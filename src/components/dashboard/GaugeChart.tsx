@@ -56,16 +56,6 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
     ctx.lineWidth = 20;
     ctx.stroke();
     
-    // Draw value arc
-    const startAngle = Math.PI;
-    const endAngle = Math.PI + (percentage / 100) * Math.PI;
-    
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, startAngle, endAngle);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 20;
-    ctx.stroke();
-    
     // Draw optimal range if thresholds exist
     if (thresholds) {
       const optimalStartPerc = Math.max(0, ((thresholds.low - min) / (max - min)) * 100);
@@ -74,12 +64,32 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
       const optimalStartAngle = Math.PI + (optimalStartPerc / 100) * Math.PI;
       const optimalEndAngle = Math.PI + (optimalEndPerc / 100) * Math.PI;
       
+      // Draw optimal range background
       ctx.beginPath();
-      ctx.arc(centerX, centerY, radius + 15, optimalStartAngle, optimalEndAngle);
-      ctx.strokeStyle = '#10B981';
-      ctx.lineWidth = 8;
+      ctx.arc(centerX, centerY, radius, optimalStartAngle, optimalEndAngle);
+      ctx.strokeStyle = '#D1FAE5';
+      ctx.lineWidth = 20;
       ctx.stroke();
     }
+    
+    // Draw value arc
+    const startAngle = Math.PI;
+    const endAngle = Math.PI + (percentage / 100) * Math.PI;
+    
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+    // Change color based on optimal range
+    if (thresholds) {
+      if (value < thresholds.low || value > thresholds.high) {
+        ctx.strokeStyle = value < thresholds.low ? '#EF4444' : '#F97316';
+      } else {
+        ctx.strokeStyle = '#10B981';
+      }
+    } else {
+      ctx.strokeStyle = color;
+    }
+    ctx.lineWidth = 20;
+    ctx.stroke();
     
     // Draw needle
     const needleAngle = Math.PI + (percentage / 100) * Math.PI;
@@ -87,13 +97,13 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
     
     ctx.save();
     ctx.translate(centerX, centerY);
-    ctx.rotate(needleAngle - Math.PI / 2);
+    ctx.rotate(needleAngle);
     
     // Needle
     ctx.beginPath();
-    ctx.moveTo(0, -needleLength);
-    ctx.lineTo(-4, 0);
-    ctx.lineTo(4, 0);
+    ctx.moveTo(-needleLength + 10, 0);
+    ctx.lineTo(-8, -4);
+    ctx.lineTo(-8, 4);
     ctx.closePath();
     ctx.fillStyle = '#374151';
     ctx.fill();
@@ -106,9 +116,9 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
     ctx.fillStyle = '#374151';
     ctx.fill();
     
-    // Draw scale marks
-    for (let i = 0; i <= 10; i++) {
-      const angle = Math.PI + (i / 10) * Math.PI;
+    // Draw scale marks (only major marks)
+    for (let i = 0; i <= 4; i++) {
+      const angle = Math.PI + (i / 4) * Math.PI;
       const x1 = centerX + Math.cos(angle) * (radius - 30);
       const y1 = centerY + Math.sin(angle) * (radius - 30);
       const x2 = centerX + Math.cos(angle) * (radius - 15);
@@ -118,18 +128,8 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
       ctx.strokeStyle = '#6B7280';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 3;
       ctx.stroke();
-      
-      // Scale numbers
-      const scaleValue = min + (i / 10) * (max - min);
-      const textX = centerX + Math.cos(angle) * (radius - 45);
-      const textY = centerY + Math.sin(angle) * (radius - 45);
-      
-      ctx.fillStyle = '#6B7280';
-      ctx.font = '12px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(scaleValue.toFixed(0), textX, textY + 4);
     }
     
   }, [value, min, max, percentage, color, thresholds]);
@@ -165,16 +165,14 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
           <span className="text-xl text-gray-500 dark:text-gray-400 ml-1">{unit}</span>
         </div>
         
-        {/* Range Display */}
-        <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 mt-4">
-          <span>{min}{unit}</span>
-          {thresholds && (
-            <span className="text-green-600 dark:text-green-400 font-medium">
-              Óptimo: {thresholds.low}-{thresholds.high}{unit}
-            </span>
-          )}
-          <span>{max}{unit}</span>
+      {/* Optimal Range Display */}
+      {thresholds && (
+        <div className="text-center mt-2">
+          <span className="text-sm text-green-600 dark:text-green-400 font-medium">
+            Rango Óptimo: {thresholds.low}-{thresholds.high}{unit}
+          </span>
         </div>
+      )}
       </div>
       
       {/* Progress Bar */}
@@ -196,3 +194,7 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
     </div>
   );
 };
+            backgroundColor: thresholds ? (
+              value < thresholds.low ? '#EF4444' : 
+              value > thresholds.high ? '#F97316' : '#10B981'
+            ) : color
