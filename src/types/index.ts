@@ -13,6 +13,7 @@ export interface User {
   createdAt: string;
   lastLogin?: string;
   status: 'active' | 'inactive';
+  active: boolean;
 }
 
 export interface AuthState {

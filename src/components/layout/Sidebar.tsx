@@ -34,7 +34,6 @@ const modules = [
   { id: 'data-entry', name: 'Recolección', icon: Database, description: 'Ingreso manual' },
   { id: 'analytics', name: 'Análisis', icon: BarChart3, description: 'Estadísticas avanzadas' },
   { id: 'sensors', name: 'Sensores', icon: Cpu, description: 'Gestión IoT y tanques' },
-  { id: 'users', name: 'Usuarios', icon: Settings, description: 'Gestión de usuarios', adminOnly: true },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({
