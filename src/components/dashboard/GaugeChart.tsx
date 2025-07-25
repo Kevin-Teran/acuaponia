@@ -21,8 +21,8 @@ interface GaugeChartProps {
 }
 
 /**
- * Componente GaugeChart - Muestra un medidor semicircular con aguja
- * que indica visualmente el valor actual dentro de un rango definido
+ * Componente GaugeChart - Muestra un medidor semicircular con aguja animada
+ * que indica visualmente el valor actual dentro de un rango definido.
  */
 export const GaugeChart: React.FC<GaugeChartProps> = ({
   value,
@@ -37,22 +37,46 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
   const [currentValue, setCurrentValue] = useState(min);
   const animationRef = useRef<number>();
 
-  /**
-   * Determina el color actual basado en los umbrales y el valor actual
-   */
+  // --- LÓGICA DE ANIMACIÓN (DEL PRIMER CÓDIGO) ---
+  useEffect(() => {
+    const animateValue = () => {
+      setCurrentValue(prev => {
+        const diff = value - prev;
+        const step = diff * 0.1; // Ajusta la velocidad de la animación
+        if (Math.abs(diff) < 0.1) {
+          cancelAnimationFrame(animationRef.current!);
+          return value;
+        }
+        return prev + step;
+      });
+      animationRef.current = requestAnimationFrame(animateValue);
+    };
+
+    animationRef.current = requestAnimationFrame(animateValue);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [value]);
+
+  // --- FUNCIONES AUXILIARES Y DE ESTADO (MEZCLA DE AMBOS) ---
+  const getValuePercentage = (val: number) => {
+    return Math.max(0, Math.min(1, (val - min) / (max - min)));
+  };
+
+  const percentageToAngle = (percentage: number) => {
+    return Math.PI + (percentage * Math.PI);
+  };
+  
   const getCurrentColor = () => {
     if (!thresholds) return color;
-    
     if (currentValue < thresholds.low) return '#EF4444'; // Rojo para bajo
     if (currentValue > thresholds.high) return '#F97316'; // Naranja para alto
     return '#10B981'; // Verde para óptimo
   };
 
-  const currentColor = getCurrentColor();
-
-  /**
-   * Obtiene el estado textual y colores asociados
-   */
   const getStatus = () => {
     if (thresholds) {
       if (currentValue < thresholds.low) return { text: 'BAJO', color: '#EF4444', bgColor: '#FEE2E2' };
@@ -62,158 +86,119 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
     return { text: 'NORMAL', color: color, bgColor: '#F3F4F6' };
   };
 
+  const currentColor = getCurrentColor();
   const status = getStatus();
 
-  /**
-   * Anima suavemente el cambio de valor
-   */
-  useEffect(() => {
-    const animateValue = () => {
-      setCurrentValue(prev => {
-        const diff = value - prev;
-        const step = diff * 0.1;
-        if (Math.abs(diff) < 0.1) return value;
-        return prev + step;
-      });
-      animationRef.current = requestAnimationFrame(animateValue);
-    };
-    
-    animationRef.current = requestAnimationFrame(animateValue);
-    
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
-  }, [value]);
-
-  /**
-   * Dibuja el gauge en el canvas
-   */
+  // --- LÓGICA DE DIBUJO EN CANVAS (COMBINADA) ---
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
-    // Limpiar canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
+    // Configuración básica
     const centerX = canvas.width / 2;
     const centerY = canvas.height * 0.8;
-    const radius = Math.min(canvas.width, canvas.height) * 0.4;
-    
-    // Calcular porcentaje y ángulo basado en el valor actual animado
-    const percentage = Math.max(0, Math.min(100, ((currentValue - min) / (max - min)) * 100));
-    const needleAngle = Math.PI + (percentage / 100) * Math.PI;
-    
-    // Dibujar arco de fondo completo (gris claro)
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, Math.PI, 2 * Math.PI);
-    ctx.strokeStyle = '#E5E7EB';
-    ctx.lineWidth = 20;
-    ctx.stroke();
+    const radius = Math.min(canvas.width, canvas.height) * 0.35;
+    const lineWidth = 20;
 
-    // Dibujar secciones coloreadas basadas en umbrales o progreso simple
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 1. Dibujar arcos de color basados en umbrales (método del segundo código)
     if (thresholds) {
       // Sección baja (rojo)
-      const lowEndAngle = Math.PI + ((thresholds.low - min) / (max - min)) * Math.PI;
+      const lowAngle = percentageToAngle(getValuePercentage(thresholds.low));
       ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, Math.PI, lowEndAngle);
+      ctx.arc(centerX, centerY, radius, Math.PI, lowAngle);
       ctx.strokeStyle = '#EF4444';
-      ctx.lineWidth = 20;
+      ctx.lineWidth = lineWidth;
       ctx.stroke();
-      
+
       // Sección óptima (verde)
-      const highEndAngle = Math.PI + ((thresholds.high - min) / (max - min)) * Math.PI;
+      const highAngle = percentageToAngle(getValuePercentage(thresholds.high));
       ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, lowEndAngle, highEndAngle);
+      ctx.arc(centerX, centerY, radius, lowAngle, highAngle);
       ctx.strokeStyle = '#10B981';
-      ctx.lineWidth = 20;
+      ctx.lineWidth = lineWidth;
       ctx.stroke();
-      
+
       // Sección alta (naranja)
       ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, highEndAngle, 2 * Math.PI);
+      ctx.arc(centerX, centerY, radius, highAngle, 2 * Math.PI);
       ctx.strokeStyle = '#F97316';
-      ctx.lineWidth = 20;
-      ctx.stroke();
-      
-      // Dibujar superposición blanca desde la posición actual hasta el final
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, needleAngle, 2 * Math.PI);
-      ctx.strokeStyle = '#E5E7EB';
-      ctx.lineWidth = 20;
+      ctx.lineWidth = lineWidth;
       ctx.stroke();
     } else {
-      // Sin umbrales, solo dibujar el progreso con color por defecto
+      // Dibujo simple si no hay umbrales
       ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, Math.PI, needleAngle);
+      ctx.arc(centerX, centerY, radius, Math.PI, 2 * Math.PI);
       ctx.strokeStyle = color;
-      ctx.lineWidth = 20;
-      ctx.stroke();
-      
-      // Dibujar arco restante en gris claro
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, needleAngle, 2 * Math.PI);
-      ctx.strokeStyle = '#E5E7EB';
-      ctx.lineWidth = 20;
+      ctx.lineWidth = lineWidth;
       ctx.stroke();
     }
-    
-    // Dibujar aguja con ángulo preciso apuntando al valor exacto
+
+    // 2. Superponer el "progreso no alcanzado" en gris claro
+    const currentAngle = percentageToAngle(getValuePercentage(currentValue));
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, currentAngle, 2 * Math.PI);
+    ctx.strokeStyle = '#E5E7EB';
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+
+    // 3. Dibujar marcas de escala
+    for (let i = 0; i <= 10; i++) {
+        const angle = Math.PI + (i / 10) * Math.PI;
+        const x1 = centerX + Math.cos(angle) * (radius - 10);
+        const y1 = centerY + Math.sin(angle) * (radius - 10);
+        const x2 = centerX + Math.cos(angle) * (radius - 20);
+        const y2 = centerY + Math.sin(angle) * (radius - 20);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = '#6B7280';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+
+    // --- 4. DIBUJAR LA AGUJA (MÉTODO DEL SEGUNDO CÓDIGO) ---
+    // Se usa 'currentAngle' que proviene del valor animado 'currentValue'
     const needleLength = radius * 0.9;
     const needleWidth = 4;
     
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(needleAngle);
+    // Calcular coordenadas de la punta y la base
+    const needleTipX = centerX + Math.cos(currentAngle) * needleLength;
+    const needleTipY = centerY + Math.sin(currentAngle) * needleLength;
+    const baseAngle1 = currentAngle + Math.PI / 2;
+    const baseAngle2 = currentAngle - Math.PI / 2;
+    const baseX1 = centerX + Math.cos(baseAngle1) * needleWidth;
+    const baseY1 = centerY + Math.sin(baseAngle1) * needleWidth;
+    const baseX2 = centerX + Math.cos(baseAngle2) * needleWidth;
+    const baseY2 = centerY + Math.sin(baseAngle2) * needleWidth;
     
-    // Aguja con punta afilada
+    // Dibujar el triángulo de la aguja
     ctx.beginPath();
-    ctx.moveTo(-needleWidth, 0);
-    ctx.lineTo(0, -needleLength);
-    ctx.lineTo(needleWidth, 0);
+    ctx.moveTo(needleTipX, needleTipY);
+    ctx.lineTo(baseX1, baseY1);
+    ctx.lineTo(baseX2, baseY2);
     ctx.closePath();
     
-    // Estilo de la aguja
-    const needleGradient = ctx.createLinearGradient(0, -needleLength, 0, 0);
-    needleGradient.addColorStop(0, '#DC2626'); // Punta roja
-    needleGradient.addColorStop(1, '#1F2937'); // Base oscura
-    ctx.fillStyle = needleGradient;
-    ctx.fill();
+    // Estilo y gradiente de la aguja
+    const gradient = ctx.createLinearGradient(centerX, centerY, needleTipX, needleTipY);
+    gradient.addColorStop(0, '#1F2937'); // Base oscura
+    gradient.addColorStop(1, '#DC2626'); // Punta roja
+    ctx.fillStyle = gradient;
     ctx.strokeStyle = '#111827';
-    ctx.lineWidth = 0.5;
+    ctx.lineWidth = 1;
+    ctx.fill();
     ctx.stroke();
-    
-    ctx.restore();
-    
-    // Dibujar círculo central
+
+    // 5. Dibujar círculo central
     ctx.beginPath();
     ctx.arc(centerX, centerY, 8, 0, 2 * Math.PI);
     ctx.fillStyle = '#111827';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-    ctx.shadowBlur = 5;
-    ctx.shadowOffsetY = 2;
     ctx.fill();
-    ctx.shadowColor = 'transparent';
     
-    // Dibujar marcas de escala (divisiones principales)
-    for (let i = 0; i <= 10; i++) {
-      const markAngle = Math.PI + (i / 10) * Math.PI;
-      const x1 = centerX + Math.cos(markAngle) * (radius - 10);
-      const y1 = centerY + Math.sin(markAngle) * (radius - 10);
-      const x2 = centerX + Math.cos(markAngle) * (radius - 20);
-      const y2 = centerY + Math.sin(markAngle) * (radius - 20);
-      
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.strokeStyle = '#6B7280';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
   }, [currentValue, min, max, thresholds, color]);
 
   return (
@@ -240,6 +225,7 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
       
       <div className="text-center">
         <div className="text-4xl font-bold mb-2" style={{ color: currentColor }}>
+          {/* Se muestra el valor animado */}
           {currentValue.toFixed(1)}
           <span className="text-xl text-gray-500 dark:text-gray-400 ml-1">{unit}</span>
         </div>
