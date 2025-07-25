@@ -10,8 +10,7 @@ const mockUsers: User[] = [
     name: 'Administrador Principal',
     createdAt: '2024-01-15T10:00:00Z',
     lastLogin: '2024-12-20T14:30:00Z',
-    status: 'active',
-    active: true
+    status: 'active'
   },
   { 
     id: '2', 
@@ -20,8 +19,7 @@ const mockUsers: User[] = [
     name: 'Usuario Operador',
     createdAt: '2024-02-01T09:15:00Z',
     lastLogin: '2024-12-19T16:45:00Z',
-    status: 'active',
-    active: true
+    status: 'active'
   },
   { 
     id: '3', 
@@ -30,8 +28,7 @@ const mockUsers: User[] = [
     name: 'Técnico de Campo',
     createdAt: '2024-03-10T11:30:00Z',
     lastLogin: '2024-12-18T08:20:00Z',
-    status: 'active',
-    active: true
+    status: 'active'
   },
   { 
     id: '4', 
@@ -39,8 +36,7 @@ const mockUsers: User[] = [
     role: 'admin', 
     name: 'Supervisor de Planta',
     createdAt: '2024-04-05T14:00:00Z',
-    status: 'inactive',
-    active: false
+    status: 'inactive'
   },
 ];
 
@@ -56,13 +52,12 @@ export const useUsers = () => {
     }, 500);
   }, []);
 
-  const addUser = async (userData: Omit<User, 'id' | 'createdAt'>): Promise<boolean> => {
+  const createUser = async (userData: Omit<User, 'id' | 'createdAt'>): Promise<boolean> => {
     try {
       const newUser: User = {
         ...userData,
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
-        status: userData.active ? 'active' : 'inactive'
       };
       
       setUsers(prev => [...prev, newUser]);
@@ -76,11 +71,7 @@ export const useUsers = () => {
   const updateUser = async (id: string, userData: Partial<User>): Promise<boolean> => {
     try {
       setUsers(prev => prev.map(user => 
-        user.id === id ? { 
-          ...user, 
-          ...userData,
-          status: userData.active !== undefined ? (userData.active ? 'active' : 'inactive') : user.status
-        } : user
+        user.id === id ? { ...user, ...userData } : user
       ));
       return true;
     } catch (error) {
@@ -103,11 +94,7 @@ export const useUsers = () => {
     try {
       setUsers(prev => prev.map(user => 
         user.id === id 
-          ? { 
-              ...user, 
-              status: user.status === 'active' ? 'inactive' : 'active',
-              active: user.status !== 'active'
-            }
+          ? { ...user, status: user.status === 'active' ? 'inactive' : 'active' }
           : user
       ));
       return true;
@@ -120,7 +107,7 @@ export const useUsers = () => {
   return {
     users,
     loading,
-    addUser,
+    createUser,
     updateUser,
     deleteUser,
     toggleUserStatus,

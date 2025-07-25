@@ -5,7 +5,7 @@ import { User, AuthState } from '../types';
 const mockUsers: User[] = [
   { 
     id: '1', 
-    email: 'admin@acuaponia.com', 
+    email: 'admin@sena.edu.co', 
     role: 'admin', 
     name: 'Administrador',
     createdAt: '2024-01-15T10:00:00Z',
@@ -14,7 +14,7 @@ const mockUsers: User[] = [
   },
   { 
     id: '2', 
-    email: 'usuario@acuaponia.com', 
+    email: 'usuario@sena.edu.co', 
     role: 'user', 
     name: 'Usuario',
     createdAt: '2024-02-01T09:15:00Z',

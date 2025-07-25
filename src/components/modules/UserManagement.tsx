@@ -1,16 +1,13 @@
 import React, { useState } from 'react';
-import { Users, Plus, Edit, Shield, ShieldCheck, Eye, X, Save, UserCheck, UserX } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, Shield, ShieldCheck, Eye, X, Save } from 'lucide-react';
 import { useUsers } from '../../hooks/useUsers';
 import { User } from '../../types';
 import { Card } from '../common/Card';
-import Swal from 'sweetalert2';
 
 export const UserManagement: React.FC = () => {
-  const { users, addUser, updateUser, deleteUser, toggleUserStatus } = useUsers();
+  const { users, addUser, updateUser, deleteUser } = useUsers();
   const [showModal, setShowModal] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [viewingUser, setViewingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -54,98 +51,22 @@ export const UserManagement: React.FC = () => {
     });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    try {
-      let success = false;
-      
-      if (editingUser) {
-        success = await updateUser(editingUser.id, formData);
-        if (success) {
-          await Swal.fire({
-            icon: 'success',
-            title: '¡Usuario actualizado!',
-            text: 'Los datos del usuario se han actualizado correctamente.',
-            timer: 2000,
-            showConfirmButton: false,
-            background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
-            color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#374151',
-          });
-        }
-      } else {
-        success = await addUser(formData);
-        if (success) {
-          await Swal.fire({
-            icon: 'success',
-            title: '¡Usuario creado!',
-            text: 'El nuevo usuario se ha creado correctamente.',
-            timer: 2000,
-            showConfirmButton: false,
-            background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
-            color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#374151',
-          });
-        }
-      }
-      
-      if (success) {
-        handleCloseModal();
-      } else {
-        await Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Hubo un problema al procesar la solicitud.',
-          confirmButtonColor: '#FF671F',
-          background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
-          color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#374151',
-        });
-      }
-    } catch (error) {
-      await Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Ocurrió un error inesperado.',
-        confirmButtonColor: '#FF671F',
-        background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
-        color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#374151',
-      });
+    if (editingUser) {
+      updateUser(editingUser.id, formData);
+    } else {
+      addUser(formData);
     }
+    
+    handleCloseModal();
   };
 
-  const handleToggleStatus = async (userId: string, currentStatus: string) => {
-    const action = currentStatus === 'active' ? 'desactivar' : 'activar';
-    const result = await Swal.fire({
-      title: `¿${action.charAt(0).toUpperCase() + action.slice(1)} usuario?`,
-      text: `¿Está seguro de ${action} este usuario?`,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonColor: currentStatus === 'active' ? '#EF4444' : '#10B981',
-      cancelButtonColor: '#6B7280',
-      confirmButtonText: action.charAt(0).toUpperCase() + action.slice(1),
-      cancelButtonText: 'Cancelar',
-      background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
-      color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#374151',
-    });
-
-    if (result.isConfirmed) {
-      const success = await toggleUserStatus(userId);
-      if (success) {
-        await Swal.fire({
-          icon: 'success',
-          title: `Usuario ${action}do`,
-          text: `El usuario se ha ${action}do correctamente.`,
-          timer: 2000,
-          showConfirmButton: false,
-          background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
-          color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#374151',
-        });
-      }
+  const handleDelete = (userId: string) => {
+    if (window.confirm('¿Está seguro de eliminar este usuario?')) {
+      deleteUser(userId);
     }
-  };
-
-  const handleViewUser = (user: User) => {
-    setViewingUser(user);
-    setShowViewModal(true);
   };
 
   const stats = {
@@ -280,22 +201,7 @@ export const UserManagement: React.FC = () => {
                         ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
                         : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
                     }`}>
-                      <button
-                        onClick={() => handleToggleStatus(user.id, user.status)}
-                        className="flex items-center space-x-1 hover:opacity-80 transition-opacity"
-                      >
-                        {user.active ? (
-                          <>
-                            <UserCheck className="w-3 h-3" />
-                            <span>Activo</span>
-                          </>
-                        ) : (
-                          <>
-                            <UserX className="w-3 h-3" />
-                            <span>Inactivo</span>
-                          </>
-                        )}
-                      </button>
+                      {user.active ? 'Activo' : 'Inactivo'}
                     </span>
                   </td>
                   <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
@@ -304,18 +210,18 @@ export const UserManagement: React.FC = () => {
                   <td className="py-3 px-4">
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => handleViewUser(user)}
-                        className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
-                        title="Ver detalles"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
                         onClick={() => handleOpenModal(user)}
                         className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                         title="Editar usuario"
                       >
                         <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(user.id)}
+                        className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        title="Eliminar usuario"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
@@ -426,140 +332,6 @@ export const UserManagement: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* View User Modal */}
-      {showViewModal && viewingUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Detalles del Usuario
-              </h3>
-              <button
-                onClick={() => setShowViewModal(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="flex items-center space-x-4 mb-6">
-                <div className="w-16 h-16 bg-gradient-to-r from-orange-500 to-orange-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                  {viewingUser.name.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <h4 className="text-xl font-semibold text-gray-900 dark:text-white">
-                    {viewingUser.name}
-                  </h4>
-                  <p className="text-gray-600 dark:text-gray-400">{viewingUser.email}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">
-                    ID de Usuario
-                  </label>
-                  <p className="text-gray-900 dark:text-white font-mono text-sm">
-                    {viewingUser.id}
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Rol
-                  </label>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    viewingUser.role === 'admin'
-                      ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
-                      : 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
-                  }`}>
-                    {viewingUser.role === 'admin' ? (
-                      <>
-                        <ShieldCheck className="w-3 h-3 mr-1" />
-                        Administrador
-                      </>
-                    ) : (
-                      <>
-                        <Shield className="w-3 h-3 mr-1" />
-                        Usuario
-                      </>
-                    )}
-                  </span>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Estado
-                  </label>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    viewingUser.active
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                      : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
-                  }`}>
-                    {viewingUser.active ? (
-                      <>
-                        <UserCheck className="w-3 h-3 mr-1" />
-                        Activo
-                      </>
-                    ) : (
-                      <>
-                        <UserX className="w-3 h-3 mr-1" />
-                        Inactivo
-                      </>
-                    )}
-                  </span>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Fecha de Creación
-                  </label>
-                  <p className="text-gray-900 dark:text-white">
-                    {new Date(viewingUser.createdAt).toLocaleDateString('es-ES', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </p>
-                </div>
-
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Último Acceso
-                  </label>
-                  <p className="text-gray-900 dark:text-white">
-                    {viewingUser.lastLogin 
-                      ? new Date(viewingUser.lastLogin).toLocaleString('es-ES')
-                      : 'Nunca ha iniciado sesión'
-                    }
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <h5 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
-                  Información del Sistema
-                </h5>
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  Los datos se almacenan localmente en el navegador para esta demostración. 
-                  En producción, estarían conectados a una base de datos segura.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-end p-6 border-t border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => setShowViewModal(false)}
-                className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
-              >
-                Cerrar
-              </button>
-            </div>
           </div>
         </div>
       )}
