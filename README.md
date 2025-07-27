@@ -1,35 +1,43 @@
-# Sistema SENA de Monitoreo Acuático
+# Sistema SENA de Monitoreo Acuático - Full Stack
 
-Sistema profesional de monitoreo en tiempo real para variables acuáticas en sistemas de acuaponía desarrollado para el SENA (Servicio Nacional de Aprendizaje).
+Sistema profesional de monitoreo en tiempo real para variables acuáticas en sistemas de acuaponía desarrollado para el SENA (Servicio Nacional de Aprendizaje). Arquitectura completa Frontend/Backend con MySQL y MQTT.
 
 ## 🏗️ Arquitectura del Proyecto
 
 ```
 sena-acuaponia-system/
-├── frontend/                 # Aplicación React + TypeScript
+├── frontend/                 # Aplicación React + TypeScript + Vite
 │   ├── src/
 │   │   ├── components/      # Componentes React
+│   │   ├── services/        # Servicios (API, Socket.IO)
 │   │   ├── hooks/          # Custom hooks
-│   │   ├── services/       # Servicios (API, Socket.IO)
 │   │   ├── config/         # Configuraciones
 │   │   └── types/          # Definiciones TypeScript
+│   ├── Dockerfile          # Docker para frontend
 │   └── package.json
-├── backend/                 # API Node.js + Express
+├── backend/                 # API Node.js + Express + TypeScript
 │   ├── src/
-│   │   ├── models/         # Modelos MongoDB
+│   │   ├── config/         # Configuraciones (DB, etc.)
 │   │   ├── routes/         # Rutas de la API
 │   │   ├── middleware/     # Middlewares
 │   │   ├── services/       # Servicios del backend
-│   │   └── config/         # Configuraciones
+│   │   └── utils/          # Utilidades
+│   ├── prisma/             # Esquema de base de datos
+│   ├── Dockerfile          # Docker para backend
 │   └── package.json
+├── mqtt/                   # Configuración MQTT
+│   └── config/
+├── docker-compose.yml      # Orquestación de servicios
 └── package.json            # Scripts principales
 ```
 
 ## 🚀 Instalación y Configuración
 
 ### Prerrequisitos
-- Node.js 18+ 
-- MongoDB 6+
+- Node.js 18+
+- MySQL 8.0+
+- Docker y Docker Compose (recomendado)
+- Broker MQTT (Mosquitto)
 - npm o yarn
 
 ### 1. Clonar el repositorio
@@ -45,28 +53,43 @@ npm run install:all
 
 ### 3. Configurar variables de entorno
 
-**Backend (.env):**
+**Backend (backend/.env):**
 ```bash
 cp backend/.env.example backend/.env
 # Editar backend/.env con tus configuraciones
 ```
 
-**Frontend (.env):**
+**Frontend (frontend/.env):**
 ```bash
 cp frontend/.env.example frontend/.env
 # Editar frontend/.env con tus configuraciones
 ```
 
-### 4. Iniciar MongoDB
+### 4. Configurar Base de Datos
 ```bash
-# Usando Docker
-docker run -d -p 27017:27017 --name mongodb mongo:latest
+# Usando Docker Compose (recomendado)
+docker-compose up -d mysql
 
-# O usando instalación local
-mongod
+# O usando MySQL local
+mysql -u root -p
+CREATE DATABASE sena_acuaponia;
+
+# Ejecutar migraciones
+cd backend
+npx prisma migrate dev
+npx prisma generate
 ```
 
-### 5. Ejecutar la aplicación
+### 5. Iniciar servicios con Docker
+```bash
+# Iniciar todos los servicios
+docker-compose up -d
+
+# Ver logs
+docker-compose logs -f
+```
+
+### 6. Ejecutar en desarrollo (sin Docker)
 
 **Desarrollo (Frontend + Backend):**
 ```bash
@@ -83,26 +106,38 @@ npm run dev:frontend
 npm run dev:backend
 ```
 
-## 🔧 Tecnologías Utilizadas
+## 🔧 Stack Tecnológico
 
 ### Frontend
 - **React 18** - Biblioteca de UI
 - **TypeScript** - Tipado estático
+- **Vite** - Build tool y dev server
 - **Tailwind CSS** - Framework CSS
 - **Chart.js** - Gráficos y visualizaciones
 - **Socket.IO Client** - Comunicación en tiempo real
 - **Axios** - Cliente HTTP
 - **SweetAlert2** - Alertas y notificaciones
+- **Date-fns** - Manipulación de fechas
 
 ### Backend
 - **Node.js** - Runtime de JavaScript
 - **Express** - Framework web
 - **TypeScript** - Tipado estático
-- **MongoDB + Mongoose** - Base de datos
+- **MySQL + Prisma** - Base de datos y ORM
 - **Socket.IO** - Comunicación en tiempo real
+- **MQTT** - Protocolo IoT para sensores
 - **JWT** - Autenticación
 - **bcryptjs** - Encriptación de contraseñas
 - **Helmet** - Seguridad HTTP
+- **Winston** - Logging
+- **Joi** - Validación de datos
+
+### Infraestructura
+- **MySQL 8.0** - Base de datos principal
+- **Eclipse Mosquitto** - Broker MQTT
+- **Redis** - Caché y sesiones
+- **Docker** - Contenedorización
+- **Nginx** - Proxy reverso y servidor web
 
 ## 📊 Funcionalidades
 
@@ -116,6 +151,7 @@ npm run dev:backend
 6. **Sensores** - Gestión de dispositivos IoT
 7. **Usuarios** - Administración de usuarios
 8. **Configuración** - Ajustes del sistema
+9. **Alertas** - Sistema de notificaciones automáticas
 
 ### 🔐 Sistema de Autenticación
 - Login con email/contraseña
@@ -123,10 +159,16 @@ npm run dev:backend
 - JWT para autenticación
 - Middleware de autorización
 
-### 📡 Comunicación en Tiempo Real
+### 📡 Comunicación IoT y Tiempo Real
 - Socket.IO para datos de sensores
+- MQTT para comunicación con dispositivos IoT
 - Alertas críticas automáticas
 - Actualizaciones de estado en vivo
+
+### 🗄️ Base de Datos
+- MySQL con Prisma ORM
+- Migraciones automáticas
+- Relaciones optimizadas
 
 ### 🏭 Relaciones del Sistema
 - **Sensores** → vinculados a **Tanques**
@@ -161,10 +203,21 @@ npm run build:frontend     # Build frontend
 npm run build:backend      # Build backend
 
 # Producción
-npm start                  # Iniciar backend en producción
+npm start                 # Iniciar backend en producción
+
+# Docker
+docker-compose up -d      # Iniciar todos los servicios
+docker-compose down       # Detener servicios
+docker-compose logs -f    # Ver logs en tiempo real
 
 # Instalación
-npm run install:all        # Instalar todas las dependencias
+npm run install:all       # Instalar todas las dependencias
+
+# Base de datos
+cd backend
+npx prisma migrate dev    # Ejecutar migraciones
+npx prisma generate       # Generar cliente
+npx prisma studio         # Interfaz web de DB
 ```
 
 ## 🌐 Endpoints de la API
@@ -183,12 +236,23 @@ npm run install:all        # Instalar todas las dependencias
 ### Sensores
 - `GET /api/sensors` - Listar sensores
 - `POST /api/sensors` - Crear sensor
+- `PUT /api/sensors/:id` - Actualizar sensor
 - `GET /api/sensors/:id/data` - Datos del sensor
 
 ### Datos
 - `GET /api/data/historical` - Datos históricos
 - `GET /api/data/statistics` - Estadísticas
 - `GET /api/data/realtime` - Datos en tiempo real
+
+### Tanques
+- `GET /api/tanks` - Listar tanques
+- `POST /api/tanks` - Crear tanque
+- `PUT /api/tanks/:id` - Actualizar tanque
+
+### Alertas
+- `GET /api/alerts` - Listar alertas
+- `POST /api/alerts/:id/resolve` - Resolver alerta
+- `GET /api/alerts/statistics` - Estadísticas de alertas
 
 ## 🚀 Despliegue
 
@@ -197,16 +261,34 @@ npm run install:all        # Instalar todas las dependencias
 npm run dev
 ```
 
-### Producción
+### Producción con Docker
 ```bash
+# Construir y ejecutar
+docker-compose -f docker-compose.prod.yml up -d
+
+# Solo construir
 npm run build
-npm start
 ```
 
-### Docker (Próximamente)
+### Producción Manual
 ```bash
-docker-compose up -d
+# Backend
+cd backend
+npm run build
+npm start
+
+# Frontend (servir con Nginx)
+cd frontend
+npm run build
+# Servir carpeta dist/ con servidor web
 ```
+
+## 🔧 Configuración MQTT
+
+Los sensores IoT deben publicar datos en los siguientes topics:
+- `sena/acuaponia/sensors/{sensor_id}/data` - Datos de sensores
+- `sena/acuaponia/sensors/{sensor_id}/status` - Estado de sensores
+- `sena/acuaponia/alerts` - Alertas del sistema
 
 ## 🤝 Contribución
 
@@ -216,6 +298,16 @@ docker-compose up -d
 4. Push a la rama (`git push origin feature/AmazingFeature`)
 5. Abrir Pull Request
 
+## 🧪 Testing
+
+```bash
+# Frontend
+cd frontend && npm run test
+
+# Backend
+cd backend && npm run test
+```
+
 ## 📝 Licencia
 
 Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para detalles.
@@ -223,6 +315,13 @@ Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) par
 ## 👥 Equipo de Desarrollo
 
 Desarrollado para el **SENA (Servicio Nacional de Aprendizaje)** como parte del programa de formación en tecnologías IoT y sistemas de monitoreo acuático.
+
+## 🔍 Monitoreo y Logs
+
+- Logs del sistema en `backend/logs/`
+- Métricas de rendimiento via Winston
+- Health checks en `/health`
+- Monitoreo de conexiones MQTT y Socket.IO
 
 ---
 
