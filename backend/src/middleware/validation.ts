@@ -1,18 +1,37 @@
 import Joi from 'joi';
 import { Request, Response, NextFunction } from 'express';
 import { CustomError } from './errorHandler';
+import { logger } from '../utils/logger';
 
 // Esquemas de validación
 const schemas = {
-  // Autenticación
+  // Autenticación - Esquema mejorado
   login: Joi.object({
-    email: Joi.string().email().required().messages({
-      'string.email': 'Email debe tener un formato válido',
-      'any.required': 'Email es requerido',
-    }),
-    password: Joi.string().min(6).required().messages({
-      'string.min': 'Contraseña debe tener al menos 6 caracteres',
-      'any.required': 'Contraseña es requerida',
+    email: Joi.string()
+      .email({ minDomainSegments: 2, tlds: { allow: ['co', 'com', 'edu', 'org', 'net'] } })
+      .required()
+      .messages({
+        'string.email': 'El email debe tener un formato válido',
+        'any.required': 'El email es requerido',
+        'string.empty': 'El email no puede estar vacío',
+      }),
+    password: Joi.string()
+      .min(6)
+      .max(100)
+      .required()
+      .messages({
+        'string.min': 'La contraseña debe tener al menos 6 caracteres',
+        'string.max': 'La contraseña no puede exceder 100 caracteres',
+        'any.required': 'La contraseña es requerida',
+        'string.empty': 'La contraseña no puede estar vacía',
+      }),
+  }),
+
+  // Refresh token
+  refreshToken: Joi.object({
+    refreshToken: Joi.string().required().messages({
+      'any.required': 'Refresh token es requerido',
+      'string.empty': 'Refresh token no puede estar vacío',
     }),
   }),
 
@@ -54,6 +73,7 @@ const schemas = {
     location: Joi.string().min(2).max(200).required(),
     capacity: Joi.number().positive().required(),
     currentLevel: Joi.number().min(0).required(),
+    userId: Joi.string().required(),
   }),
 
   updateTank: Joi.object({
@@ -66,6 +86,7 @@ const schemas = {
 
   // Datos de sensor
   sensorData: Joi.object({
+    sensorId: Joi.string().required(),
     temperature: Joi.number().min(-10).max(50).allow(null),
     ph: Joi.number().min(0).max(14).allow(null),
     oxygen: Joi.number().min(0).max(20).allow(null),
@@ -91,6 +112,7 @@ const schemas = {
   createReport: Joi.object({
     title: Joi.string().min(5).max(200).required(),
     type: Joi.string().valid('DAILY', 'WEEKLY', 'MONTHLY', 'CUSTOM').required(),
+    userId: Joi.string().required(),
     parameters: Joi.object({
       startDate: Joi.date(),
       endDate: Joi.date(),
@@ -115,19 +137,29 @@ const schemas = {
 };
 
 // Función helper para crear middleware de validación
-const createValidationMiddleware = (schema: Joi.ObjectSchema, property: 'body' | 'query' | 'params' = 'body') => {
+const createValidationMiddleware = (
+  schema: Joi.ObjectSchema, 
+  property: 'body' | 'query' | 'params' = 'body'
+) => {
   return (req: Request, res: Response, next: NextFunction) => {
+    // Log de la data que se está validando
+    logger.debug(`Validating ${property}:`, req[property]);
+
     const { error, value } = schema.validate(req[property], {
       abortEarly: false,
       stripUnknown: true,
+      allowUnknown: false,
     });
 
     if (error) {
       const errorMessage = error.details.map(detail => detail.message).join(', ');
+      logger.warn(`Validación fallida en ${property}: ${errorMessage}`);
       throw new CustomError(`Validación fallida: ${errorMessage}`, 400);
     }
 
+    // Asignar el valor validado y sanitizado
     req[property] = value;
+    logger.debug(`Validación exitosa para ${property}`);
     next();
   };
 };
@@ -135,6 +167,7 @@ const createValidationMiddleware = (schema: Joi.ObjectSchema, property: 'body' |
 // Middleware de validación exportados
 export const authValidation = {
   login: createValidationMiddleware(schemas.login),
+  refreshToken: createValidationMiddleware(schemas.refreshToken),
 };
 
 export const userValidation = {

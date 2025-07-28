@@ -14,7 +14,7 @@ import { Sensors } from './components/modules/Sensors';
 import { LoadingSpinner } from './components/common/LoadingSpinner';
 
 function App() {
-  const { user, isAuthenticated, loading: authLoading, login, logout } = useAuth();
+  const { user, isAuthenticated, loading: authLoading, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [currentModule, setCurrentModule] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -22,13 +22,18 @@ function App() {
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <LoadingSpinner size="lg" />
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-gray-600 dark:text-gray-400">
+            Cargando sistema de autenticación...
+          </p>
+        </div>
       </div>
     );
   }
 
   if (!isAuthenticated) {
-    return <LoginForm onLogin={login} loading={authLoading} />;
+    return <LoginForm />;
   }
 
   const renderCurrentModule = () => {

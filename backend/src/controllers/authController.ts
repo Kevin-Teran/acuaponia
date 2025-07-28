@@ -1,3 +1,4 @@
+// backend/src/controllers/authController.ts
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -28,6 +29,14 @@ export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   try {
+    logger.info(`Intento de login para: ${email}`);
+
+    // Validar entrada
+    if (!email || !password) {
+      logger.warn(`Login fallido: email o password faltante`);
+      throw new CustomError('Email y contraseña son requeridos', 400);
+    }
+
     // 1. Buscar usuario por email
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
@@ -38,6 +47,8 @@ export const login = async (req: Request, res: Response) => {
       throw new CustomError('Credenciales inválidas', 401);
     }
 
+    logger.info(`Usuario encontrado: ${user.email}, status: ${user.status}`);
+
     // 2. Verificar contraseña
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
@@ -47,7 +58,7 @@ export const login = async (req: Request, res: Response) => {
 
     // 3. Verificar estado de la cuenta
     if (user.status !== 'ACTIVE') {
-      logger.warn(`Intento de login fallido: cuenta ${email} inactiva`);
+      logger.warn(`Intento de login fallido: cuenta ${email} inactiva (status: ${user.status})`);
       throw new CustomError('Cuenta inactiva', 403);
     }
 
@@ -61,7 +72,7 @@ export const login = async (req: Request, res: Response) => {
     const tokens = generateTokens(user);
 
     // 6. Responder con los datos del usuario
-    res.json({
+    const response = {
       success: true,
       data: {
         user: {
@@ -69,13 +80,17 @@ export const login = async (req: Request, res: Response) => {
           email: user.email,
           name: user.name,
           role: user.role,
-          lastLogin: user.lastLogin,
+          status: user.status,
+          createdAt: user.createdAt,
+          lastLogin: new Date(), // Usar la fecha actual
         },
         tokens,
       },
-    });
+    };
 
     logger.info(`Login exitoso: ${user.email}`);
+    res.json(response);
+
   } catch (error) {
     logger.error('Error en login:', error);
     throw error;
@@ -104,6 +119,7 @@ export const refresh = async (req: Request, res: Response) => {
     const { accessToken } = generateTokens(user);
     res.json({ success: true, data: { accessToken } });
   } catch (error) {
+    logger.error('Error en refresh token:', error);
     throw new CustomError('Refresh token inválido', 401);
   }
 };
@@ -138,6 +154,7 @@ export const getMe = async (req: Request, res: Response) => {
 
     res.json({ success: true, data: { user } });
   } catch (error) {
+    logger.error('Error en getMe:', error);
     throw new CustomError('Token inválido', 401);
   }
 };
