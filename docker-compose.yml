@@ -1,113 +1,90 @@
+# docker-compose.yml
+# Versión corregida y unificada para funcionar con un único .env y PostgreSQL.
+
 version: '3.8'
 
 services:
-  # Base de datos MySQL
-  mysql:
-    image: mysql:8.0
-    container_name: sena_acuaponia_mysql
+  # --- Servicio del Backend (Node.js/Express) ---
+  backend:
+    build: ./backend
+    container_name: acuaponia-backend
     restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: sena_acuaponia
-      MYSQL_USER: sena_user
-      MYSQL_PASSWORD: sena_password
+    env_file: .env # Carga toda la configuración desde el archivo .env central
     ports:
-      - "3306:3306"
+      - "5000:5000" # Expone el puerto del backend a la máquina host
+    depends_on:
+      - db      # El backend no se iniciará hasta que la base de datos esté lista
+      - mqtt    # El backend no se iniciará hasta que el broker MQTT esté listo
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./backend/database/init:/docker-entrypoint-initdb.d
+      - ./backend:/app
+      - /app/node_modules # Evita que node_modules local sobreescriba el del contenedor
     networks:
       - sena_network
 
-  # Broker MQTT (Eclipse Mosquitto)
-  mosquitto:
+  # --- Servicio del Frontend (React/Vite) ---
+  frontend:
+    build: ./frontend
+    container_name: acuaponia-frontend
+    restart: unless-stopped
+    # El puerto se expone a través de Nginx, no directamente.
+    # ports:
+    #   - "3000:80" # Quitado para evitar conflicto con Nginx
+    depends_on:
+      - backend
+    networks:
+      - sena_network
+
+  # --- Servicio de la Base de Datos (Cambiado a PostgreSQL) ---
+  db:
+    image: postgres:14-alpine
+    container_name: acuaponia-db
+    restart: unless-stopped
+    env_file: .env # Carga las credenciales de la DB desde .env
+    ports:
+      - "5432:5432" # Expone el puerto de Postgres para conexión externa si es necesario
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - sena_network
+
+  # --- Servicio del Broker MQTT (Mosquitto) ---
+  mqtt:
     image: eclipse-mosquitto:2.0
-    container_name: sena_acuaponia_mqtt
+    container_name: acuaponia-mqtt
     restart: unless-stopped
     ports:
       - "1883:1883"
       - "9001:9001"
     volumes:
-      - ./mqtt/config:/mosquitto/config
+      - ./mqtt/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
       - ./mqtt/data:/mosquitto/data
       - ./mqtt/log:/mosquitto/log
     networks:
       - sena_network
-
-  # Redis para caché y sesiones
-  redis:
-    image: redis:7-alpine
-    container_name: sena_acuaponia_redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - sena_network
-
-  # Backend API
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: sena_acuaponia_backend
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: mysql://sena_user:sena_password@mysql:3306/sena_acuaponia
-      MQTT_BROKER_URL: mqtt://mosquitto:1883
-      REDIS_URL: redis://redis:6379
-    ports:
-      - "5000:5000"
-    depends_on:
-      - mysql
-      - mosquitto
-      - redis
-    volumes:
-      - ./backend/logs:/app/logs
-      - ./backend/uploads:/app/uploads
-    networks:
-      - sena_network
-
-  # Frontend
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: sena_acuaponia_frontend
-    restart: unless-stopped
-    environment:
-      VITE_API_BASE_URL: http://localhost:5000/api
-      VITE_SOCKET_URL: http://localhost:5000
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
-    networks:
-      - sena_network
-
-  # Nginx como proxy reverso (opcional)
-  nginx:
-    image: nginx:alpine
-    container_name: sena_acuaponia_nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./nginx/ssl:/etc/nginx/ssl
-    depends_on:
-      - frontend
-      - backend
-    networks:
-      - sena_network
+  
+  # --- Nginx como proxy reverso (Comentado para evitar conflicto inicial) ---
+  # Nginx es la forma correcta de exponer el frontend en producción.
+  # Para desarrollo, puedes acceder al frontend directamente si expones su puerto (ej: 3000:80).
+  # Para usar Nginx, descomenta este bloque y asegúrate de que el puerto del frontend no esté expuesto.
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: acuaponia-nginx
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+  #   depends_on:
+  #     - frontend
+  #     - backend
+  #   networks:
+  #     - sena_network
 
 volumes:
-  mysql_data:
-  redis_data:
+  postgres_data:
+    driver: local
 
 networks:
   sena_network:
     driver: bridge
+

@@ -1,5 +1,6 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { prisma } from '../config/database';
+import { Prisma, AlertSeverity } from '@prisma/client';
 import { asyncHandler, CustomError } from '../middleware/errorHandler';
 import { alertValidation } from '../middleware/validation';
 import { alertService } from '../services/alertService';
@@ -8,7 +9,7 @@ import { logger } from '../utils/logger';
 const router = express.Router();
 
 // GET /api/alerts - Listar alertas
-router.get('/', alertValidation.query, asyncHandler(async (req, res) => {
+router.get('/', alertValidation.query, asyncHandler(async (req: Request, res: Response) => {
   const { 
     page = 1, 
     limit = 20, 
@@ -31,19 +32,24 @@ router.get('/', alertValidation.query, asyncHandler(async (req, res) => {
 
   const alerts = await alertService.getAlerts(query);
 
-  const total = await prisma.alert.count({
-    where: {
-      ...(query.sensorId && { sensorId: query.sensorId }),
-      ...(query.severity && { severity: query.severity }),
-      ...(query.resolved !== undefined && { resolved: query.resolved }),
-      ...(query.startDate || query.endDate) && {
-        createdAt: {
-          ...(query.startDate && { gte: query.startDate }),
-          ...(query.endDate && { lte: query.endDate }),
-        }
-      }
-    }
-  });
+  const where: Prisma.AlertWhereInput = {};
+  if (query.sensorId) {
+    where.sensorId = query.sensorId;
+  }
+  if (query.severity) {
+    where.severity = query.severity as AlertSeverity;
+  }
+  if (query.resolved !== undefined) {
+    where.resolved = query.resolved;
+  }
+  if (query.startDate || query.endDate) {
+    where.createdAt = {
+      ...(query.startDate && { gte: query.startDate }),
+      ...(query.endDate && { lte: query.endDate }),
+    };
+  }
+
+  const total = await prisma.alert.count({ where });
 
   res.json({
     success: true,
@@ -60,7 +66,7 @@ router.get('/', alertValidation.query, asyncHandler(async (req, res) => {
 }));
 
 // POST /api/alerts - Crear alerta manual
-router.post('/', alertValidation.create, asyncHandler(async (req, res) => {
+router.post('/', alertValidation.create, asyncHandler(async (req: Request, res: Response) => {
   const { type, severity, message, sensorId, value, threshold } = req.body;
 
   const alert = await alertService.createAlert({
@@ -82,7 +88,7 @@ router.post('/', alertValidation.create, asyncHandler(async (req, res) => {
 }));
 
 // POST /api/alerts/:id/resolve - Resolver alerta
-router.post('/:id/resolve', asyncHandler(async (req, res) => {
+router.post('/:id/resolve', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
   const { userId } = req.body; // En una implementación real, esto vendría del token JWT
 
@@ -96,7 +102,7 @@ router.post('/:id/resolve', asyncHandler(async (req, res) => {
 }));
 
 // GET /api/alerts/statistics - Estadísticas de alertas
-router.get('/statistics', asyncHandler(async (req, res) => {
+router.get('/statistics', asyncHandler(async (req: Request, res: Response) => {
   const { startDate, endDate } = req.query;
 
   const statistics = await alertService.getAlertStatistics(
@@ -111,7 +117,7 @@ router.get('/statistics', asyncHandler(async (req, res) => {
 }));
 
 // GET /api/alerts/recent - Alertas recientes
-router.get('/recent', asyncHandler(async (req, res) => {
+router.get('/recent', asyncHandler(async (req: Request, res: Response) => {
   const { limit = 10 } = req.query;
 
   const recentAlerts = await prisma.alert.findMany({
@@ -146,7 +152,7 @@ router.get('/recent', asyncHandler(async (req, res) => {
 }));
 
 // GET /api/alerts/critical - Alertas críticas no resueltas
-router.get('/critical', asyncHandler(async (req, res) => {
+router.get('/critical', asyncHandler(async (req: Request, res: Response) => {
   const criticalAlerts = await prisma.alert.findMany({
     where: {
       severity: 'CRITICAL',
@@ -175,7 +181,7 @@ router.get('/critical', asyncHandler(async (req, res) => {
 }));
 
 // DELETE /api/alerts/:id - Eliminar alerta
-router.delete('/:id', asyncHandler(async (req, res) => {
+router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 
   const alert = await prisma.alert.findUnique({

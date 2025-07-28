@@ -1,65 +1,53 @@
 import nodemailer from 'nodemailer';
 import { logger } from '../utils/logger';
 
+interface MailOptions {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+}
+
 class EmailService {
-  private transporter: nodemailer.Transporter | null = null;
+  private transporter: nodemailer.Transporter;
 
   constructor() {
-    this.initializeTransporter();
+    // Se corrige el nombre del método de 'createTransporter' a 'createTransport'
+    this.transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT),
+      secure: Number(process.env.SMTP_PORT) === 465, // true for 465, false for other ports
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    this.verifyConnection();
   }
 
-  private initializeTransporter() {
+  private verifyConnection(): void {
+    this.transporter.verify((error, success) => {
+      if (error) {
+        logger.error('❌ Error configurando el servicio de email:', error);
+      } else {
+        logger.info('✅ Servidor de email está listo para enviar correos');
+      }
+    });
+  }
+
+  public async sendMail(options: MailOptions): Promise<void> {
     try {
-      this.transporter = nodemailer.createTransporter({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || '587'),
-        secure: process.env.SMTP_PORT === '465',
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
+      const info = await this.transporter.sendMail({
+        from: `"SENA Acuaponía" <${process.env.SMTP_USER}>`,
+        ...options,
       });
-
-      logger.info('✅ Servicio de email inicializado');
+      logger.info(`📧 Email enviado: ${info.messageId}`);
     } catch (error) {
-      logger.error('❌ Error inicializando servicio de email:', error);
+      logger.error('❌ Error enviando email:', error);
+      throw new Error('Error al enviar el correo electrónico');
     }
-  }
-
-  async sendEmail(to: string, subject: string, html: string) {
-    if (!this.transporter) {
-      logger.error('❌ Transporter de email no inicializado');
-      return false;
-    }
-
-    try {
-      const mailOptions = {
-        from: `"Sistema SENA Acuaponía" <${process.env.SMTP_USER}>`,
-        to,
-        subject,
-        html,
-      };
-
-      const result = await this.transporter.sendMail(mailOptions);
-      logger.info(`✅ Email enviado a ${to}: ${subject}`);
-      return result;
-    } catch (error) {
-      logger.error(`❌ Error enviando email a ${to}:`, error);
-      return false;
-    }
-  }
-
-  async sendBulkEmail(recipients: string[], subject: string, html: string) {
-    const results = [];
-    
-    for (const recipient of recipients) {
-      const result = await this.sendEmail(recipient, subject, html);
-      results.push({ recipient, success: !!result });
-    }
-
-    return results;
   }
 }
 
 export const emailService = new EmailService();
-export default emailService;

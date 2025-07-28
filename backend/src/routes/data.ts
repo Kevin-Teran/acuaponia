@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { prisma } from '../config/database';
 import { asyncHandler, CustomError } from '../middleware/errorHandler';
 import { sensorValidation } from '../middleware/validation';
@@ -8,7 +8,7 @@ import { sensorDataService } from '../services/sensorDataService';
 const router = express.Router();
 
 // GET /api/data/historical - Obtener datos históricos
-router.get('/historical', asyncHandler(async (req, res) => {
+router.get('/historical', asyncHandler(async (req: Request, res: Response) => {
   const { 
     sensorId, 
     tankId, 
@@ -36,7 +36,7 @@ router.get('/historical', asyncHandler(async (req, res) => {
 }));
 
 // GET /api/data/statistics - Obtener estadísticas
-router.get('/statistics', asyncHandler(async (req, res) => {
+router.get('/statistics', asyncHandler(async (req: Request, res: Response) => {
   const { sensorId, startDate, endDate } = req.query;
 
   if (!sensorId) {
@@ -56,7 +56,7 @@ router.get('/statistics', asyncHandler(async (req, res) => {
 }));
 
 // GET /api/data/realtime - Obtener datos en tiempo real
-router.get('/realtime', asyncHandler(async (req, res) => {
+router.get('/realtime', asyncHandler(async (req: Request, res: Response) => {
   const { sensorIds } = req.query;
 
   let sensorIdArray: string[] = [];
@@ -102,7 +102,7 @@ router.get('/realtime', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/data/sensor-data - Crear datos de sensor (para ingreso manual)
-router.post('/sensor-data', sensorValidation.data, asyncHandler(async (req, res) => {
+router.post('/sensor-data', sensorValidation.data, asyncHandler(async (req: Request, res: Response) => {
   const { sensorId, temperature, ph, oxygen, timestamp } = req.body;
 
   const sensorData = await sensorDataService.createSensorData({
@@ -123,7 +123,7 @@ router.post('/sensor-data', sensorValidation.data, asyncHandler(async (req, res)
 }));
 
 // GET /api/data/summary - Resumen de datos por período
-router.get('/summary', asyncHandler(async (req, res) => {
+router.get('/summary', asyncHandler(async (req: Request, res: Response) => {
   const { period = 'day', tankId } = req.query;
 
   let startDate: Date;

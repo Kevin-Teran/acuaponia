@@ -2,6 +2,7 @@ import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
 import { socketService } from './socketService';
 import { emailService } from './emailService';
+import { Sensor } from '@prisma/client';
 
 export interface CreateAlertInput {
   type: string;
@@ -137,7 +138,7 @@ class AlertService {
     }
   }
 
-  private checkTemperatureThresholds(temperature: number, sensor: any) {
+  private checkTemperatureThresholds(temperature: number, sensor: Sensor & { tank: any }) {
     const alerts = [];
     const thresholds = this.defaultThresholds.temperature;
 
@@ -180,7 +181,7 @@ class AlertService {
     return alerts;
   }
 
-  private checkPhThresholds(ph: number, sensor: any) {
+  private checkPhThresholds(ph: number, sensor: Sensor & { tank: any }) {
     const alerts = [];
     const thresholds = this.defaultThresholds.ph;
 
@@ -223,7 +224,7 @@ class AlertService {
     return alerts;
   }
 
-  private checkOxygenThresholds(oxygen: number, sensor: any) {
+  private checkOxygenThresholds(oxygen: number, sensor: Sensor & { tank: any }) {
     const alerts = [];
     const thresholds = this.defaultThresholds.oxygen;
 
@@ -361,25 +362,29 @@ class AlertService {
         }
       });
 
-      const emailData = {
-        subject: `🚨 Alerta ${alert.severity}: ${alert.type}`,
-        html: `
-          <h2>Alerta del Sistema de Monitoreo Acuático SENA</h2>
-          <p><strong>Tipo:</strong> ${alert.type}</p>
-          <p><strong>Severidad:</strong> ${alert.severity}</p>
-          <p><strong>Mensaje:</strong> ${alert.message}</p>
-          <p><strong>Sensor:</strong> ${alert.sensor.name}</p>
-          <p><strong>Ubicación:</strong> ${alert.sensor.tank.name} - ${alert.sensor.tank.location}</p>
-          <p><strong>Fecha:</strong> ${new Date(alert.createdAt).toLocaleString('es-ES')}</p>
-          ${alert.value ? `<p><strong>Valor:</strong> ${alert.value}</p>` : ''}
-          ${alert.threshold ? `<p><strong>Umbral:</strong> ${alert.threshold}</p>` : ''}
-          <hr>
-          <p><small>Sistema de Monitoreo Acuático - SENA</small></p>
-        `,
-      };
-
       for (const admin of admins) {
-        await emailService.sendEmail(admin.email, emailData.subject, emailData.html);
+        if (admin.email) {
+            // --- CORRECCIÓN AQUÍ ---
+            // Se añadió la propiedad 'text' que era obligatoria.
+            await emailService.sendMail({
+              to: admin.email,
+              subject: `🚨 Alerta ${alert.severity}: ${alert.type}`,
+              text: `Alerta del Sistema de Monitoreo Acuático SENA\n\nTipo: ${alert.type}\nSeveridad: ${alert.severity}\nMensaje: ${alert.message}\nSensor: ${alert.sensor.name}\nUbicación: ${alert.sensor.tank.name} - ${alert.sensor.tank.location}\nFecha: ${new Date(alert.createdAt).toLocaleString('es-ES')}`,
+              html: `
+                <h2>Alerta del Sistema de Monitoreo Acuático SENA</h2>
+                <p><strong>Tipo:</strong> ${alert.type}</p>
+                <p><strong>Severidad:</strong> ${alert.severity}</p>
+                <p><strong>Mensaje:</strong> ${alert.message}</p>
+                <p><strong>Sensor:</strong> ${alert.sensor.name}</p>
+                <p><strong>Ubicación:</strong> ${alert.sensor.tank.name} - ${alert.sensor.tank.location}</p>
+                <p><strong>Fecha:</strong> ${new Date(alert.createdAt).toLocaleString('es-ES')}</p>
+                ${alert.value ? `<p><strong>Valor:</strong> ${alert.value}</p>` : ''}
+                ${alert.threshold ? `<p><strong>Umbral:</strong> ${alert.threshold}</p>` : ''}
+                <hr>
+                <p><small>Sistema de Monitoreo Acuático - SENA</small></p>
+              `,
+            });
+        }
       }
 
     } catch (error) {
