@@ -5,93 +5,96 @@ import { prisma } from '../config/database';
 import { CustomError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
 
-// --- FUNCIÓN AUXILIAR PARA GENERAR TOKENS ---
-const generateTokens = (user: { id: string; email: string; role: string; }) => {
-  const jwtSecret = process.env.JWT_SECRET;
-  const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET;
+const generateTokens = (user: { id: string; email: string; role: string }) => {
+  const jwtSecret = process.env.JWT_SECRET || 'default_secret';
+  const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET || 'default_refresh_secret';
 
-  if (typeof jwtSecret !== 'string' || typeof jwtRefreshSecret !== 'string') {
-    logger.error('Las claves JWT_SECRET o JWT_REFRESH_SECRET no están definidas en el entorno.');
-    throw new CustomError('Error de configuración del servidor.', 500);
-  }
+  const accessToken = jwt.sign(
+    { userId: user.id, email: user.email, role: user.role },
+    jwtSecret,
+    { expiresIn: '15m' }
+  );
 
-  const accessTokenOptions: jwt.SignOptions = { expiresIn: '24h' };
-  const refreshTokenOptions: jwt.SignOptions = { expiresIn: '7d' };
-
-  const accessToken = jwt.sign({ userId: user.id, email: user.email, role: user.role }, jwtSecret, accessTokenOptions);
-  const refreshToken = jwt.sign({ userId: user.id }, jwtRefreshSecret, refreshTokenOptions);
+  const refreshToken = jwt.sign(
+    { userId: user.id },
+    jwtRefreshSecret,
+    { expiresIn: '7d' }
+  );
 
   return { accessToken, refreshToken };
 };
 
-// --- CONTROLADORES EXPORTADOS ---
-
-// Controlador para el inicio de sesión
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
-  const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase() },
-    select: {
-      id: true,
-      email: true,
-      password: true,
-      name: true,
-      role: true,
-      status: true,
-      lastLogin: true,
-    },
-  });
+  try {
+    // 1. Buscar usuario por email
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
 
-  if (!user || !(await bcrypt.compare(password, user.password))) {
-    throw new CustomError('Credenciales inválidas', 401);
-  }
+    if (!user) {
+      logger.warn(`Intento de login fallido: usuario ${email} no encontrado`);
+      throw new CustomError('Credenciales inválidas', 401);
+    }
 
-  if (user.status !== 'ACTIVE') {
-    throw new CustomError('Cuenta inactiva o suspendida', 401);
-  }
+    // 2. Verificar contraseña
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      logger.warn(`Intento de login fallido: contraseña incorrecta para ${email}`);
+      throw new CustomError('Credenciales inválidas', 401);
+    }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { lastLogin: new Date() },
-  });
+    // 3. Verificar estado de la cuenta
+    if (user.status !== 'ACTIVE') {
+      logger.warn(`Intento de login fallido: cuenta ${email} inactiva`);
+      throw new CustomError('Cuenta inactiva', 403);
+    }
 
-  const tokens = generateTokens(user);
-  logger.info(`Usuario autenticado: ${user.email}`);
+    // 4. Actualizar último login
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date() },
+    });
 
-  res.json({
-    success: true,
-    data: {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        lastLogin: user.lastLogin,
+    // 5. Generar tokens
+    const tokens = generateTokens(user);
+
+    // 6. Responder con los datos del usuario
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          lastLogin: user.lastLogin,
+        },
+        tokens,
       },
-      tokens,
-    },
-  });
+    });
+
+    logger.info(`Login exitoso: ${user.email}`);
+  } catch (error) {
+    logger.error('Error en login:', error);
+    throw error;
+  }
 };
 
-// Controlador para refrescar el token
 export const refresh = async (req: Request, res: Response) => {
-    const { refreshToken } = req.body;
+  const { refreshToken } = req.body;
 
   if (!refreshToken) {
     throw new CustomError('Refresh token requerido', 400);
   }
 
-  const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET;
-  if (typeof jwtRefreshSecret !== 'string') {
-    throw new CustomError('Error de configuración del servidor.', 500);
-  }
-
   try {
+    const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET || 'default_refresh_secret';
     const decoded = jwt.verify(refreshToken, jwtRefreshSecret) as any;
+
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { id: true, email: true, name: true, role: true, status: true },
     });
 
     if (!user || user.status !== 'ACTIVE') {
@@ -99,39 +102,23 @@ export const refresh = async (req: Request, res: Response) => {
     }
 
     const { accessToken } = generateTokens(user);
-
-    res.json({
-      success: true,
-      data: {
-        accessToken,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-        },
-      },
-    });
+    res.json({ success: true, data: { accessToken } });
   } catch (error) {
     throw new CustomError('Refresh token inválido', 401);
   }
 };
 
-// Controlador para obtener el perfil del usuario
 export const getMe = async (req: Request, res: Response) => {
-    const token = req.headers.authorization?.replace('Bearer ', '');
+  const token = req.headers.authorization?.split(' ')[1];
 
   if (!token) {
     throw new CustomError('Token de acceso requerido', 401);
   }
-  
-  const jwtSecret = process.env.JWT_SECRET;
-  if (typeof jwtSecret !== 'string') {
-    throw new CustomError('Error de configuración del servidor.', 500);
-  }
 
   try {
+    const jwtSecret = process.env.JWT_SECRET || 'default_secret';
     const decoded = jwt.verify(token, jwtSecret) as any;
+
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       select: {
@@ -155,7 +142,6 @@ export const getMe = async (req: Request, res: Response) => {
   }
 };
 
-// Controlador para cerrar sesión
 export const logout = async (req: Request, res: Response) => {
   logger.info('Usuario cerró sesión');
   res.json({ success: true, message: 'Sesión cerrada exitosamente' });

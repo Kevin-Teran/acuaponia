@@ -1,7 +1,6 @@
 import { api } from '../config/api';
 import { LoginCredentials, User } from '../types';
 
-// --- Interfaz para la respuesta de la API de login ---
 interface LoginResponse {
   success: boolean;
   data: {
@@ -13,17 +12,6 @@ interface LoginResponse {
   };
 }
 
-/**
- * Servicio de Autenticación
- * Contiene toda la lógica para el inicio de sesión, cierre de sesión
- * y gestión de la información del usuario.
- */
-
-/**
- * Inicia sesión en la aplicación.
- * @param credentials - Un objeto con el email y la contraseña del usuario.
- * @returns Los datos del usuario si el inicio de sesión es exitoso.
- */
 export const login = async (credentials: LoginCredentials): Promise<User> => {
   try {
     const response = await api.post<LoginResponse>('/auth/login', credentials);
@@ -31,54 +19,72 @@ export const login = async (credentials: LoginCredentials): Promise<User> => {
     if (response.data.success && response.data.data) {
       const { user, tokens } = response.data.data;
 
-      // Guardar el token y los datos del usuario en el almacenamiento local del navegador.
       localStorage.setItem('acuaponia_token', tokens.accessToken);
+      localStorage.setItem('acuaponia_refresh_token', tokens.refreshToken);
       localStorage.setItem('acuaponia_user', JSON.stringify(user));
 
+      // Configurar el token en axios para peticiones futuras
+      api.defaults.headers.common['Authorization'] = `Bearer ${tokens.accessToken}`;
+
       return user;
-    } else {
-      // Si la API responde con éxito pero sin datos, lanzar un error.
-      throw new Error('La respuesta de la API no contiene los datos esperados.');
     }
+    throw new Error('La respuesta de la API no contiene los datos esperados.');
   } catch (error: any) {
-    // Si hay un error, lo registramos y lo lanzamos de nuevo para que el componente que lo llamó lo maneje.
-    console.error('Error en el servicio de login:', error.response?.data?.message || error.message);
-    throw new Error(error.response?.data?.message || 'Error al iniciar sesión. Por favor, inténtelo de nuevo.');
+    console.error('Error en el servicio de login:', error);
+    throw new Error(error.response?.data?.message || 'Error al iniciar sesión');
   }
 };
 
-/**
- * Cierra la sesión del usuario.
- * Elimina el token y los datos del usuario del almacenamiento local.
- */
 export const logout = (): void => {
   localStorage.removeItem('acuaponia_token');
+  localStorage.removeItem('acuaponia_refresh_token');
   localStorage.removeItem('acuaponia_user');
-  // Redirigir al usuario a la página de login.
+  delete api.defaults.headers.common['Authorization'];
   window.location.href = '/login';
 };
 
-/**
- * Obtiene los datos del usuario actualmente autenticado desde el almacenamiento local.
- * @returns El objeto del usuario o null si no hay nadie autenticado.
- */
 export const getCurrentUser = (): User | null => {
   const userStr = localStorage.getItem('acuaponia_user');
-  if (userStr) {
-    try {
-      return JSON.parse(userStr) as User;
-    } catch (error) {
-      console.error('Error al parsear los datos del usuario:', error);
-      return null;
-    }
-  }
-  return null;
+  return userStr ? JSON.parse(userStr) : null;
 };
 
-/**
- * Obtiene el token de autenticación del almacenamiento local.
- * @returns El token como string o null si no existe.
- */
-export const getToken = (): string | null => {
-  return localStorage.getItem('acuaponia_token');
+export const refreshToken = async (): Promise<string> => {
+  const refreshToken = localStorage.getItem('acuaponia_refresh_token');
+  if (!refreshToken) throw new Error('No hay refresh token disponible');
+
+  try {
+    const response = await api.post('/auth/refresh', { refreshToken });
+    const newAccessToken = response.data.data.accessToken;
+    
+    localStorage.setItem('acuaponia_token', newAccessToken);
+    api.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
+    
+    return newAccessToken;
+  } catch (error) {
+    logout();
+    throw error;
+  }
 };
+
+// Interceptor para manejar tokens expirados
+api.interceptors.response.use(
+  response => response,
+  async error => {
+    const originalRequest = error.config;
+    
+    if (error.response.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      try {
+        const newToken = await refreshToken();
+        originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        logout();
+        return Promise.reject(refreshError);
+      }
+    }
+    
+    return Promise.reject(error);
+  }
+);

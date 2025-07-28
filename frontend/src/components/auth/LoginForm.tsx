@@ -1,57 +1,38 @@
 import React, { useState } from 'react';
-import { User, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, LogIn, UserCheck } from 'lucide-react';
 import Swal from 'sweetalert2';
-import { LoginCredentials } from '../../types'; // Se importa el tipo para las credenciales
+import { useAuth } from '../../hooks/useAuth';
+import { LoginCredentials } from '../types';
 
-// --- CORRECCIÓN AQUÍ ---
-// La prop onLogin ahora espera un objeto de tipo LoginCredentials
-interface LoginFormProps {
-  onLogin: (credentials: LoginCredentials) => Promise<boolean>;
-  loading: boolean;
-}
-
-export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading }) => {
+export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      // --- CORRECCIÓN AQUÍ ---
-      // Se envían las credenciales como un objeto, coincidiendo con LoginCredentials
-      const success = await onLogin({ email, password });
-      
-      if (!success) {
-        await Swal.fire({
-          icon: 'error',
-          title: 'Error de Autenticación',
-          text: 'Credenciales inválidas. Verifique su email y contraseña.',
-          confirmButtonText: 'Intentar de nuevo',
-          confirmButtonColor: '#FF671F',
-          background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
-          color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#374151',
-        });
-      } else {
-        await Swal.fire({
-          icon: 'success',
-          title: '¡Bienvenido!',
-          text: 'Inicio de sesión exitoso',
-          timer: 1500,
-          showConfirmButton: false,
-          background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
-          color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#374151',
-        });
-      }
-    } catch (err) {
+      await login({ email, password });
+      await Swal.fire({
+        icon: 'success',
+        title: '¡Bienvenido!',
+        text: 'Inicio de sesión exitoso',
+        timer: 1500,
+        showConfirmButton: false,
+        background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
+        color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#374151',
+      });
+      window.location.href = '/dashboard';
+    } catch (error: any) {
       await Swal.fire({
         icon: 'error',
-        title: 'Error de Conexión',
-        text: 'No se pudo conectar al servidor. Intente nuevamente.',
-        confirmButtonText: 'Reintentar',
+        title: 'Error de Autenticación',
+        text: error.message || 'Credenciales inválidas. Verifique su email y contraseña.',
+        confirmButtonText: 'Intentar de nuevo',
         confirmButtonColor: '#FF671F',
         background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
         color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#374151',
@@ -69,9 +50,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* SENA Header */}
+        {/* Cabecera */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 from-sena-orange to-orange-600 rounded-full mb-4 shadow-lg">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full mb-4 shadow-lg">
             <img 
               src="/logo-sena.png" 
               alt="SENA Logo" 
@@ -86,59 +67,66 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading }) => {
           </p>
         </div>
 
-        {/* Login Form */}
+        {/* Formulario */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-200 dark:border-gray-700">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Field */}
+            {/* Campo Email */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" htmlFor="email">
                 Correo Electrónico
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" aria-hidden="true" />
                 <input
+                  id="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-orange focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                  autoComplete="email"
+                  aria-label="Correo electrónico"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
                   placeholder="usuario@sena.edu.co"
                   required
                 />
               </div>
             </div>
 
-            {/* Password Field */}
+            {/* Campo Contraseña */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" htmlFor="password">
                 Contraseña
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" aria-hidden="true" />
                 <input
+                  id="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-orange focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                  autoComplete="current-password"
+                  aria-label="Contraseña"
+                  className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
                   placeholder="••••••••"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
-            {/* Submit Button */}
+            {/* Botón de Envío */}
             <button
               type="submit"
-              disabled={isLoading || loading}
-              className="w-full bg-gradient-to-r from-sena-orange to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
             >
-              {isLoading || loading ? (
+              {isLoading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               ) : (
                 <>
@@ -149,7 +137,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading }) => {
             </button>
           </form>
 
-          {/* Demo Accounts */}
+          {/* Cuentas de demostración */}
           <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 text-center">
               Cuentas de demostración:
@@ -162,31 +150,27 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading }) => {
                     setEmail(account.email);
                     setPassword(account.password);
                   }}
-                  className="w-full text-left p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600"
+                  className="w-full flex justify-between items-center text-left p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600"
+                  aria-label={`Usar cuenta demo ${account.role}`}
                 >
-                  <div className="flex justify-between items-center">
+                  <div className="flex items-start space-x-3">
+                    <UserCheck className="w-5 h-5 text-orange-500 mt-1" />
                     <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        {account.email}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {account.role}
-                      </p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{account.email}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{account.role}</p>
                     </div>
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
-                      Clic para usar
-                    </span>
                   </div>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">Usar</span>
                 </button>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Footer */}
+        {/* Pie de página */}
         <div className="text-center mt-8">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            © 2025 SENA - Todos los derechos reservados
+            © {new Date().getFullYear()} SENA - Todos los derechos reservados
           </p>
         </div>
       </div>
