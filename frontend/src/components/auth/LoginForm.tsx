@@ -7,6 +7,7 @@ export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +20,7 @@ export const LoginForm: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const success = await login({ email, password });
+      const success = await login({ email, password, rememberMe });
       
       if (success) {
         setIsRedirecting(true);
@@ -77,7 +78,7 @@ export const LoginForm: React.FC = () => {
       {/* Overlay de carga durante redirección */}
       {isRedirecting && (
         <div className="fixed inset-0 bg-white dark:bg-gray-900 bg-opacity-90 dark:bg-opacity-90 z-50 flex items-center justify-center transition-opacity duration-500">
-          <div className="text-center">
+          <div className="text-center animate-fade-in">
             <div className="flex justify-center mb-6">
               <img 
                 src="/logo-sena.png" 
@@ -85,10 +86,13 @@ export const LoginForm: React.FC = () => {
                 className="h-24 w-auto animate-pulse"
               />
             </div>
-            <div className="w-64 bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mx-auto">
-              <div className="bg-orange-500 h-2.5 rounded-full animate-progress"></div>
+            <div className="w-64 bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mx-auto overflow-hidden">
+              <div 
+                className="bg-gradient-to-r from-orange-500 to-orange-600 h-2.5 rounded-full animate-progress"
+                style={{ animationDuration: '1.5s' }}
+              ></div>
             </div>
-            <p className="mt-4 text-gray-600 dark:text-gray-300">Cargando sistema...</p>
+            <p className="mt-4 text-gray-600 dark:text-gray-300 font-medium">Cargando sistema...</p>
           </div>
         </div>
       )}
@@ -97,9 +101,11 @@ export const LoginForm: React.FC = () => {
         {/* Cabecera */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full mb-4 shadow-lg bg-white dark:bg-gray-800">
-            <div className="w-16 h-16 bg-orange-500 rounded-full flex items-center justify-center">
-              <User className="w-8 h-8 text-white" />
-            </div>
+            <img 
+              src="/logo-sena.png" 
+              alt="Logo SENA" 
+              className="w-16 h-16 rounded-full object-cover"
+            />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
             Sistema de Monitoreo
@@ -110,10 +116,10 @@ export const LoginForm: React.FC = () => {
         </div>
 
         {/* Formulario */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-200 dark:border-gray-700 transition-all duration-300 hover:shadow-2xl">
           
           {error && (
-            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg animate-fade-in">
               <div className="flex items-center">
                 <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
                 <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
@@ -178,11 +184,27 @@ export const LoginForm: React.FC = () => {
               </div>
             </div>
 
+            {/* Recordar sesión */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <input
+                  id="remember-me"
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="h-4 w-4 text-orange-500 focus:ring-orange-500 border-gray-300 rounded"
+                />
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                  Recordar mi sesión
+                </label>
+              </div>
+            </div>
+
             {/* Botón de Envío */}
             <button
               type="submit"
               disabled={isLoading || !email || !password}
-              className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+              className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-[1.01]"
             >
               {isLoading ? (
                 <>
@@ -198,13 +220,6 @@ export const LoginForm: React.FC = () => {
             </button>
           </form>
 
-          {/* Estado de conexión */}
-          <div className="mt-4 text-center">
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {isLoading ? '🔄 Conectando con el servidor...' : '✅ Listo para iniciar sesión'}
-            </p>
-          </div>
-
           {/* Cuentas de demostración */}
           <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 text-center">
@@ -216,7 +231,7 @@ export const LoginForm: React.FC = () => {
                   key={index}
                   onClick={() => handleDemoLogin(account.email, account.password)}
                   disabled={isLoading}
-                  className="w-full flex justify-between items-center text-left p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full flex justify-between items-center text-left p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transform hover:translate-x-1"
                 >
                   <div className="flex items-start space-x-3">
                     <UserCheck className="w-5 h-5 text-orange-500 mt-1" />
@@ -240,7 +255,7 @@ export const LoginForm: React.FC = () => {
             © {new Date().getFullYear()} SENA - Todos los derechos reservados
           </p>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-            Backend: http://localhost:5001/api
+            Versión 1.0.0
           </p>
         </div>
       </div>
