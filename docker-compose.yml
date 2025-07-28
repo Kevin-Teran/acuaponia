@@ -11,7 +11,7 @@ services:
     restart: unless-stopped
     env_file: .env # Carga toda la configuración desde el archivo .env central
     ports:
-      - "5000:5000" # Expone el puerto del backend a la máquina host
+      - "5001:5001" # Expone el puerto del backend a la máquina host
     depends_on:
       - db      # El backend no se iniciará hasta que la base de datos esté lista
       - mqtt    # El backend no se iniciará hasta que el broker MQTT esté listo

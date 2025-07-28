@@ -27,7 +27,7 @@ class MQTTService {
         password: process.env.MQTT_PASSWORD,
         clean: true,
         connectTimeout: 30000,
-        reconnectPeriod: 5000,
+        reconnectPeriod: 5001,
         keepalive: 60,
       };
 

@@ -1,20 +1,21 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { prisma } from '../config/database';
 import { asyncHandler, CustomError } from '../middleware/errorHandler';
 import { sensorValidation } from '../middleware/validation';
 import { logger } from '../utils/logger';
+import { SensorStatus, SensorType } from '@prisma/client';
 
 const router = express.Router();
 
 // GET /api/sensors - Listar sensores
-router.get('/', sensorValidation.query, asyncHandler(async (req, res) => {
+router.get('/', sensorValidation.query, asyncHandler(async (req: Request, res: Response) => {
   const { page = 1, limit = 10, type, status, tankId } = req.query;
   
   const where: any = {};
   
-  if (type) where.type = type;
-  if (status) where.status = status;
-  if (tankId) where.tankId = tankId;
+  if (type) where.type = type as SensorType;
+  if (status) where.status = status as SensorStatus;
+  if (tankId) where.tankId = tankId as string;
 
   const [sensors, total] = await Promise.all([
     prisma.sensor.findMany({
@@ -50,7 +51,7 @@ router.get('/', sensorValidation.query, asyncHandler(async (req, res) => {
 }));
 
 // POST /api/sensors - Crear sensor
-router.post('/', sensorValidation.create, asyncHandler(async (req, res) => {
+router.post('/', sensorValidation.create, asyncHandler(async (req: Request, res: Response) => {
   const { name, type, location, tankId, calibrationDate } = req.body;
 
   // Verificar que el tanque existe
@@ -65,7 +66,7 @@ router.post('/', sensorValidation.create, asyncHandler(async (req, res) => {
   const sensor = await prisma.sensor.create({
     data: {
       name,
-      type: type as any,
+      type: type as SensorType,
       location,
       tankId,
       calibrationDate: new Date(calibrationDate),
@@ -91,7 +92,7 @@ router.post('/', sensorValidation.create, asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/sensors/:id - Actualizar sensor
-router.put('/:id', sensorValidation.update, asyncHandler(async (req, res) => {
+router.put('/:id', sensorValidation.update, asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
   const { name, location, status, batteryLevel, calibrationDate } = req.body;
 
@@ -99,7 +100,7 @@ router.put('/:id', sensorValidation.update, asyncHandler(async (req, res) => {
   
   if (name) updateData.name = name;
   if (location) updateData.location = location;
-  if (status) updateData.status = status;
+  if (status) updateData.status = status as SensorStatus;
   if (batteryLevel !== undefined) updateData.batteryLevel = batteryLevel;
   if (calibrationDate) updateData.calibrationDate = new Date(calibrationDate);
 
@@ -127,7 +128,7 @@ router.put('/:id', sensorValidation.update, asyncHandler(async (req, res) => {
 }));
 
 // GET /api/sensors/:id/data - Obtener datos del sensor
-router.get('/:id/data', asyncHandler(async (req, res) => {
+router.get('/:id/data', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
   const { startDate, endDate, limit = 100 } = req.query;
 
@@ -161,7 +162,7 @@ router.get('/:id/data', asyncHandler(async (req, res) => {
 }));
 
 // DELETE /api/sensors/:id - Eliminar sensor
-router.delete('/:id', asyncHandler(async (req, res) => {
+router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 
   const sensor = await prisma.sensor.findUnique({

@@ -1,20 +1,21 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { prisma } from '../config/database';
 import { asyncHandler, CustomError } from '../middleware/errorHandler';
 import { reportValidation } from '../middleware/validation';
 import { logger } from '../utils/logger';
+import { ReportStatus, ReportType } from '@prisma/client';
 
 const router = express.Router();
 
 // GET /api/reports - Listar reportes
-router.get('/', reportValidation.query, asyncHandler(async (req, res) => {
+router.get('/', reportValidation.query, asyncHandler(async (req: Request, res: Response) => {
   const { page = 1, limit = 10, type, status, userId } = req.query;
   
   const where: any = {};
   
-  if (type) where.type = type;
-  if (status) where.status = status;
-  if (userId) where.userId = userId;
+  if (type) where.type = type as ReportType;
+  if (status) where.status = status as ReportStatus;
+  if (userId) where.userId = userId as string;
 
   const [reports, total] = await Promise.all([
     prisma.report.findMany({
@@ -50,7 +51,7 @@ router.get('/', reportValidation.query, asyncHandler(async (req, res) => {
 }));
 
 // POST /api/reports - Crear reporte
-router.post('/', reportValidation.create, asyncHandler(async (req, res) => {
+router.post('/', reportValidation.create, asyncHandler(async (req: Request, res: Response) => {
   const { title, type, parameters, userId } = req.body;
 
   // Verificar que el usuario existe
@@ -65,7 +66,7 @@ router.post('/', reportValidation.create, asyncHandler(async (req, res) => {
   const report = await prisma.report.create({
     data: {
       title,
-      type: type as any,
+      type: type as ReportType,
       parameters,
       userId,
       status: 'PENDING',
@@ -112,7 +113,7 @@ router.post('/', reportValidation.create, asyncHandler(async (req, res) => {
 }));
 
 // GET /api/reports/:id - Obtener reporte específico
-router.get('/:id', asyncHandler(async (req, res) => {
+router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 
   const report = await prisma.report.findUnique({
@@ -139,7 +140,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
 }));
 
 // GET /api/reports/:id/download - Descargar reporte
-router.get('/:id/download', asyncHandler(async (req, res) => {
+router.get('/:id/download', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 
   const report = await prisma.report.findUnique({
@@ -179,7 +180,7 @@ router.get('/:id/download', asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/reports/:id - Actualizar reporte
-router.put('/:id', asyncHandler(async (req, res) => {
+router.put('/:id', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
   const { title, parameters } = req.body;
 
@@ -212,7 +213,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
 }));
 
 // DELETE /api/reports/:id - Eliminar reporte
-router.delete('/:id', asyncHandler(async (req, res) => {
+router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 
   const report = await prisma.report.findUnique({
@@ -242,7 +243,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
 }));
 
 // GET /api/reports/generate/data-export - Generar reporte de exportación de datos
-router.post('/generate/data-export', asyncHandler(async (req, res) => {
+router.post('/generate/data-export', asyncHandler(async (req: Request, res: Response) => {
   const { 
     startDate, 
     endDate, 

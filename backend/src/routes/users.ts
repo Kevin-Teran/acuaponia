@@ -1,36 +1,31 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../config/database';
 import { asyncHandler, CustomError } from '../middleware/errorHandler';
 import { userValidation } from '../middleware/validation';
 import { logger } from '../utils/logger';
+import { Role, UserStatus } from '@prisma/client';
 
 const router = express.Router();
 
 // GET /api/users - Listar usuarios
-router.get('/', userValidation.query, asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, search, status } = req.query;
+router.get('/', userValidation.query, asyncHandler(async (req: Request, res: Response) => {
+  const { page = 1, limit = 10, role, status } = req.query;
   
   const where: any = {};
   
-  if (search) {
-    where.OR = [
-      { name: { contains: search as string } },
-      { email: { contains: search as string } }
-    ];
-  }
-  
-  if (status) {
-    where.status = status;
-  }
+  // Se usa el tipo 'Role'
+  if (role) where.role = role as Role;
+  // Se usa el tipo 'UserStatus'
+  if (status) where.status = status as UserStatus;
 
   const [users, total] = await Promise.all([
     prisma.user.findMany({
       where,
       select: {
         id: true,
-        email: true,
         name: true,
+        email: true,
         role: true,
         status: true,
         createdAt: true,
@@ -57,41 +52,37 @@ router.get('/', userValidation.query, asyncHandler(async (req, res) => {
   });
 }));
 
-// POST /api/users - Crear usuario
-router.post('/', userValidation.create, asyncHandler(async (req, res) => {
-  const { email, password, name, role = 'USER' } = req.body;
+// POST /api/users - Crear un nuevo usuario (ruta de administrador)
+router.post('/', userValidation.create, asyncHandler(async (req: Request, res: Response) => {
+  const { name, email, password, role, status } = req.body;
 
-  // Verificar si el email ya existe
-  const existingUser = await prisma.user.findUnique({
-    where: { email: email.toLowerCase() }
-  });
-
+  const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser) {
-    throw new CustomError('El email ya está registrado', 409);
+    throw new CustomError('El correo electrónico ya está en uso', 409);
   }
 
-  // Encriptar contraseña
-  const hashedPassword = await bcrypt.hash(password, 12);
+  const hashedPassword = await bcrypt.hash(password, 10);
 
-  // Crear usuario
   const user = await prisma.user.create({
     data: {
-      email: email.toLowerCase(),
-      password: hashedPassword,
       name,
-      role: role as any,
+      email,
+      password: hashedPassword,
+      // Se usa el tipo 'Role'
+      role: role as Role,
+      // Se usa el tipo 'UserStatus'
+      status: status as UserStatus,
     },
     select: {
       id: true,
-      email: true,
       name: true,
+      email: true,
       role: true,
       status: true,
-      createdAt: true,
     }
   });
 
-  logger.info(`Usuario creado: ${user.email}`);
+  logger.info(`Usuario creado por un administrador: ${user.email}`);
 
   res.status(201).json({
     success: true,
@@ -100,29 +91,73 @@ router.post('/', userValidation.create, asyncHandler(async (req, res) => {
   });
 }));
 
-// PUT /api/users/:id - Actualizar usuario
-router.put('/:id', userValidation.update, asyncHandler(async (req, res) => {
+// GET /api/users/:id - Obtener un usuario específico
+router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { email, name, role, status } = req.body;
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      lastLogin: true,
+      tanks: {
+        select: { id: true, name: true }
+      }
+    }
+  });
+
+  if (!user) {
+    throw new CustomError('Usuario no encontrado', 404);
+  }
+
+  res.json({
+    success: true,
+    data: { user }
+  });
+}));
+
+
+// PUT /api/users/:id - Actualizar un usuario
+router.put('/:id', userValidation.update, asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { name, email, role, status } = req.body;
 
   const updateData: any = {};
   
-  if (email) updateData.email = email.toLowerCase();
   if (name) updateData.name = name;
-  if (role) updateData.role = role;
-  if (status) updateData.status = status;
+  if (email) updateData.email = email;
+  // Se usa el tipo 'Role'
+  if (role) updateData.role = role as Role;
+  // Se usa el tipo 'UserStatus'
+  if (status) updateData.status = status as UserStatus;
+
+  // Verificar si el nuevo email ya está en uso por otro usuario
+  if (email) {
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        email,
+        id: { not: id }
+      }
+    });
+    if (existingUser) {
+      throw new CustomError('El correo electrónico ya está en uso por otro usuario', 409);
+    }
+  }
 
   const user = await prisma.user.update({
     where: { id },
     data: updateData,
     select: {
       id: true,
-      email: true,
       name: true,
+      email: true,
       role: true,
       status: true,
-      createdAt: true,
-      lastLogin: true,
     }
   });
 
@@ -135,44 +170,8 @@ router.put('/:id', userValidation.update, asyncHandler(async (req, res) => {
   });
 }));
 
-// PATCH /api/users/:id/toggle-status - Cambiar estado del usuario
-router.patch('/:id/toggle-status', asyncHandler(async (req, res) => {
-  const { id } = req.params;
-
-  const currentUser = await prisma.user.findUnique({
-    where: { id },
-    select: { status: true, email: true }
-  });
-
-  if (!currentUser) {
-    throw new CustomError('Usuario no encontrado', 404);
-  }
-
-  const newStatus = currentUser.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-
-  const user = await prisma.user.update({
-    where: { id },
-    data: { status: newStatus },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      role: true,
-      status: true,
-    }
-  });
-
-  logger.info(`Estado de usuario cambiado: ${user.email} -> ${newStatus}`);
-
-  res.json({
-    success: true,
-    data: { user },
-    message: `Usuario ${newStatus === 'ACTIVE' ? 'activado' : 'desactivado'} exitosamente`
-  });
-}));
-
-// DELETE /api/users/:id - Eliminar usuario
-router.delete('/:id', asyncHandler(async (req, res) => {
+// DELETE /api/users/:id - Eliminar un usuario
+router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 
   const user = await prisma.user.findUnique({
@@ -184,6 +183,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
     throw new CustomError('Usuario no encontrado', 404);
   }
 
+  // Aquí se podría añadir lógica para reasignar los tanques del usuario, etc.
   await prisma.user.delete({
     where: { id }
   });

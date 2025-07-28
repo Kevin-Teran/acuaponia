@@ -1,19 +1,20 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { prisma } from '../config/database';
 import { asyncHandler, CustomError } from '../middleware/errorHandler';
 import { tankValidation } from '../middleware/validation';
 import { logger } from '../utils/logger';
+import { TankStatus } from '@prisma/client';
 
 const router = express.Router();
 
 // GET /api/tanks - Listar tanques
-router.get('/', tankValidation.query, asyncHandler(async (req, res) => {
+router.get('/', tankValidation.query, asyncHandler(async (req: Request, res: Response) => {
   const { page = 1, limit = 10, status, userId } = req.query;
   
   const where: any = {};
   
-  if (status) where.status = status;
-  if (userId) where.userId = userId;
+  if (status) where.status = status as TankStatus;
+  if (userId) where.userId = userId as string;
 
   const [tanks, total] = await Promise.all([
     prisma.tank.findMany({
@@ -63,7 +64,7 @@ router.get('/', tankValidation.query, asyncHandler(async (req, res) => {
 }));
 
 // POST /api/tanks - Crear tanque
-router.post('/', tankValidation.create, asyncHandler(async (req, res) => {
+router.post('/', tankValidation.create, asyncHandler(async (req: Request, res: Response) => {
   const { name, location, capacity, currentLevel, userId } = req.body;
 
   // Verificar que el usuario existe
@@ -104,7 +105,7 @@ router.post('/', tankValidation.create, asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/tanks/:id - Actualizar tanque
-router.put('/:id', tankValidation.update, asyncHandler(async (req, res) => {
+router.put('/:id', tankValidation.update, asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
   const { name, location, capacity, currentLevel, status } = req.body;
 
@@ -114,7 +115,7 @@ router.put('/:id', tankValidation.update, asyncHandler(async (req, res) => {
   if (location) updateData.location = location;
   if (capacity !== undefined) updateData.capacity = capacity;
   if (currentLevel !== undefined) updateData.currentLevel = currentLevel;
-  if (status) updateData.status = status;
+  if (status) updateData.status = status as TankStatus;
 
   const tank = await prisma.tank.update({
     where: { id },
@@ -148,7 +149,7 @@ router.put('/:id', tankValidation.update, asyncHandler(async (req, res) => {
 }));
 
 // GET /api/tanks/:id/sensors - Obtener sensores del tanque
-router.get('/:id/sensors', asyncHandler(async (req, res) => {
+router.get('/:id/sensors', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 
   const tank = await prisma.tank.findUnique({
@@ -183,7 +184,7 @@ router.get('/:id/sensors', asyncHandler(async (req, res) => {
 }));
 
 // DELETE /api/tanks/:id - Eliminar tanque
-router.delete('/:id', asyncHandler(async (req, res) => {
+router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 
   const tank = await prisma.tank.findUnique({
