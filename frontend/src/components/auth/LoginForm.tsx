@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { User, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 import Swal from 'sweetalert2';
+import { LoginCredentials } from '../../types'; // Se importa el tipo para las credenciales
 
+// --- CORRECCIÓN AQUÍ ---
+// La prop onLogin ahora espera un objeto de tipo LoginCredentials
 interface LoginFormProps {
-  onLogin: (email: string, password: string) => Promise<boolean>;
+  onLogin: (credentials: LoginCredentials) => Promise<boolean>;
   loading: boolean;
 }
 
@@ -18,7 +21,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading }) => {
     setIsLoading(true);
 
     try {
-      const success = await onLogin(email, password);
+      // --- CORRECCIÓN AQUÍ ---
+      // Se envían las credenciales como un objeto, coincidiendo con LoginCredentials
+      const success = await onLogin({ email, password });
       
       if (!success) {
         await Swal.fire({
@@ -66,17 +71,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading }) => {
       <div className="w-full max-w-md">
         {/* SENA Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-sena-orange to-orange-600 rounded-full mb-4 shadow-lg">
+          <div className="inline-flex items-center justify-center w-20 h-20 from-sena-orange to-orange-600 rounded-full mb-4 shadow-lg">
             <img 
-              src="https://www.soydebuenaventura.com/media/transparent/20230802_logosena.png" 
+              src="/logo-sena.png" 
               alt="SENA Logo" 
               className="w-16 h-16 object-contain"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.nextElementSibling!.style.display = 'block';
-              }}
             />
-            <span className="text-2xl font-bold text-white hidden">SENA</span>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
             Sistema de Monitoreo
@@ -186,7 +186,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, loading }) => {
         {/* Footer */}
         <div className="text-center mt-8">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            © 2024 SENA - Todos los derechos reservados
+            © 2025 SENA - Todos los derechos reservados
           </p>
         </div>
       </div>

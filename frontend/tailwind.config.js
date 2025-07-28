@@ -7,19 +7,19 @@ export default {
       colors: {
         primary: {
           50: '#eff6ff',
-          500: '#FF671F', // Naranja SENA
+          500: '#FF671F', 
           600: '#E55A1B',
           700: '#CC4E17',
         },
         secondary: {
           50: '#ecfdf5',
-          500: '#39A900', // Verde SENA
+          500: '#39A900', 
           600: '#2E8700',
           700: '#236600',
         },
         accent: {
           50: '#fff7ed',
-          500: '#007BBF', // Azul SENA
+          500: '#007BBF', 
           600: '#0066A3',
           700: '#005287',
         },

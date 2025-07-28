@@ -72,15 +72,15 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
   
   const getCurrentColor = () => {
     if (!thresholds) return color;
-    if (currentValue < thresholds.low) return '#EF4444'; // Rojo para bajo
-    if (currentValue > thresholds.high) return '#F97316'; // Naranja para alto
+    if (currentValue < thresholds.low) return '#007BBF'; // Rojo para bajo
+    if (currentValue > thresholds.high) return '#EF4444'; // Naranja para alto
     return '#10B981'; // Verde para óptimo
   };
 
   const getStatus = () => {
     if (thresholds) {
-      if (currentValue < thresholds.low) return { text: 'BAJO', color: '#EF4444', bgColor: '#FEE2E2' };
-      if (currentValue > thresholds.high) return { text: 'ALTO', color: '#F97316', bgColor: '#FED7AA' };
+      if (currentValue < thresholds.low) return { text: 'BAJO', color: '#007BBF', bgColor: '#FEE2E2' };
+      if (currentValue > thresholds.high) return { text: 'ALTO', color: '#EF4444', bgColor: '#FED7AA' };
       return { text: 'ÓPTIMO', color: '#10B981', bgColor: '#D1FAE5' };
     }
     return { text: 'NORMAL', color: color, bgColor: '#F3F4F6' };
@@ -111,7 +111,7 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
       const lowAngle = percentageToAngle(getValuePercentage(thresholds.low));
       ctx.beginPath();
       ctx.arc(centerX, centerY, radius, Math.PI, lowAngle);
-      ctx.strokeStyle = '#EF4444';
+      ctx.strokeStyle = '#007BBF';
       ctx.lineWidth = lineWidth;
       ctx.stroke();
 
@@ -126,7 +126,7 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
       // Sección alta (naranja)
       ctx.beginPath();
       ctx.arc(centerX, centerY, radius, highAngle, 2 * Math.PI);
-      ctx.strokeStyle = '#F97316';
+      ctx.strokeStyle = '#EF4444';
       ctx.lineWidth = lineWidth;
       ctx.stroke();
     } else {

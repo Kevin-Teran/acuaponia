@@ -1,3 +1,8 @@
+export interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
 export interface SensorData {
   timestamp: string;
   temperature: number;
@@ -12,7 +17,7 @@ export interface User {
   name: string;
   createdAt: string;
   lastLogin?: string;
-  status: 'active' | 'inactive';
+  status: boolean;
 }
 
 export interface AuthState {
