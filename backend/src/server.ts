@@ -40,7 +40,7 @@ const io = new SocketIOServer(server, {
 });
 
 const PORT = process.env.PORT || 5000;
-const HOST = process.env.HOST || 'localhost';
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Rate limiting
 const limiter = rateLimit({
@@ -139,7 +139,7 @@ async function startServer() {
     process.on('SIGTERM', gracefulShutdown);
     process.on('SIGINT', gracefulShutdown);
 
-  } catch (error) {
+    }, parseInt(process.env.GRACEFUL_SHUTDOWN_TIMEOUT || '10000'));
     logger.error('❌ Error al iniciar el servidor:', error);
     process.exit(1);
   }
