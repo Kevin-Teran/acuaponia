@@ -9,14 +9,20 @@ interface MailOptions {
 }
 
 class EmailService {
-  private transporter: nodemailer.Transporter;
+  private transporter: nodemailer.Transporter | null = null;
+  private isVerified: boolean = false;
 
   constructor() {
-    // Se corrige el nombre del método de 'createTransporter' a 'createTransport'
+    // Verifica si las variables de entorno para SMTP están presentes
+    if (!process.env.SMTP_HOST || !process.env.SMTP_PORT || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      logger.warn('⚠️  Credenciales SMTP no definidas en .env. El servicio de email estará deshabilitado.');
+      return; // No intenta crear el transporter si faltan credenciales
+    }
+
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT),
-      secure: Number(process.env.SMTP_PORT) === 465, // true for 465, false for other ports
+      secure: Number(process.env.SMTP_PORT) === 465, // true para 465, false para otros puertos
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
@@ -26,17 +32,33 @@ class EmailService {
     this.verifyConnection();
   }
 
+  /**
+   * Verifica la conexión con el servidor SMTP de forma asíncrona sin bloquear el inicio.
+   */
   private verifyConnection(): void {
-    this.transporter.verify((error, success) => {
+    if (!this.transporter) return;
+
+    this.transporter.verify((error) => {
       if (error) {
-        logger.error('❌ Error configurando el servicio de email:', error);
+        logger.error(`❌ Error al verificar la conexión SMTP: ${error.message}. Los correos no se enviarán.`);
+        this.isVerified = false;
       } else {
-        logger.info('✅ Servidor de email está listo para enviar correos');
+        logger.info('✅ Servidor de email está listo para enviar correos.');
+        this.isVerified = true;
       }
     });
   }
 
+  /**
+   * Envía un correo electrónico si el servicio está configurado y verificado.
+   * @param {MailOptions} options - Opciones del correo (destinatario, asunto, etc.).
+   */
   public async sendMail(options: MailOptions): Promise<void> {
+    if (!this.transporter || !this.isVerified) {
+      logger.error('Email no enviado: el servicio de correo no está configurado o verificado.');
+      return; // Previene el envío si no hay conexión, evitando un crash.
+    }
+
     try {
       const info = await this.transporter.sendMail({
         from: `"SENA Acuaponía" <${process.env.SMTP_USER}>`,
@@ -45,7 +67,7 @@ class EmailService {
       logger.info(`📧 Email enviado: ${info.messageId}`);
     } catch (error) {
       logger.error('❌ Error enviando email:', error);
-      throw new Error('Error al enviar el correo electrónico');
+      // No relanzamos el error para no detener otros procesos.
     }
   }
 }
