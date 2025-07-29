@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User, Lock, Eye, EyeOff, LogIn, UserCheck, AlertCircle } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { useAuth } from '../../hooks/useAuth';
+import { LoadingSpinner } from '../common/LoadingSpinner';
 
 export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -75,26 +76,14 @@ export const LoginForm: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4 relative">
-      {/* Overlay de carga durante redirección */}
+      
+      {/* Loading de redirección con el nuevo componente */}
       {isRedirecting && (
-        <div className="fixed inset-0 bg-white dark:bg-gray-900 bg-opacity-90 dark:bg-opacity-90 z-50 flex items-center justify-center transition-opacity duration-500">
-          <div className="text-center animate-fade-in">
-            <div className="flex justify-center mb-6">
-              <img 
-                src="/logo-sena.png" 
-                alt="Logo SENA" 
-                className="h-24 w-auto animate-pulse"
-              />
-            </div>
-            <div className="w-64 bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mx-auto overflow-hidden">
-              <div 
-                className="bg-gradient-to-r from-orange-500 to-orange-600 h-2.5 rounded-full animate-progress"
-                style={{ animationDuration: '1.5s' }}
-              ></div>
-            </div>
-            <p className="mt-4 text-gray-600 dark:text-gray-300 font-medium">Cargando sistema...</p>
-          </div>
-        </div>
+        <LoadingSpinner 
+          fullScreen 
+          size="lg" 
+          message="Cargando sistema..." 
+        />
       )}
 
       <div className="w-full max-w-md">
