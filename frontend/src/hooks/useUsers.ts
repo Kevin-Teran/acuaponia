@@ -1,115 +1,73 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { User } from '../types';
+import * as userService from '../services/userService';
 
-// Mock de usuarios para demostración
-const mockUsers: User[] = [
-  { 
-    id: '1', 
-    email: 'admin@acuaponia.com', 
-    role: 'admin', 
-    name: 'Administrador Principal',
-    createdAt: '2024-01-15T10:00:00Z',
-    lastLogin: '2024-12-20T14:30:00Z',
-    status: 'active'
-  },
-  { 
-    id: '2', 
-    email: 'usuario@acuaponia.com', 
-    role: 'user', 
-    name: 'Usuario Operador',
-    createdAt: '2024-02-01T09:15:00Z',
-    lastLogin: '2024-12-19T16:45:00Z',
-    status: 'active'
-  },
-  { 
-    id: '3', 
-    email: 'tecnico@acuaponia.com', 
-    role: 'user', 
-    name: 'Técnico de Campo',
-    createdAt: '2024-03-10T11:30:00Z',
-    lastLogin: '2024-12-18T08:20:00Z',
-    status: 'active'
-  },
-  { 
-    id: '4', 
-    email: 'supervisor@acuaponia.com', 
-    role: 'admin', 
-    name: 'Supervisor de Planta',
-    createdAt: '2024-04-05T14:00:00Z',
-    status: 'inactive'
-  },
-];
-
+/**
+ * @hook useUsers
+ * @desc Hook personalizado para gestionar el estado y las operaciones CRUD de los usuarios.
+ */
 export const useUsers = () => {
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+    const [users, setUsers] = useState<User[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Simular carga de usuarios
-    setTimeout(() => {
-      setUsers(mockUsers);
-      setLoading(false);
-    }, 500);
-  }, []);
+    const fetchUsers = useCallback(async () => {
+        try {
+            setLoading(true);
+            const fetchedUsers = await userService.getUsers();
+            setUsers(fetchedUsers);
+            setError(null);
+        } catch (err) {
+            console.error('Error fetching users:', err);
+            setError('No se pudieron cargar los usuarios.');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
-  const createUser = async (userData: Omit<User, 'id' | 'createdAt'>): Promise<boolean> => {
-    try {
-      const newUser: User = {
-        ...userData,
-        id: Date.now().toString(),
-        createdAt: new Date().toISOString(),
-      };
-      
-      setUsers(prev => [...prev, newUser]);
-      return true;
-    } catch (error) {
-      console.error('Error creating user:', error);
-      return false;
-    }
-  };
+    useEffect(() => {
+        fetchUsers();
+    }, [fetchUsers]);
 
-  const updateUser = async (id: string, userData: Partial<User>): Promise<boolean> => {
-    try {
-      setUsers(prev => prev.map(user => 
-        user.id === id ? { ...user, ...userData } : user
-      ));
-      return true;
-    } catch (error) {
-      console.error('Error updating user:', error);
-      return false;
-    }
-  };
+    const addUser = async (userData: Partial<User>): Promise<User | null> => {
+        try {
+            const newUser = await userService.createUser(userData);
+            setUsers(prev => [newUser, ...prev]);
+            return newUser;
+        } catch (err) {
+            console.error('Error creating user:', err);
+            return null;
+        }
+    };
 
-  const deleteUser = async (id: string): Promise<boolean> => {
-    try {
-      setUsers(prev => prev.filter(user => user.id !== id));
-      return true;
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      return false;
-    }
-  };
+    const updateUser = async (id: string, userData: Partial<User>): Promise<User | null> => {
+        try {
+            const updatedUser = await userService.updateUser(id, userData);
+            setUsers(prev => prev.map(user => (user.id === id ? updatedUser : user)));
+            return updatedUser;
+        } catch (err) {
+            console.error('Error updating user:', err);
+            return null;
+        }
+    };
 
-  const toggleUserStatus = async (id: string): Promise<boolean> => {
-    try {
-      setUsers(prev => prev.map(user => 
-        user.id === id 
-          ? { ...user, status: user.status === 'active' ? 'inactive' : 'active' }
-          : user
-      ));
-      return true;
-    } catch (error) {
-      console.error('Error toggling user status:', error);
-      return false;
-    }
-  };
+    const deleteUser = async (id: string): Promise<boolean> => {
+        try {
+            await userService.deleteUser(id);
+            setUsers(prev => prev.filter(user => user.id !== id));
+            return true;
+        } catch (err) {
+            console.error('Error deleting user:', err);
+            return false;
+        }
+    };
 
-  return {
-    users,
-    loading,
-    createUser,
-    updateUser,
-    deleteUser,
-    toggleUserStatus,
-  };
+    return {
+        users,
+        loading,
+        error,
+        addUser,
+        updateUser,
+        deleteUser,
+    };
 };

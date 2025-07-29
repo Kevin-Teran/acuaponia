@@ -4,8 +4,18 @@ import { apiHelper } from '../config/api';
 
 const AuthContext = createContext();
 
+/**
+ * Hook para acceder al contexto de autenticación
+ * @returns {Object} Contexto de autenticación
+ */
 export const useAuth = () => useContext(AuthContext);
 
+/**
+ * Proveedor de autenticación que maneja el estado de usuario y token
+ * @param {Object} props - Propiedades del componente
+ * @param {React.ReactNode} props.children - Componentes hijos
+ * @returns {React.ReactElement} Componente de proveedor de autenticación
+ */
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
@@ -21,15 +31,9 @@ export const AuthProvider = ({ children }) => {
           try {
             const decoded = jwtDecode(storedToken);
             const currentTime = Date.now() / 1000;
-            
-            console.log('Token decodificado:', {
-              userId: decoded.id,
-              exp: decoded.exp,
-              isExpired: decoded.exp < currentTime
-            });
 
             if (decoded.exp < currentTime) {
-              console.log('Token expirado, limpiando almacenamiento');
+              console.error('Token expirado, limpiando almacenamiento');
               localStorage.removeItem('token');
               localStorage.removeItem('user');
               setLoading(false);
@@ -42,7 +46,6 @@ export const AuthProvider = ({ children }) => {
               try {
                 const parsedUser = JSON.parse(storedUser);
                 setUser(parsedUser);
-                console.log('Usuario cargado desde localStorage:', parsedUser);
               } catch (parseError) {
                 console.error('Error parsing stored user:', parseError);
                 localStorage.removeItem('user');
@@ -59,20 +62,17 @@ export const AuthProvider = ({ children }) => {
               const freshUser = userResponse.data;
               setUser(freshUser);
               localStorage.setItem('user', JSON.stringify(freshUser));
-              
-              console.log('Usuario actualizado desde servidor:', freshUser);
             } catch (serverError) {
               console.error('Error verificando token con servidor:', serverError);
               
               if (serverError.response?.status === 401 || serverError.response?.status === 403) {
-                console.log('Token rechazado por servidor, limpiando almacenamiento');
+                console.error('Token rechazado por servidor, limpiando almacenamiento');
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
                 setToken(null);
                 setUser(null);
               }
             }
-
           } catch (tokenError) {
             console.error('Token inválido:', tokenError);
             localStorage.removeItem('token');
@@ -90,10 +90,9 @@ export const AuthProvider = ({ children }) => {
 
     initializeAuth();
 
-    // SINCRONIZACIÓN ENTRE PESTAÑAS
     const handleStorageChange = (event) => {
       if (event.key === 'token' || event.key === 'user') {
-        window.location.reload(); // Forzar sincronización de sesión
+        window.location.reload();
       }
     };
 
@@ -111,8 +110,6 @@ export const AuthProvider = ({ children }) => {
    */
   const login = async ({ identifier, password, rememberMe }) => {
     try {
-      console.log('Iniciando login...', { identifier, rememberMe });
-      
       const response = await apiHelper.post('/auth/login', {
         identifier,
         password,
@@ -121,12 +118,9 @@ export const AuthProvider = ({ children }) => {
 
       const receivedToken = response.data.token;
       const returnedUser = response.data.user;
-      
-      console.log('Login exitoso:', { token: !!receivedToken, user: returnedUser });
 
       try {
-        const decoded = jwtDecode(receivedToken);
-        console.log('Token decodificado:', decoded);
+        jwtDecode(receivedToken);
       } catch (decodeError) {
         console.error('Token recibido inválido:', decodeError);
         throw new Error('Token inválido recibido del servidor');
@@ -151,9 +145,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('user', JSON.stringify(fullUser));
       localStorage.setItem('token', receivedToken);
 
-      console.log('Usuario y token guardados correctamente');
       return fullUser;
-
     } catch (err) {
       console.error('Error en login:', err);
       throw err;
@@ -166,8 +158,6 @@ export const AuthProvider = ({ children }) => {
    */
   const logout = async () => {
     try {
-      console.log('Iniciando logout...');
-      
       if (token) {
         try {
           await apiHelper.post('/auth/logout', {}, {
@@ -186,7 +176,6 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      console.log('Logout completado');
     }
   };
 

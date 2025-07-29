@@ -13,11 +13,15 @@ export interface SensorData {
 export interface User {
   id: string;
   email: string;
-  role: 'ADMIN' | 'USER'; // Cambiado para coincidir con el backend
+  role: 'ADMIN' | 'USER';
   name: string;
   createdAt: string;
   lastLogin?: string;
-  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED'; // Cambiado de boolean a string
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+  _count?: {
+    tanks: number;
+  };
+  tanks?: { id: string; name: string; location: string }[];
 }
 
 export interface AuthState {
