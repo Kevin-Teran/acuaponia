@@ -34,7 +34,6 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
         "bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full flex flex-col animate-in fade-in zoom-in-95",
         sizeClasses[size]
       )}>
-        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
           <button 
@@ -45,13 +44,9 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
             <X className="w-5 h-5"/>
           </button>
         </div>
-
-        {/* Body */}
         <div className="p-6 overflow-y-auto">
           {children}
         </div>
-
-        {/* Footer */}
         {footer && (
           <div className="flex justify-end space-x-3 p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
             {footer}
