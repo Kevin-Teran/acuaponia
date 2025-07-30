@@ -14,7 +14,9 @@ import { errorHandler, notFound } from './middleware/errorHandler';
 
 // --- IMPORTACIÓN DE RUTAS ---
 import authRoutes from './routes/auth';
-import userRoutes from './routes/users'; // <-- AGREGAR ESTA LÍNEA
+import userRoutes from './routes/users';
+import tankRoutes from './routes/tanks';
+import sensorRoutes from './routes/sensors';
 
 // --- CONFIGURACIÓN INICIAL ---
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -48,6 +50,8 @@ io.on('connection', (socket) => {
 // --- RUTAS DE LA API ---
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes); 
+app.use('/api/tanks', tankRoutes); 
+app.use('/api/sensors', sensorRoutes);
 
 app.get('/', (req, res) => {
   res.status(200).send('El backend del sistema de Acuaponía está funcionando correctamente.');
