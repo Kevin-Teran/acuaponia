@@ -14,7 +14,7 @@ import { errorHandler, notFound } from './middleware/errorHandler';
 
 // --- IMPORTACIÓN DE RUTAS ---
 import authRoutes from './routes/auth';
-// Aquí se añadirán las otras rutas más adelante
+import userRoutes from './routes/users'; // <-- AGREGAR ESTA LÍNEA
 
 // --- CONFIGURACIÓN INICIAL ---
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -47,6 +47,7 @@ io.on('connection', (socket) => {
 
 // --- RUTAS DE LA API ---
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes); 
 
 app.get('/', (req, res) => {
   res.status(200).send('El backend del sistema de Acuaponía está funcionando correctamente.');
@@ -59,7 +60,6 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5001;
 
 // --- INICIO DEL SERVIDOR ---
-// CORRECCIÓN: Se añade la llamada a server.listen para que el servidor se inicie.
 server.listen(PORT, () => {
   logger.info(`🚀 Servidor escuchando en el puerto ${PORT}`);
   initializeMQTT();

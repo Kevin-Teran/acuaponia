@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Users, Plus, Edit, Trash2, Shield, ShieldCheck, Save, X, Loader, AlertCircle, Eye, MapPin } from 'lucide-react';
 import { useUsers } from '../../hooks/useUsers';
 import { useAuth } from '../../hooks/useAuth';
@@ -31,12 +31,12 @@ export const UserManagement: React.FC = () => {
   });
 
   const handleOpenModal = async (mode: 'create' | 'edit' | 'view', user?: User) => {
-    if (user && mode === 'view') {
-        const fullUserData = await userService.getUserById(user.id);
-        setDetailedUser(fullUserData);
-    }
     setModalState({ mode, user: user || null });
     if (user && (mode === 'edit' || mode === 'view')) {
+        if (mode === 'view') {
+            const fullUserData = await userService.getUserById(user.id);
+            setDetailedUser(fullUserData);
+        }
         setFormData({ name: user.name, email: user.email, password: '', role: user.role, status: user.status });
     } else {
         setFormData({ name: '', email: '', password: '', role: 'USER', status: 'ACTIVE' });
@@ -52,24 +52,19 @@ export const UserManagement: React.FC = () => {
     e.preventDefault();
     setIsSubmitting(true);
     
-    try {
-        const dataToSubmit: Partial<User> = { ...formData };
-        if (modalState.mode === 'edit' && !formData.password) {
-          delete dataToSubmit.password;
-        }
-    
-        const result = modalState.mode === 'edit' 
-            ? await updateUser(modalState.user!.id, dataToSubmit) 
-            : await addUser(dataToSubmit);
+    const dataToSubmit: Partial<User> = { ...formData };
+    if (modalState.mode === 'edit' && !formData.password) {
+      delete dataToSubmit.password;
+    }
 
-        if (result) {
-          Swal.fire({ icon: 'success', title: `Usuario ${modalState.mode === 'edit' ? 'actualizado' : 'creado'}`, toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
-          handleCloseModal();
-        }
-    } catch (err: any) {
-        Swal.fire({ icon: 'error', title: 'Error', text: err.response?.data?.error?.message || `No se pudo ${modalState.mode === 'edit' ? 'actualizar' : 'crear'} el usuario.` });
-    } finally {
-        setIsSubmitting(false);
+    const result = modalState.mode === 'edit' ? await updateUser(modalState.user!.id, dataToSubmit) : await addUser(dataToSubmit);
+    setIsSubmitting(false);
+
+    if (result) {
+      Swal.fire({ icon: 'success', title: `Usuario ${modalState.mode === 'edit' ? 'actualizado' : 'creado'}`, toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true });
+      handleCloseModal();
+    } else {
+      Swal.fire({ icon: 'error', title: 'Error', text: `No se pudo ${modalState.mode === 'edit' ? 'actualizar' : 'crear'} el usuario.` });
     }
   };
 
@@ -131,23 +126,26 @@ export const UserManagement: React.FC = () => {
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="p-4 text-left font-semibold text-gray-900 dark:text-white">Usuario</th>
                     <th className="p-4 text-left font-semibold text-gray-900 dark:text-white">Rol</th>
-                    <th className="p-4 text-center font-semibold text-gray-900 dark:text-white">Tanques</th>
+                    <th className="p-4 text-center font-semibold text-gray-900 dark:text-white">Tanques Asignados</th>
                     <th className="p-4 text-left font-semibold text-gray-900 dark:text-white">Estado</th>
                     <th className="p-4 text-left font-semibold text-gray-900 dark:text-white">Último Acceso</th>
                     <th className="p-4 text-center font-semibold text-gray-900 dark:text-white">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((user) => (
+                  {users.map((user) => {
+                    const isCurrentUser = user.id === currentUser?.id;
+                    return (
                       <tr key={user.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                         <td className="p-4"><div className="flex items-center space-x-3"><div className="w-10 h-10 bg-sena-green/20 rounded-full flex items-center justify-center text-sena-green font-semibold">{user.name.charAt(0).toUpperCase()}</div><div><p className="font-medium text-gray-900 dark:text-white">{user.name}</p><p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p></div></div></td>
-                        <td className="p-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.role === 'ADMIN' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'}`}>{user.role}</span></td>
-                        <td className="p-4 text-center"><span className="font-medium text-gray-800 dark:text-gray-200">{user._count?.tanks ?? 0}</span></td>
-                        <td className="p-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{user.status}</span></td>
+                        <td className="p-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.role === 'ADMIN' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'}`}>{user.role === 'ADMIN' ? <><ShieldCheck className="w-3 h-3 mr-1" />Administrador</> : <><Shield className="w-3 h-3 mr-1" />Usuario</>}</span></td>
+                        <td className="p-4 text-center"><span className="font-medium text-gray-800 dark:text-gray-200">{user._count?.tanks ?? 0 > 0 ? user._count?.tanks : 'Ninguno'}</span></td>
+                        <td className="p-4"><div title={isCurrentUser ? "No puedes cambiar tu propio estado" : ""}><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.status === 'ACTIVE' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'} ${isCurrentUser ? 'cursor-not-allowed opacity-70' : ''}`}>{user.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}</span></div></td>
                         <td className="p-4 text-gray-600 dark:text-gray-400">{user.lastLogin ? format(new Date(user.lastLogin), 'dd MMM, yyyy HH:mm', { locale: es }) : 'Nunca'}</td>
-                        <td className="p-4"><div className="flex items-center justify-center space-x-2"><button onClick={() => handleOpenModal('view', user)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"><Eye className="w-4 h-4" /></button><button onClick={() => handleOpenModal('edit', user)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit className="w-4 h-4" /></button><button onClick={() => handleDelete(user)} disabled={user.id === currentUser?.id} className="p-2 text-red-600 rounded-lg disabled:text-gray-400 disabled:cursor-not-allowed enabled:hover:bg-red-50"><Trash2 className="w-4 h-4" /></button></div></td>
+                        <td className="p-4"><div className="flex items-center justify-center space-x-2"><button onClick={() => handleOpenModal('view', user)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"><Eye className="w-4 h-4" /></button><button onClick={() => handleOpenModal('edit', user)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit className="w-4 h-4" /></button><div title={isCurrentUser ? "No puedes eliminar tu propia cuenta" : "Eliminar usuario"}><button onClick={() => handleDelete(user)} disabled={isCurrentUser} className="p-2 text-red-600 rounded-lg disabled:text-gray-400 disabled:cursor-not-allowed enabled:hover:bg-red-50"><Trash2 className="w-4 h-4" /></button></div></div></td>
                       </tr>
-                    ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -158,13 +156,18 @@ export const UserManagement: React.FC = () => {
         <Modal 
           isOpen={!!modalState.mode} 
           onClose={handleCloseModal} 
-          title={modalState.mode === 'create' ? 'Crear Nuevo Usuario' : modalState.mode === 'edit' ? 'Editar Usuario' : 'Detalles del Usuario'}
-          footer={modalState.mode !== 'view' ? (
+          title={
+            modalState.mode === 'create' ? 'Crear Nuevo Usuario' :
+            modalState.mode === 'edit' ? 'Editar Usuario' : 'Detalles del Usuario'
+          }
+          footer={
+            modalState.mode === 'create' || modalState.mode === 'edit' ? (
               <>
-                <button type="button" onClick={handleCloseModal} className="px-4 py-2 rounded-lg">Cancelar</button>
-                <button type="submit" form="user-form" disabled={isSubmitting} className="px-4 py-2 bg-sena-green text-white rounded-lg flex items-center">{isSubmitting ? <Loader className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}<span>{modalState.mode === 'edit' ? 'Guardar' : 'Crear'}</span></button>
+                <button type="button" onClick={handleCloseModal} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors">Cancelar</button>
+                <button type="submit" form="user-form" disabled={isSubmitting} className="px-4 py-2 bg-sena-green hover:bg-green-700 text-white rounded-lg flex items-center space-x-2 transition-colors disabled:bg-green-300">{isSubmitting ? <Loader className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}<span>{modalState.mode === 'edit' ? 'Guardar Cambios' : 'Crear Usuario'}</span></button>
               </>
-            ) : null}
+            ) : null
+          }
         >
             {modalState.mode === 'view' && detailedUser && (
                 <div className="space-y-4">
@@ -174,23 +177,23 @@ export const UserManagement: React.FC = () => {
                   <p><strong>Estado:</strong> {detailedUser.status}</p>
                   <p><strong>Miembro desde:</strong> {format(new Date(detailedUser.createdAt), 'dd MMMM, yyyy', { locale: es })}</p>
                   <div>
-                    <strong>Tanques Asignados:</strong>
+                    <strong className="block mb-2">Tanques Asignados:</strong>
                     {detailedUser.tanks && detailedUser.tanks.length > 0 ? (
-                      <ul className="list-disc list-inside">
-                        {detailedUser.tanks.map(tank => <li key={tank.id}>{tank.name} ({tank.location})</li>)}
+                      <ul className="list-disc list-inside space-y-1">
+                        {detailedUser.tanks.map(tank => <li key={tank.id}><MapPin className="inline w-4 h-4 mr-2 text-sena-blue"/>{tank.name} ({tank.location})</li>)}
                       </ul>
-                    ) : (<p>Ninguno</p>)}
+                    ) : (<p className="text-gray-500">Ninguno</p>)}
                   </div>
                 </div>
             )}
             {(modalState.mode === 'create' || modalState.mode === 'edit') && (
                 <form id="user-form" onSubmit={handleSubmit} className="space-y-4">
-                    <div><label>Nombre Completo</label><input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full form-input" required /></div>
-                    <div><label>Email</label><input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full form-input" required /></div>
-                    <div><label>Contraseña {modalState.mode === 'edit' && '(dejar en blanco para no cambiar)'}</label><input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full form-input" required={modalState.mode !== 'edit'} /></div>
+                    <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre Completo</label><input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700" required /></div>
+                    <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label><input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700" required /></div>
+                    <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contraseña {modalState.mode === 'edit' && '(dejar en blanco para no cambiar)'}</label><input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700" required={modalState.mode !== 'edit'} /></div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div><label>Rol</label><select value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value as any })} className="w-full form-select"><option value="USER">Usuario</option><option value="ADMIN">Administrador</option></select></div>
-                        <div><label>Estado</label><select value={formData.status} disabled={modalState.user?.id === currentUser?.id} onChange={(e) => setFormData({ ...formData, status: e.target.value as any })} className="w-full form-select"><option value="ACTIVE">Activo</option><option value="INACTIVE">Inactivo</option><option value="SUSPENDED">Suspendido</option></select></div>
+                        <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rol</label><select value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value as any })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700"><option value="USER">Usuario</option><option value="ADMIN">Administrador</option></select></div>
+                        <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label><select value={formData.status} disabled={modalState.user?.id === currentUser?.id} title={modalState.user?.id === currentUser?.id ? 'No puedes cambiar tu propio estado' : ''} onChange={(e) => setFormData({ ...formData, status: e.target.value as any })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700 disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"><option value="ACTIVE">Activo</option><option value="INACTIVE">Inactivo</option><option value="SUSPENDED">Suspendido</option></select></div>
                     </div>
                 </form>
             )}
