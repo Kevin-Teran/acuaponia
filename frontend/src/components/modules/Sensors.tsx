@@ -16,6 +16,7 @@ const SENSOR_TYPES: Sensor['type'][] = ['TEMPERATURE', 'PH', 'OXYGEN'];
  * @desc Módulo para la gestión integral de tanques y sensores con reglas de negocio.
  */
 export const Sensors: React.FC = () => {
+  // --- Estados del Componente ---
   const [sensors, setSensors] = useState<Sensor[]>([]);
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,15 +24,17 @@ export const Sensors: React.FC = () => {
   const [expandedTanks, setExpandedTanks] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // --- Estados para Modales y Formularios ---
   const [showTankModal, setShowTankModal] = useState(false);
   const [editingTank, setEditingTank] = useState<Tank | null>(null);
   const [tankFormData, setTankFormData] = useState({ name: '', location: '', status: 'ACTIVE' as Tank['status'] });
 
   const [showSensorModal, setShowSensorModal] = useState(false);
   const [editingSensor, setEditingSensor] = useState<Sensor | null>(null);
-  const [sensorFormData, setSensorFormData] = useState({ name: '', type: 'TEMPERATURE' as Sensor['type'], tankId: '', calibrationDate: new Date().toISOString().split('T')[0] });
+  const [sensorFormData, setSensorFormData] = useState({ name: '', type: 'TEMPERATURE' as Sensor['type'], tankId: '', calibrationDate: new Date().toISOString().split('T')[0], status: 'ACTIVE' as Sensor['status'] });
   const [availableSensorTypes, setAvailableSensorTypes] = useState<Sensor['type'][]>(SENSOR_TYPES);
 
+  // --- Carga y Sincronización de Datos ---
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -68,6 +71,7 @@ export const Sensors: React.FC = () => {
     return map;
   }, [sensors, tanks]);
 
+  // --- Manejadores de Modales ---
   const handleOpenTankModal = (tank?: Tank) => {
     if (tank) {
       setEditingTank(tank);
@@ -80,17 +84,17 @@ export const Sensors: React.FC = () => {
   };
 
   const handleOpenSensorModal = (sensor?: Sensor, tankId?: string) => {
-    const targetTankId = sensor?.tankId || tankId || '';
+    const targetTankId = sensor?.tankId || tankId || (tanks[0]?.id ?? '');
     const existingTypes = (sensorsByTank.get(targetTankId) || []).map(s => s.type);
     const availableTypes = SENSOR_TYPES.filter(type => !existingTypes.includes(type));
     setAvailableSensorTypes(availableTypes);
 
     if (sensor) {
         setEditingSensor(sensor);
-        setSensorFormData({ name: sensor.name, type: sensor.type, tankId: sensor.tankId, calibrationDate: format(new Date(sensor.calibrationDate), 'yyyy-MM-dd') });
+        setSensorFormData({ name: sensor.name, type: sensor.type, tankId: sensor.tankId, calibrationDate: format(new Date(sensor.calibrationDate), 'yyyy-MM-dd'), status: sensor.status });
     } else {
         setEditingSensor(null);
-        setSensorFormData({ name: '', type: availableTypes[0] || 'TEMPERATURE', tankId: targetTankId, calibrationDate: new Date().toISOString().split('T')[0] });
+        setSensorFormData({ name: '', type: availableTypes[0] || 'TEMPERATURE', tankId: targetTankId, calibrationDate: new Date().toISOString().split('T')[0], status: 'ACTIVE' });
     }
     setShowSensorModal(true);
   };
@@ -100,6 +104,7 @@ export const Sensors: React.FC = () => {
     setShowSensorModal(false);
   };
 
+  // --- Lógica de Negocio (CRUD) ---
   const handleTankSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -142,10 +147,9 @@ export const Sensors: React.FC = () => {
   const handleDeleteTank = (tank: Tank) => {
     const tankSensors = sensorsByTank.get(tank.id) || [];
     if (tankSensors.length > 0) {
-        Swal.fire('Acción no permitida', 'Debes eliminar los sensores asociados a este tanque antes de poder eliminarlo.', 'warning');
+        Swal.fire('Acción no permitida', 'Debes eliminar o reasignar los sensores de este tanque antes de poder eliminarlo.', 'warning');
         return;
     }
-
     Swal.fire({
       title: `¿Eliminar el tanque "${tank.name}"?`,
       text: "Esta acción no se puede deshacer.",
@@ -191,6 +195,7 @@ export const Sensors: React.FC = () => {
     });
   };
 
+  // --- Funciones de Utilidad ---
   const getSensorIcon = (type: Sensor['type']) => {
     const icons = { TEMPERATURE: Thermometer, PH: Droplets, OXYGEN: Wind, LEVEL: Droplets, FLOW: Wind };
     return icons[type] || Settings;
@@ -213,6 +218,14 @@ export const Sensors: React.FC = () => {
       if (newSet.has(tankId)) newSet.delete(tankId);
       else newSet.add(tankId);
       return newSet;
+    });
+  };
+
+  const availableTanksForSensor = (sensor: Sensor) => {
+    return tanks.filter(tank => {
+        if (tank.id === sensor.tankId) return true;
+        const existingTypes = (sensorsByTank.get(tank.id) || []).map(s => s.type);
+        return !existingTypes.includes(sensor.type);
     });
   };
 
@@ -241,7 +254,7 @@ export const Sensors: React.FC = () => {
             const tankSensors = sensorsByTank.get(tank.id) || [];
             const isExpanded = expandedTanks.has(tank.id);
             const existingSensorTypes = tankSensors.map(s => s.type);
-            const availableSensorTypes = SENSOR_TYPES.filter(type => !existingSensorTypes.includes(type));
+            const availableTypesForNewSensor = SENSOR_TYPES.filter(type => !existingSensorTypes.includes(type));
 
             return (
                 <Card key={tank.id} className="p-0 overflow-hidden">
@@ -290,8 +303,8 @@ export const Sensors: React.FC = () => {
                                         </div>
                                     );
                                 })}
-                                 
-                                {availableSensorTypes.length > 0 && (
+                                
+                                {availableTypesForNewSensor.length > 0 && (
                                     <div className="flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
                                         <button onClick={() => handleOpenSensorModal(undefined, tank.id)} className="text-sena-green hover:text-green-700 flex flex-col items-center">
                                             <Plus className="w-8 h-8"/>
@@ -345,12 +358,14 @@ export const Sensors: React.FC = () => {
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Asignar a Tanque</label>
-                    <select value={sensorFormData.tankId} onChange={(e) => setSensorFormData({ ...sensorFormData, tankId: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700" required>
-                        {tanks.map(tank => <option key={tank.id} value={tank.id}>{tank.name}</option>)}
+                    <select value={sensorFormData.tankId} onChange={(e) => setSensorFormData({ ...sensorFormData, tankId: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700" required disabled={!editingSensor}>
+                        {editingSensor ? availableTanksForSensor(editingSensor).map(tank => <option key={tank.id} value={tank.id}>{tank.name}</option>) :
+                         <option value={sensorFormData.tankId}>{tanks.find(t => t.id === sensorFormData.tankId)?.name}</option>}
                     </select>
                 </div>
             </div>
             <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de Calibración</label><input type="date" value={sensorFormData.calibrationDate} onChange={(e) => setSensorFormData({ ...sensorFormData, calibrationDate: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700" required /></div>
+            {editingSensor && <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label><select value={sensorFormData.status} onChange={(e) => setSensorFormData({ ...sensorFormData, status: e.target.value as any })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700"><option value="ACTIVE">Activo</option><option value="MAINTENANCE">Mantenimiento</option><option value="INACTIVE">Inactivo</option><option value="ERROR">Error</option></select></div>}
         </form>
       </Modal>
     </div>

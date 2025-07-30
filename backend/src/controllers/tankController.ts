@@ -5,17 +5,13 @@ import { logger } from '../utils/logger';
 import { TankStatus } from '@prisma/client';
 
 /**
- * @desc     Obtiene todos los tanques del usuario autenticado.
+ * @desc     Obtiene todos los tanques que pertenecen al usuario autenticado.
  * @route    GET /api/tanks
  * @access   Private
  */
-export const getTanks = async (req: Request, res: Response) => {
-    // @ts-ignore - Se asume que req.user.id es inyectado por el middleware de autenticación
+export const getTanks = async (req: Request, res: Response): Promise<void> => {
+    // @ts-ignore
     const userId = req.user.id;
-
-    if (!userId) {
-        throw new CustomError('No autorizado', 401);
-    }
 
     const tanks = await prisma.tank.findMany({
         where: { userId },
@@ -26,17 +22,27 @@ export const getTanks = async (req: Request, res: Response) => {
 };
 
 /**
- * @desc     Crea un nuevo tanque.
+ * @desc     Crea un nuevo tanque y lo asocia con el usuario autenticado.
  * @route    POST /api/tanks
  * @access   Private
  */
-export const createTank = async (req: Request, res: Response) => {
-    const { name, location, capacity, currentLevel } = req.body;
+export const createTank = async (req: Request, res: Response): Promise<void> => {
+    const { name, location, status } = req.body;
     // @ts-ignore
     const userId = req.user.id;
 
+    if (!name || !location) {
+        throw new CustomError('El nombre y la ubicación son requeridos.', 400);
+    }
+
+    // Ahora, sin capacity ni currentLevel, la creación es limpia.
     const newTank = await prisma.tank.create({
-        data: { name, location, capacity, currentLevel, userId, status: 'ACTIVE' },
+        data: {
+            name,
+            location,
+            status: (status as TankStatus) || 'ACTIVE',
+            userId,
+        },
     });
 
     logger.info(`Tanque creado: ${newTank.name} por usuario ${userId}`);
@@ -44,17 +50,25 @@ export const createTank = async (req: Request, res: Response) => {
 };
 
 /**
- * @desc     Actualiza un tanque existente.
+ * @desc     Actualiza la información de un tanque existente.
  * @route    PUT /api/tanks/:id
  * @access   Private
  */
-export const updateTank = async (req: Request, res: Response) => {
+export const updateTank = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
-    const { name, location, capacity, currentLevel, status } = req.body;
+    const { name, location, status } = req.body;
+    // @ts-ignore
+    const userId = req.user.id;
+
+    const tank = await prisma.tank.findFirst({ where: { id, userId } });
+
+    if (!tank) {
+        throw new CustomError('Tanque no encontrado o no tiene permiso para editarlo.', 404);
+    }
 
     const updatedTank = await prisma.tank.update({
         where: { id },
-        data: { name, location, capacity, currentLevel, status: status as TankStatus },
+        data: { name, location, status: status as TankStatus },
     });
 
     logger.info(`Tanque actualizado: ${updatedTank.name}`);
@@ -62,16 +76,37 @@ export const updateTank = async (req: Request, res: Response) => {
 };
 
 /**
- * @desc     Elimina un tanque y sus sensores asociados en cascada.
+ * @desc     Elimina un tanque y sus sensores asociados (en cascada).
  * @route    DELETE /api/tanks/:id
  * @access   Private
  */
-export const deleteTank = async (req: Request, res: Response) => {
+export const deleteTank = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
+    // @ts-ignore
+    const userId = req.user.id;
+
+    const tank = await prisma.tank.findFirst({ where: { id, userId } });
+
+    if (!tank) {
+        throw new CustomError('Tanque no encontrado o no tiene permiso para eliminarlo.', 404);
+    }
     
-    // La eliminación en cascada se define en el schema de Prisma.
     await prisma.tank.delete({ where: { id } });
 
     logger.info(`Tanque y sus dependencias eliminadas: ${id}`);
     res.json({ success: true, message: 'Tanque eliminado correctamente' });
+};
+
+/**
+ * @desc     Obtiene los tanques de un usuario específico (para vistas de administrador).
+ * @route    GET /api/tanks/user/:userId
+ * @access   Private (Admin)
+ */
+export const getTanksByUserId = async (req: Request, res: Response): Promise<void> => {
+    const { userId } = req.params;
+    const tanks = await prisma.tank.findMany({
+        where: { userId },
+        orderBy: { name: 'asc' },
+    });
+    res.json({ success: true, data: tanks });
 };

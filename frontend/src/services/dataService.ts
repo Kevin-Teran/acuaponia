@@ -1,12 +1,18 @@
 import api from '../config/api';
-import { SensorData } from '../types';
 
-/**
- * @desc     Get historical sensor data
- * @param    params - Query parameters for filtering
- * @returns  {Promise<SensorData[]>}
- */
-export const getHistoricalData = async (params: any): Promise<SensorData[]> => {
-    const response = await api.get('/data/historical', { params });
-    return response.data.data.sensorData;
+export const submitManualEntry = (data: { sensorId: string, temperature: number, ph: number, oxygen: number }) => {
+    return api.post('/data/manual-entry', data);
+};
+
+export const getEmitterStatus = async (): Promise<string[]> => {
+    const response = await api.get('/data/synthetic/status');
+    return response.data.data;
+};
+
+export const startEmitter = (sensorId: string) => {
+    return api.post('/data/synthetic/start', { sensorId });
+};
+
+export const stopEmitter = (sensorId: string) => {
+    return api.post('/data/synthetic/stop', { sensorId });
 };

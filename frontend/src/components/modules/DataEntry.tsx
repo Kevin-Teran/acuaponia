@@ -1,222 +1,299 @@
-import React, { useState } from 'react';
-import { Save, Plus, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { SlidersHorizontal, Send, Bot, Play, StopCircle, Loader, AlertCircle, Trash2, Pause } from 'lucide-react';
 import { Card } from '../common/Card';
+import { User, Tank, Sensor } from '../../types';
+import * as userService from '../../services/userService';
+import * as tankService from '../../services/tankService';
+import * as sensorService from '../../services/sensorService';
+import * as dataService from '../../services/dataService';
+import Swal from 'sweetalert2';
+import { cn } from '../../utils/cn';
 
+// --- Sub-componente: Panel de Selección ---
+const SelectionPanel = ({ users, tanks, sensors, loading, selections, onSelectUser, onSelectTank, onToggleSensor }: any) => (
+    <Card title="1. Selección de Objetivos" icon={SlidersHorizontal}>
+        <div className="space-y-4">
+            <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Usuario</label>
+                <select 
+                    className="w-full mt-1 form-select" 
+                    value={selections.user} 
+                    onChange={(e) => onSelectUser(e.target.value)} 
+                    disabled={loading.users}
+                >
+                    <option value="">{loading.users ? "Cargando..." : "Seleccione un usuario"}</option>
+                    {users.map((user: User) => <option key={user.id} value={user.id}>{user.name}</option>)}
+                </select>
+            </div>
+            <div>
+                <label className="block text-sm font-medium">Tanque</label>
+                <select 
+                    className="w-full mt-1 form-select" 
+                    value={selections.tank} 
+                    onChange={(e) => onSelectTank(e.target.value)} 
+                    disabled={loading.tanks || !selections.user}
+                >
+                    <option value="">{loading.tanks ? "Cargando..." : "Seleccione un tanque"}</option>
+                    {tanks.map((tank: Tank) => <option key={tank.id} value={tank.id}>{tank.name}</option>)}
+                </select>
+            </div>
+            <div>
+                <label className="block text-sm font-medium">Sensores</label>
+                <div className="mt-2 space-y-2 max-h-48 overflow-y-auto p-2 border rounded-md dark:border-gray-600">
+                    {sensors.length > 0 ? sensors.map((sensor: Sensor) => (
+                        <div key={sensor.id} className="flex items-center">
+                            <input 
+                                id={`sensor-${sensor.id}`} 
+                                type="checkbox" 
+                                checked={selections.sensors.includes(sensor.id)} 
+                                onChange={() => onToggleSensor(sensor.id)}
+                                className="h-4 w-4 rounded border-gray-300 text-sena-green focus:ring-sena-green"
+                            />
+                            <label htmlFor={`sensor-${sensor.id}`} className="ml-3 text-sm">{sensor.name} ({sensor.type})</label>
+                        </div>
+                    )) : <p className="text-sm text-gray-500">Seleccione un tanque para ver sus sensores.</p>}
+                </div>
+            </div>
+        </div>
+    </Card>
+);
+
+// --- Sub-componente: Formulario Manual Inteligente ---
+const ManualEntryForm = ({ sensor, onSubmit }: { sensor: Sensor | null; onSubmit: (data: any) => void }) => {
+    const [value, setValue] = useState('25.0');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        if (sensor) {
+            if (sensor.type === 'PH') setValue('7.0');
+            else if (sensor.type === 'OXYGEN') setValue('8.0');
+            else setValue('25.0');
+        }
+    }, [sensor]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!sensor) return;
+        setIsSubmitting(true);
+        try {
+            const payload = {
+                sensorId: sensor.id,
+                value: parseFloat(value),
+                type: sensor.type,
+            };
+            await onSubmit(payload);
+            Swal.fire('¡Enviado!', 'Los datos manuales se han enviado correctamente.', 'success');
+        } catch (error) {
+            Swal.fire('Error', 'No se pudieron enviar los datos.', 'error');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+    
+    const getLabel = () => {
+        if (!sensor) return 'Valor';
+        if (sensor.type === 'TEMPERATURE') return 'Temperatura (°C)';
+        if (sensor.type === 'PH') return 'pH';
+        if (sensor.type === 'OXYGEN') return 'Oxígeno (mg/L)';
+        return 'Valor';
+    };
+    
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400 h-10">
+                {sensor ? `Enviando datos para el sensor de ${sensor.type}:` : "Seleccione un único sensor para habilitar este panel."}
+            </p>
+            <div className="grid grid-cols-1 gap-4">
+                <div>
+                    <label className="block text-sm">{getLabel()}</label>
+                    <input type="number" step="0.1" value={value} onChange={e => setValue(e.target.value)} disabled={!sensor || isSubmitting} className="w-full mt-1 form-input" />
+                </div>
+            </div>
+            <button type="submit" disabled={!sensor || isSubmitting} className="w-full bg-sena-blue text-white py-2 rounded-lg flex items-center justify-center disabled:bg-gray-400">
+                {isSubmitting ? <Loader className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 mr-2" />}
+                Enviar Dato
+            </button>
+        </form>
+    );
+};
+
+// --- Sub-componente: Simulador ---
+const SyntheticDataEmitter = ({ selectedSensorIds, onStart, activeEmitters, onPause, onResume, onStop }: any) => {
+    return (
+        <div className="space-y-4">
+            <button onClick={onStart} disabled={selectedSensorIds.length === 0} className="w-full bg-sena-green text-white py-2 rounded-lg flex items-center justify-center disabled:bg-gray-400">
+                <Play className="w-5 h-5 mr-2" />
+                Iniciar Simulación para {selectedSensorIds.length} sensor(es)
+            </button>
+            <div className="space-y-2">
+                <h4 className="text-sm font-medium">Procesos Activos:</h4>
+                <div className="space-y-2 max-h-60 overflow-y-auto p-1">
+                    {activeEmitters && activeEmitters.length > 0 ? activeEmitters.map((emitter: any) => (
+                        <div key={emitter.sensorId} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-md">
+                            <div>
+                                <p className="font-semibold text-sm">{emitter.sensorName}</p>
+                                <p className="text-xs text-gray-500">{emitter.tankName} / {emitter.userName}</p>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                {emitter.status === 'active' ? 
+                                    <button onClick={() => onPause(emitter.sensorId)} className="p-1.5 text-yellow-500 hover:bg-yellow-100 rounded-md" title="Pausar"><Pause className="w-4 h-4"/></button> :
+                                    <button onClick={() => onResume(emitter.sensorId)} className="p-1.5 text-green-500 hover:bg-green-100 rounded-md" title="Reanudar"><Play className="w-4 h-4"/></button>
+                                }
+                                <button onClick={() => onStop(emitter.sensorId)} className="p-1.5 text-red-500 hover:bg-red-100 rounded-md" title="Detener y Eliminar"><StopCircle className="w-4 h-4"/></button>
+                            </div>
+                        </div>
+                    )) : <p className="text-sm text-gray-500 italic">No hay procesos de simulación activos.</p>}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+/**
+ * @component DataEntry
+ * @desc Módulo de recolección de datos para administradores.
+ */
 export const DataEntry: React.FC = () => {
-  const [formData, setFormData] = useState({
-    temperature: '',
-    ph: '',
-    oxygen: '',
-    location: '',
-    notes: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [savedEntries, setSavedEntries] = useState<any[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
+    const [tanks, setTanks] = useState<Tank[]>([]);
+    const [sensors, setSensors] = useState<Sensor[]>([]);
+    const [loading, setLoading] = useState({ users: true, tanks: false, sensors: false });
+    const [error, setError] = useState<string | null>(null);
+    const [selectedUser, setSelectedUser] = useState<string>('');
+    const [selectedTank, setSelectedTank] = useState<string>('');
+    const [selectedSensors, setSelectedSensors] = useState<string[]>([]);
+    const [activeEmitters, setActiveEmitters] = useState<any[]>([]);
+    const [activeTab, setActiveTab] = useState<'manual' | 'emitter'>('manual');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
+    const fetchInitialData = useCallback(async () => {
+        try {
+            setLoading(prev => ({ ...prev, users: true }));
+            const [usersData, emittersData] = await Promise.all([
+                userService.getAllUsers(),
+                dataService.getEmitterStatus()
+            ]);
+            setUsers(usersData);
+            setActiveEmitters(emittersData || []); // CORRECCIÓN: Asegura que siempre sea un array
+            setError(null);
+        } catch (err) {
+            setError("No se pudieron cargar los datos iniciales. Verifica la conexión con el backend.");
+        } finally {
+            setLoading(prev => ({ ...prev, users: false }));
+        }
+    }, []);
 
-    // Simulación de guardado
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    useEffect(() => {
+        fetchInitialData();
+    }, [fetchInitialData]);
 
-    const newEntry = {
-      id: Date.now(),
-      ...formData,
-      timestamp: new Date().toISOString(),
-      temperature: parseFloat(formData.temperature),
-      ph: parseFloat(formData.ph),
-      oxygen: parseFloat(formData.oxygen),
+    const handleSelectUser = (userId: string) => {
+        setSelectedUser(userId);
+        setSelectedTank('');
+        setSelectedSensors([]);
+        setTanks([]);
+        setSensors([]);
+        if (userId) {
+            const fetchTanks = async () => {
+                setLoading(prev => ({ ...prev, tanks: true }));
+                try { setTanks(await tankService.getTanksByUser(userId)); } 
+                catch { setError("No se pudieron cargar los tanques."); } 
+                finally { setLoading(prev => ({ ...prev, tanks: false })); }
+            };
+            fetchTanks();
+        }
+    };
+    
+    const handleSelectTank = (tankId: string) => {
+        setSelectedTank(tankId);
+        setSelectedSensors([]);
+        setSensors([]);
+        if (tankId) {
+            const fetchSensors = async () => {
+                setLoading(prev => ({ ...prev, sensors: true }));
+                try { setSensors(await sensorService.getSensorsByTank(tankId)); } 
+                catch { setError("No se pudieron cargar los sensores."); } 
+                finally { setLoading(prev => ({ ...prev, sensors: false })); }
+            };
+            fetchSensors();
+        }
+    };
+    
+    const handleToggleSensor = (sensorId: string) => {
+        setSelectedSensors(prev => 
+            prev.includes(sensorId) 
+                ? prev.filter(id => id !== sensorId) 
+                : [...prev, sensorId]
+        );
     };
 
-    setSavedEntries(prev => [newEntry, ...prev]);
-    setFormData({
-      temperature: '',
-      ph: '',
-      oxygen: '',
-      location: '',
-      notes: '',
-    });
+    const handleEmitterAction = async (action: (id: string) => Promise<any>, id: string) => {
+        await action(id);
+        const emitters = await dataService.getEmitterStatus();
+        setActiveEmitters(emitters || []);
+    };
 
-    setSaving(false);
-  };
+    const handleStartSimulation = async () => {
+        await dataService.startEmitter(selectedSensors);
+        const emitters = await dataService.getEmitterStatus();
+        setActiveEmitters(emitters || []);
+        setSelectedSensors([]);
+    };
 
-  const isValid = formData.temperature && formData.ph && formData.oxygen;
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Recolección Manual de Datos
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-1">
-          Ingreso manual como respaldo cuando fallan los sensores IoT
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Formulario de entrada */}
-        <Card title="Nuevo Registro" subtitle="Ingrese los datos manualmente">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Temperatura (°C) *
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="50"
-                  value={formData.temperature}
-                  onChange={(e) => setFormData(prev => ({ ...prev, temperature: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="24.5"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  pH *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="14"
-                  value={formData.ph}
-                  onChange={(e) => setFormData(prev => ({ ...prev, ph: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="7.2"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Oxígeno (mg/L) *
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="20"
-                  value={formData.oxygen}
-                  onChange={(e) => setFormData(prev => ({ ...prev, oxygen: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="8.5"
-                  required
-                />
-              </div>
-            </div>
-
+    return (
+        <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Ubicación/Tanque
-              </label>
-              <select
-                value={formData.location}
-                onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="">Seleccionar ubicación</option>
-                <option value="tanque-1">Tanque Principal 1</option>
-                <option value="tanque-2">Tanque Principal 2</option>
-                <option value="crecimiento">Tanque de Crecimiento</option>
-                <option value="filtrado">Sistema de Filtrado</option>
-              </select>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Recolección de Datos</h1>
+                <p className="text-gray-600 dark:text-gray-400 mt-1">Herramientas de prueba y simulación para administradores.</p>
             </div>
+            
+            {error && <div className="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400" role="alert"><AlertCircle className="inline w-5 h-5 mr-2"/>{error}</div>}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Notas/Observaciones
-              </label>
-              <textarea
-                value={formData.notes}
-                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="Observaciones adicionales, condiciones especiales, etc."
-              />
-            </div>
-
-            {!isValid && (
-              <div className="flex items-center space-x-2 text-orange-600 dark:text-orange-400">
-                <AlertCircle className="w-4 h-4" />
-                <span className="text-sm">Complete todos los campos obligatorios (*)</span>
-              </div>
-            )}
-
-            <div className="flex space-x-3">
-              <button
-                type="submit"
-                disabled={!isValid || saving}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-md transition-colors disabled:cursor-not-allowed"
-              >
-                <Save className="w-4 h-4" />
-                <span>{saving ? 'Guardando...' : 'Guardar Registro'}</span>
-              </button>
-            </div>
-          </form>
-        </Card>
-
-        {/* Registros recientes */}
-        <Card title="Registros Recientes" subtitle={`${savedEntries.length} entradas guardadas`}>
-          <div className="space-y-3">
-            {savedEntries.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                <Plus className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>No hay registros manuales aún</p>
-                <p className="text-sm">Complete el formulario para agregar datos</p>
-              </div>
-            ) : (
-              savedEntries.slice(0, 5).map((entry) => (
-                <div
-                  key={entry.id}
-                  className="p-3 bg-gray-50 dark:bg-gray-700 rounded-md border border-gray-200 dark:border-gray-600"
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {new Date(entry.timestamp).toLocaleString()}
-                    </span>
-                    {entry.location && (
-                      <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
-                        {entry.location}
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-3 gap-3 text-sm">
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400">Temp:</span>
-                      <span className="font-medium text-gray-900 dark:text-white ml-1">
-                        {entry.temperature}°C
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400">pH:</span>
-                      <span className="font-medium text-gray-900 dark:text-white ml-1">
-                        {entry.ph}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400">O₂:</span>
-                      <span className="font-medium text-gray-900 dark:text-white ml-1">
-                        {entry.oxygen} mg/L
-                      </span>
-                    </div>
-                  </div>
-                  {entry.notes && (
-                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-2 italic">
-                      "{entry.notes}"
-                    </p>
-                  )}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-1">
+                    <SelectionPanel 
+                        users={users} 
+                        tanks={tanks} 
+                        sensors={sensors} 
+                        loading={loading}
+                        selections={{ user: selectedUser, tank: selectedTank, sensors: selectedSensors }}
+                        onSelectUser={handleSelectUser}
+                        onSelectTank={handleSelectTank}
+                        onToggleSensor={handleToggleSensor}
+                    />
                 </div>
-              ))
-            )}
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
+                
+                <div className="lg:col-span-2">
+                    <Card>
+                        <div className="border-b border-gray-200 dark:border-gray-700">
+                            <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                                <button onClick={() => setActiveTab('manual')} className={cn('whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm', activeTab === 'manual' ? 'border-sena-green text-sena-green' : 'border-transparent text-gray-500 hover:border-gray-300')}>Entrada Manual</button>
+                                <button onClick={() => setActiveTab('emitter')} className={cn('whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm', activeTab === 'emitter' ? 'border-sena-green text-sena-green' : 'border-transparent text-gray-500 hover:border-gray-300')}>Simulador</button>
+                            </nav>
+                        </div>
+
+                        <div className="pt-6">
+                            {activeTab === 'manual' && (
+                                <ManualEntryForm 
+                                    sensor={selectedSensors.length === 1 ? sensors.find(s => s.id === selectedSensors[0]) || null : null} 
+                                    onSubmit={async (data) => {
+                                        await dataService.submitManualEntry(data);
+                                    }} 
+                                />
+                            )}
+                            {activeTab === 'emitter' && (
+                                <SyntheticDataEmitter 
+                                    selectedSensorIds={selectedSensors}
+                                    activeEmitters={activeEmitters}
+                                    onStart={handleStartSimulation}
+                                    onPause={(id: string) => handleEmitterAction(dataService.pauseEmitter, id)}
+                                    onResume={(id: string) => handleEmitterAction(dataService.resumeEmitter, id)}
+                                    onStop={(id: string) => handleEmitterAction(dataService.stopEmitter, id)}
+                                />
+                            )}
+                        </div>
+                    </Card>
+                </div>
+            </div>
+        </div>
+    );
 };

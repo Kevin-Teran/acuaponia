@@ -1,260 +1,193 @@
-import mqtt, { MqttClient } from 'mqtt';
+import mqtt, { MqttClient, IClientOptions } from 'mqtt';
 import { logger } from '../utils/logger';
 import { socketService } from './socketService';
 import { sensorDataService } from './sensorDataService';
 import { alertService } from './alertService';
+import { prisma } from '../config/database';
+import { SensorType } from '@prisma/client';
 
+/**
+ * @class MQTTService
+ * @desc Gestiona la conexión y la comunicación con el broker MQTT.
+ * Se encarga de suscribirse a los topics relevantes, manejar los mensajes entrantes
+ * y proporcionar un método para publicar mensajes.
+ */
 class MQTTService {
   private client: MqttClient | null = null;
+  private isConnected: boolean = false;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private isConnected = false;
+  private readonly maxReconnectAttempts = 10;
 
-  // Topics MQTT
+  // Topics a los que el backend se suscribirá. El '+' es un comodín.
   private readonly topics = {
     sensorData: 'sena/acuaponia/sensors/+/data',
     sensorStatus: 'sena/acuaponia/sensors/+/status',
-    systemCommands: 'sena/acuaponia/system/commands',
     alerts: 'sena/acuaponia/alerts',
   };
 
-  async initialize(): Promise<void> {
-    try {
-      const brokerUrl = process.env.MQTT_BROKER_URL || 'mqtt://localhost:1883';
-      const options = {
-        clientId: process.env.MQTT_CLIENT_ID || 'sena_acuaponia_backend',
-        username: process.env.MQTT_USERNAME,
-        password: process.env.MQTT_PASSWORD,
-        clean: true,
-        connectTimeout: 30000,
-        reconnectPeriod: 5001,
-        keepalive: 60,
-      };
+  /**
+   * @desc Inicializa y establece la conexión con el broker MQTT.
+   */
+  public initialize(): void {
+    const brokerUrl = process.env.MQTT_BROKER_URL || 'mqtt://localhost:1883';
+    const options: IClientOptions = {
+      clientId: `sena_acuaponia_backend_${Date.now()}`,
+      username: process.env.MQTT_USERNAME,
+      password: process.env.MQTT_PASSWORD,
+      clean: true,
+      connectTimeout: 4000,
+      reconnectPeriod: 5000, // Reintentar cada 5 segundos
+    };
 
-      logger.info(`🔌 Conectando a broker MQTT: ${brokerUrl}`);
-      
-      this.client = mqtt.connect(brokerUrl, options);
+    logger.info(`🔌 Intentando conectar al broker MQTT: ${brokerUrl}`);
+    this.client = mqtt.connect(brokerUrl, options);
 
-      this.client.on('connect', () => {
-        this.isConnected = true;
-        this.reconnectAttempts = 0;
-        logger.info('✅ Conectado al broker MQTT exitosamente');
-        this.subscribeToTopics();
-      });
+    this.client.on('connect', () => {
+      this.isConnected = true;
+      this.reconnectAttempts = 0;
+      logger.info('✅ Conectado al broker MQTT exitosamente.');
+      this.subscribeToTopics();
+    });
 
-      this.client.on('error', (error) => {
-        logger.error('❌ Error MQTT:', error);
+    this.client.on('error', (error) => {
+      logger.error('❌ Error de conexión MQTT:', error.message);
+      this.isConnected = false;
+    });
+
+    this.client.on('reconnect', () => {
+      this.reconnectAttempts++;
+      logger.warn(`🔄 Reintentando conexión MQTT... (Intento ${this.reconnectAttempts})`);
+      if (this.reconnectAttempts > this.maxReconnectAttempts) {
+        logger.error('❌ Se alcanzó el máximo de reintentos de conexión MQTT. El servicio se detendrá.');
+        this.client?.end(true); // Forzar cierre
+      }
+    });
+
+    this.client.on('close', () => {
+        logger.warn('⚠️ Conexión MQTT cerrada.');
         this.isConnected = false;
-      });
+    });
 
-      this.client.on('offline', () => {
-        logger.warn('⚠️ Cliente MQTT desconectado');
-        this.isConnected = false;
-      });
-
-      this.client.on('reconnect', () => {
-        this.reconnectAttempts++;
-        logger.info(`🔄 Reintentando conexión MQTT... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-        
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-          logger.error('❌ Máximo número de reintentos MQTT alcanzado');
-          this.client?.end();
-        }
-      });
-
-      this.client.on('message', this.handleMessage.bind(this));
-
-    } catch (error) {
-      logger.error('❌ Error inicializando cliente MQTT:', error);
-      throw error;
-    }
+    this.client.on('message', this.handleMessage.bind(this));
   }
 
+  /**
+   * @desc Se suscribe a todos los topics definidos en la clase.
+   */
   private subscribeToTopics(): void {
     if (!this.client) return;
 
     Object.values(this.topics).forEach(topic => {
-      this.client!.subscribe(topic, { qos: 1 }, (error) => {
-        if (error) {
-          logger.error(`❌ Error suscribiéndose al topic ${topic}:`, error);
+      this.client!.subscribe(topic, { qos: 1 }, (err) => {
+        if (err) {
+          logger.error(`❌ Error al suscribirse al topic ${topic}:`, err.message);
         } else {
-          logger.info(`✅ Suscrito al topic: ${topic}`);
+          logger.info(`✅ Suscrito exitosamente al topic: ${topic}`);
         }
       });
     });
   }
-
-  private async handleMessage(topic: string, message: Buffer): Promise<void> {
-    try {
-      const messageStr = message.toString();
-      logger.debug(`📨 Mensaje MQTT recibido en ${topic}: ${messageStr}`);
-
-      // Parsear mensaje JSON
-      let data;
-      try {
-        data = JSON.parse(messageStr);
-      } catch (parseError) {
-        logger.error('❌ Error parseando mensaje MQTT:', parseError);
-        return;
-      }
-
-      // Procesar según el topic
-      if (topic.includes('/sensors/') && topic.endsWith('/data')) {
-        await this.handleSensorData(topic, data);
-      } else if (topic.includes('/sensors/') && topic.endsWith('/status')) {
-        await this.handleSensorStatus(topic, data);
-      } else if (topic.includes('/alerts')) {
-        await this.handleAlert(data);
-      }
-
-    } catch (error) {
-      logger.error('❌ Error procesando mensaje MQTT:', error);
-    }
-  }
-
-  private async handleSensorData(topic: string, data: any): Promise<void> {
-    try {
-      // Extraer ID del sensor del topic
-      const sensorId = this.extractSensorIdFromTopic(topic);
-      
-      if (!sensorId) {
-        logger.error('❌ No se pudo extraer ID del sensor del topic:', topic);
-        return;
-      }
-
-      // Validar estructura de datos
-      if (!this.isValidSensorData(data)) {
-        logger.error('❌ Datos de sensor inválidos:', data);
-        return;
-      }
-
-      // Guardar datos en la base de datos
-      const sensorData = await sensorDataService.createSensorData({
-        sensorId,
-        temperature: data.temperature,
-        ph: data.ph,
-        oxygen: data.oxygen,
-        timestamp: new Date(data.timestamp || Date.now()),
-      });
-
-      // Emitir datos en tiempo real via Socket.IO
-      socketService.emitSensorData(sensorData);
-
-      // Verificar alertas
-      await alertService.checkThresholds(sensorId, data);
-
-      logger.debug(`✅ Datos de sensor procesados: ${sensorId}`);
-
-    } catch (error) {
-      logger.error('❌ Error procesando datos de sensor:', error);
-    }
-  }
-
-  private async handleSensorStatus(topic: string, data: any): Promise<void> {
-    try {
-      const sensorId = this.extractSensorIdFromTopic(topic);
-      
-      if (!sensorId) {
-        logger.error('❌ No se pudo extraer ID del sensor del topic:', topic);
-        return;
-      }
-
-      // Actualizar estado del sensor
-      // await sensorService.updateSensorStatus(sensorId, data);
-
-      // Emitir actualización de estado
-      socketService.emitSensorStatus(sensorId, data);
-
-      logger.debug(`✅ Estado de sensor actualizado: ${sensorId}`);
-
-    } catch (error) {
-      logger.error('❌ Error procesando estado de sensor:', error);
-    }
-  }
-
-  private async handleAlert(data: any): Promise<void> {
-    try {
-      // Procesar alerta
-      const alert = await alertService.createAlert(data);
-
-      // Emitir alerta via Socket.IO
-      socketService.emitAlert(alert);
-
-      logger.info(`🚨 Alerta procesada: ${alert.type}`);
-
-    } catch (error) {
-      logger.error('❌ Error procesando alerta:', error);
-    }
-  }
-
-  private extractSensorIdFromTopic(topic: string): string | null {
-    const match = topic.match(/\/sensors\/([^\/]+)\//);
-    return match ? match[1] : null;
-  }
-
-  private isValidSensorData(data: any): boolean {
-    return (
-      typeof data === 'object' &&
-      data !== null &&
-      (typeof data.temperature === 'number' || data.temperature === null) &&
-      (typeof data.ph === 'number' || data.ph === null) &&
-      (typeof data.oxygen === 'number' || data.oxygen === null)
-    );
-  }
-
-  // Métodos públicos para publicar mensajes
-  public publishSensorCommand(sensorId: string, command: any): void {
-    if (!this.isConnected || !this.client) {
-      logger.error('❌ Cliente MQTT no conectado');
+  
+  /**
+   * @desc Publica un mensaje en un topic MQTT específico.
+   * @param {string} topic - El topic al que se va a publicar.
+   * @param {string | Buffer} message - El mensaje a publicar.
+   */
+  public publish(topic: string, message: string | Buffer): void {
+    if (!this.client || !this.isConnected) {
+      logger.error(`❌ No se puede publicar en '${topic}': Cliente MQTT no conectado.`);
       return;
     }
-
-    const topic = `sena/acuaponia/sensors/${sensorId}/commands`;
-    const message = JSON.stringify(command);
 
     this.client.publish(topic, message, { qos: 1 }, (error) => {
       if (error) {
-        logger.error(`❌ Error publicando comando a sensor ${sensorId}:`, error);
+        logger.error(`❌ Error al publicar en el topic ${topic}:`, error);
       } else {
-        logger.info(`✅ Comando enviado a sensor ${sensorId}`);
+        logger.debug(`✅ Mensaje publicado en el topic: ${topic}`);
       }
     });
   }
 
-  public publishSystemAlert(alert: any): void {
-    if (!this.isConnected || !this.client) {
-      logger.error('❌ Cliente MQTT no conectado');
+  /**
+   * @desc Manejador central de mensajes. Parsea el mensaje y lo delega al handler apropiado.
+   * @param {string} topic - El topic del mensaje recibido.
+   * @param {Buffer} message - El contenido del mensaje.
+   */
+  private async handleMessage(topic: string, message: Buffer): Promise<void> {
+    const messageStr = message.toString();
+    logger.debug(`📨 Mensaje MQTT recibido en ${topic}: ${messageStr}`);
+    
+    let data;
+    try {
+      data = JSON.parse(messageStr);
+    } catch (parseError) {
+      logger.error('❌ Error al parsear mensaje MQTT a JSON:', parseError);
       return;
     }
 
-    const message = JSON.stringify(alert);
-
-    this.client.publish(this.topics.alerts, message, { qos: 1 }, (error) => {
-      if (error) {
-        logger.error('❌ Error publicando alerta del sistema:', error);
-      } else {
-        logger.info('✅ Alerta del sistema publicada');
-      }
-    });
-  }
-
-  public isClientConnected(): boolean {
-    return this.isConnected;
-  }
-
-  public async disconnect(): Promise<void> {
-    if (this.client) {
-      this.client.end();
-      this.isConnected = false;
-      logger.info('✅ Cliente MQTT desconectado');
+    if (topic.includes('/sensors/') && topic.endsWith('/data')) {
+      await this.handleSensorData(topic, data);
     }
+  }
+
+  /**
+   * @desc Procesa los paquetes de datos de los sensores con la nueva estructura de BD.
+   * @param {string} topic - El topic del que se extrae el ID del sensor.
+   * @param {any} data - El payload del mensaje.
+   */
+  private async handleSensorData(topic: string, data: any): Promise<void> {
+    const sensorId = this.extractSensorIdFromTopic(topic);
+    if (!sensorId) {
+      logger.error('❌ No se pudo extraer el ID del sensor del topic:', topic);
+      return;
+    }
+
+    // Itera sobre las posibles claves (temperature, ph, oxygen) en el payload
+    for (const key of Object.keys(data)) {
+      const value = data[key];
+      const type = key.toUpperCase();
+
+      // Si la clave es un tipo de sensor válido y tiene un valor numérico
+      if (Object.values(SensorType).includes(type as any) && typeof value === 'number') {
+        try {
+          // --- CORRECCIÓN CLAVE ---
+          // Se crea el dato con la nueva estructura (value y type)
+          const sensorData = await sensorDataService.createSensorData({
+            sensorId,
+            type: type as SensorType,
+            value: value,
+            timestamp: new Date(data.timestamp || Date.now()),
+          });
+
+          if (sensorData) {
+            // El `sensorData` de retorno ya incluye el tanque, por lo que es seguro emitirlo.
+            socketService.emitSensorData(sensorData);
+            await alertService.checkThresholds(sensorId, { [key]: value });
+          }
+        } catch (error) {
+          logger.error(`❌ Error procesando dato de ${type} para el sensor ${sensorId}:`, error);
+        }
+      }
+    }
+  }
+
+  /**
+   * @desc Extrae el ID del sensor a partir del topic MQTT.
+   * @param {string} topic - El topic completo.
+   * @returns {string | null} El ID del sensor o null si no se encuentra.
+   */
+  private extractSensorIdFromTopic(topic: string): string | null {
+    // Expresión regular ajustada para ser más específica
+    const match = topic.match(/sena\/acuaponia\/sensors\/([^/]+)\/data/);
+    return match ? match[1] : null;
   }
 }
 
 export const mqttService = new MQTTService();
 
-export async function initializeMQTT(): Promise<void> {
-  await mqttService.initialize();
+/**
+ * @desc Función de conveniencia para inicializar el servicio MQTT en el server.ts.
+ */
+export function initializeMQTT(): void {
+  mqttService.initialize();
 }
-
-export default mqttService;

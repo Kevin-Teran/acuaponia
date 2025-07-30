@@ -1,14 +1,23 @@
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
+import { SensorType } from '@prisma/client';
 
+/**
+ * @interface CreateSensorDataInput
+ * @desc Define la estructura para crear un nuevo registro de datos de sensor,
+ * alineada con el esquema de base de datos normalizado.
+ */
 export interface CreateSensorDataInput {
   sensorId: string;
-  temperature?: number | null;
-  ph?: number | null;
-  oxygen?: number | null;
+  value: number;
+  type: SensorType;
   timestamp?: Date;
 }
 
+/**
+ * @interface SensorDataQuery
+ * @desc Define los parámetros de consulta para obtener datos históricos de sensores.
+ */
 export interface SensorDataQuery {
   sensorId?: string;
   tankId?: string;
@@ -18,104 +27,83 @@ export interface SensorDataQuery {
   offset?: number;
 }
 
+/**
+ * @class SensorDataService
+ * @desc Gestiona toda la lógica de negocio relacionada con los datos de los sensores.
+ */
 class SensorDataService {
+  /**
+   * @desc Crea un nuevo registro de datos para un sensor.
+   * Valida que el sensor exista y que el tipo de dato corresponda al tipo de sensor.
+   * Actualiza la última lectura (`lastReading`) del sensor correspondiente.
+   * @param {CreateSensorDataInput} data - Los datos de la nueva lectura.
+   * @returns {Promise<any>} El registro de datos creado, incluyendo la información del tanque.
+   */
   async createSensorData(data: CreateSensorDataInput) {
     try {
-      // Verificar que el sensor existe
       const sensor = await prisma.sensor.findUnique({
         where: { id: data.sensorId },
-        include: { tank: true }
       });
 
       if (!sensor) {
         throw new Error(`Sensor con ID ${data.sensorId} no encontrado`);
       }
 
-      // Crear el registro de datos
+      if (sensor.type !== data.type) {
+        logger.warn(`Intento de registrar un dato de tipo ${data.type} en un sensor de tipo ${sensor.type}`);
+        return null;
+      }
+
       const sensorData = await prisma.sensorData.create({
         data: {
           sensorId: data.sensorId,
           tankId: sensor.tankId,
-          temperature: data.temperature,
-          ph: data.ph,
-          oxygen: data.oxygen,
+          type: data.type,
+          value: data.value,
           timestamp: data.timestamp || new Date(),
         },
         include: {
-          sensor: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-            }
-          },
-          tank: {
-            select: {
-              id: true,
-              name: true,
-              location: true,
-            }
-          }
-        }
+          tank: true, // Incluir datos del tanque para el socketService
+        },
       });
-
-      // Actualizar la última lectura del sensor
+      
       await prisma.sensor.update({
         where: { id: data.sensorId },
         data: {
-          lastReading: data.temperature || data.ph || data.oxygen || sensor.lastReading,
+          lastReading: data.value,
           lastUpdate: new Date(),
         }
       });
 
-      logger.debug(`Datos de sensor creados: ${data.sensorId}`);
       return sensorData;
-
     } catch (error) {
       logger.error('Error creando datos de sensor:', error);
       throw error;
     }
   }
 
+  /**
+   * @desc Obtiene una lista de datos históricos de sensores basada en filtros.
+   * @param {SensorDataQuery} query - Los filtros para la consulta.
+   * @returns {Promise<any[]>} Un array de registros de datos de sensores.
+   */
   async getSensorData(query: SensorDataQuery) {
     try {
       const where: any = {};
 
-      if (query.sensorId) {
-        where.sensorId = query.sensorId;
-      }
-
-      if (query.tankId) {
-        where.tankId = query.tankId;
-      }
-
+      if (query.sensorId) where.sensorId = query.sensorId;
+      if (query.tankId) where.tankId = query.tankId;
       if (query.startDate || query.endDate) {
         where.timestamp = {};
-        if (query.startDate) {
-          where.timestamp.gte = query.startDate;
-        }
-        if (query.endDate) {
-          where.timestamp.lte = query.endDate;
-        }
+        if (query.startDate) where.timestamp.gte = query.startDate;
+        if (query.endDate) where.timestamp.lte = query.endDate;
       }
 
       const sensorData = await prisma.sensorData.findMany({
         where,
         include: {
-          sensor: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-            }
-          },
-          tank: {
-            select: {
-              id: true,
-              name: true,
-              location: true,
-            }
-          }
+          sensor: { select: { id: true, name: true, type: true } },
+          tank: { select: { id: true, name: true, location: true } }
         },
         orderBy: { timestamp: 'desc' },
         take: query.limit || 100,
@@ -123,126 +111,45 @@ class SensorDataService {
       });
 
       return sensorData;
-
     } catch (error) {
       logger.error('Error obteniendo datos de sensor:', error);
       throw error;
     }
   }
 
-  async getLatestSensorData(sensorId: string) {
-    try {
-      const latestData = await prisma.sensorData.findFirst({
-        where: { sensorId },
-        orderBy: { timestamp: 'desc' },
-        include: {
-          sensor: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-            }
-          }
-        }
-      });
-
-      return latestData;
-
-    } catch (error) {
-      logger.error('Error obteniendo últimos datos de sensor:', error);
-      throw error;
-    }
-  }
-
+  /**
+   * @desc Obtiene estadísticas (promedio, min, max) para un sensor en un rango de fechas.
+   * @param {string} sensorId - El ID del sensor.
+   * @param {Date} [startDate] - La fecha de inicio del rango.
+   * @param {Date} [endDate] - La fecha de fin del rango.
+   * @returns {Promise<any>} Un objeto con las estadísticas calculadas.
+   */
   async getSensorDataStatistics(sensorId: string, startDate?: Date, endDate?: Date) {
     try {
-      const where: any = { sensorId };
-
-      if (startDate || endDate) {
-        where.timestamp = {};
-        if (startDate) where.timestamp.gte = startDate;
-        if (endDate) where.timestamp.lte = endDate;
-      }
-
-      const data = await prisma.sensorData.findMany({
-        where,
-        select: {
-          temperature: true,
-          ph: true,
-          oxygen: true,
+        const where: any = { sensorId };
+        if (startDate || endDate) {
+            where.timestamp = {};
+            if (startDate) where.timestamp.gte = startDate;
+            if (endDate) where.timestamp.lte = endDate;
         }
-      });
 
-      if (data.length === 0) {
-        return null;
-      }
+        const aggregations = await prisma.sensorData.aggregate({
+            _avg: { value: true },
+            _max: { value: true },
+            _min: { value: true },
+            _count: { value: true },
+            where,
+        });
 
-      // Calcular estadísticas
-      const temperatures = data.map(d => d.temperature).filter(t => t !== null) as number[];
-      const phs = data.map(d => d.ph).filter(p => p !== null) as number[];
-      const oxygens = data.map(d => d.oxygen).filter(o => o !== null) as number[];
-
-      const calculateStats = (values: number[]) => {
-        if (values.length === 0) return null;
-        
-        const sorted = values.sort((a, b) => a - b);
-        const sum = values.reduce((a, b) => a + b, 0);
-        const avg = sum / values.length;
-        const min = sorted[0];
-        const max = sorted[sorted.length - 1];
-        
-        return { min, max, avg, count: values.length };
-      };
-
-      return {
-        temperature: calculateStats(temperatures),
-        ph: calculateStats(phs),
-        oxygen: calculateStats(oxygens),
-        totalRecords: data.length,
-      };
-
+        return {
+            avg: aggregations._avg.value,
+            min: aggregations._min.value,
+            max: aggregations._max.value,
+            count: aggregations._count.value,
+        };
     } catch (error) {
-      logger.error('Error calculando estadísticas de sensor:', error);
-      throw error;
-    }
-  }
-
-  async deleteSensorData(sensorId: string, olderThan?: Date) {
-    try {
-      const where: any = { sensorId };
-
-      if (olderThan) {
-        where.timestamp = { lt: olderThan };
-      }
-
-      const result = await prisma.sensorData.deleteMany({ where });
-
-      logger.info(`Eliminados ${result.count} registros de datos del sensor ${sensorId}`);
-      return result;
-
-    } catch (error) {
-      logger.error('Error eliminando datos de sensor:', error);
-      throw error;
-    }
-  }
-
-  async cleanupOldData(daysToKeep: number = 365) {
-    try {
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
-
-      const result = await prisma.sensorData.deleteMany({
-        where: {
-          timestamp: { lt: cutoffDate }
-        }
-      });
-
-      logger.info(`Limpieza automática: eliminados ${result.count} registros antiguos`);
-      return result;
-
-    } catch (error) {
-      logger.error('Error en limpieza automática de datos:', error);
-      throw error;
+        logger.error('Error calculando estadísticas de sensor:', error);
+        throw error;
     }
   }
 }

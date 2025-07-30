@@ -128,3 +128,16 @@ export const deleteUser = async (req: Request, res: Response) => {
     logger.info(`Usuario eliminado: ${id}`);
     res.json({ success: true, message: 'Usuario eliminado exitosamente' });
 };
+
+/**
+ * @desc     Obtiene todos los usuarios (para vistas de administrador).
+ * @route    GET /api/users/all
+ * @access   Private (Admin)
+ */
+ export const getAllUsers = async (req: Request, res: Response) => {
+    const users = await prisma.user.findMany({
+        select: { id: true, name: true, email: true },
+        orderBy: { name: 'asc' },
+    });
+    res.json({ success: true, data: users });
+};

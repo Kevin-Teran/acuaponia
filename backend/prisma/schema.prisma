@@ -30,40 +30,37 @@ model User {
 }
 
 model Tank {
-  id          String   @id @default(cuid())
-  name        String
-  location    String
-  capacity    Float    // Capacidad en litros
-  currentLevel Float   // Nivel actual en litros
-  status      TankStatus @default(ACTIVE)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String     @id @default(cuid())
+  name       String
+  location   String
+  status     TankStatus @default(ACTIVE)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
 
   // Relaciones
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sensors     Sensor[]
-  sensorData  SensorData[]
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sensors    Sensor[]
+  sensorData SensorData[]
 
   @@map("tanks")
 }
 
 model Sensor {
-  id              String      @id @default(cuid())
+  id              String       @id @default(cuid())
   name            String
   type            SensorType
   location        String
   status          SensorStatus @default(ACTIVE)
-  batteryLevel    Int         @default(100)
   calibrationDate DateTime
   lastReading     Float?
   lastUpdate      DateTime?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   // Relaciones
   tankId          String
-  tank            Tank        @relation(fields: [tankId], references: [id], onDelete: Cascade)
+  tank            Tank         @relation(fields: [tankId], references: [id], onDelete: Cascade)
   sensorData      SensorData[]
   alerts          Alert[]
 
@@ -71,18 +68,17 @@ model Sensor {
 }
 
 model SensorData {
-  id          String   @id @default(cuid())
-  temperature Float?
-  ph          Float?
-  oxygen      Float?
-  timestamp   DateTime @default(now())
-  createdAt   DateTime @default(now())
+  id        String     @id @default(cuid())
+  value     Float      
+  type      SensorType 
+  timestamp DateTime   @default(now())
+  createdAt DateTime   @default(now())
 
   // Relaciones
-  sensorId    String
-  sensor      Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
-  tankId      String
-  tank        Tank     @relation(fields: [tankId], references: [id], onDelete: Cascade)
+  sensorId  String
+  sensor    Sensor     @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  tankId    String
+  tank      Tank       @relation(fields: [tankId], references: [id], onDelete: Cascade)
 
   @@map("sensor_data")
   @@index([timestamp])
@@ -90,22 +86,22 @@ model SensorData {
 }
 
 model Alert {
-  id          String      @id @default(cuid())
+  id          String        @id @default(cuid())
   type        AlertType
   severity    AlertSeverity
-  message     String      @db.Text
+  message     String        @db.Text
   value       Float?
   threshold   Float?
-  resolved    Boolean     @default(false)
+  resolved    Boolean       @default(false)
   resolvedAt  DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   // Relaciones
   sensorId    String
-  sensor      Sensor      @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  sensor      Sensor        @relation(fields: [sensorId], references: [id], onDelete: Cascade)
   userId      String?
-  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user        User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@map("alerts")
   @@index([createdAt])
@@ -113,18 +109,17 @@ model Alert {
 }
 
 model Report {
-  id          String      @id @default(cuid())
+  id          String       @id @default(cuid())
   title       String
   type        ReportType
-  parameters  Json        // Parámetros del reporte (fechas, filtros, etc.)
-  filePath    String?     // Ruta del archivo generado
+  parameters  Json
+  filePath    String?
   status      ReportStatus @default(PENDING)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
-  // Relaciones
   userId      String
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("reports")
   @@index([createdAt])
@@ -141,7 +136,8 @@ model SystemConfig {
   @@map("system_config")
 }
 
-// Enums
+// --- ENUMS ---
+
 enum Role {
   ADMIN
   USER
@@ -150,7 +146,6 @@ enum Role {
 enum UserStatus {
   ACTIVE
   INACTIVE
-  SUSPENDED
 }
 
 enum TankStatus {

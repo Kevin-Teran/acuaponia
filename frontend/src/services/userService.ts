@@ -49,3 +49,12 @@ export const getUserById = async (id: string): Promise<User> => {
 export const deleteUser = async (id: string): Promise<void> => {
     await api.delete(`/users/${id}`);
 };
+
+/**
+ * @desc     Obtiene todos los usuarios desde la API.
+ * @returns  {Promise<User[]>}
+ */
+export const getAllUsers = async (): Promise<User[]> => {
+    const response = await api.get('/users/all');
+    return response.data.data;
+};

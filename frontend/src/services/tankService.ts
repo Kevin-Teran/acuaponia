@@ -19,3 +19,8 @@ export const updateTank = async (id: string, tankData: Partial<Tank>): Promise<T
 export const deleteTank = async (id: string): Promise<void> => {
     await api.delete(`/tanks/${id}`);
 };
+
+export const getTanksByUser = async (userId: string): Promise<Tank[]> => {
+    const response = await api.get(`/tanks/user/${userId}`);
+    return response.data.data;
+};

@@ -6,6 +6,10 @@ export const getSensors = async (): Promise<Sensor[]> => {
     return response.data.data;
 };
 
+export const startEmitter = (sensorIds: string[]) => {
+    return api.post('/data/synthetic/start', sensorIds);
+};
+
 export const createSensor = async (sensorData: Partial<Sensor>): Promise<Sensor> => {
     const response = await api.post('/sensors', sensorData);
     return response.data.data;
@@ -18,4 +22,9 @@ export const updateSensor = async (id: string, sensorData: Partial<Sensor>): Pro
 
 export const deleteSensor = async (id: string): Promise<void> => {
     await api.delete(`/sensors/${id}`);
+};
+
+export const getSensorsByTank = async (tankId: string): Promise<Sensor[]> => {
+    const response = await api.get(`/sensors/tank/${tankId}`);
+    return response.data.data;
 };
