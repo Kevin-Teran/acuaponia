@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,43 +8,41 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
+  id        String       @id @default(cuid())
+  email     String       @unique
   password  String
   name      String
-  role      Role     @default(USER)
-  status    UserStatus @default(ACTIVE)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  role      Role         @default(USER)
+  status    users_status @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
   lastLogin DateTime?
-
-  // Relaciones
-  tanks     Tank[]
   alerts    Alert[]
   reports   Report[]
+  tanks     Tank[]
 
   @@map("users")
 }
 
 model Tank {
-  id         String     @id @default(cuid())
+  id         String       @id @default(cuid())
   name       String
   location   String
-  status     TankStatus @default(ACTIVE)
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
-
-  // Relaciones
+  status     TankStatus   @default(ACTIVE)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
   userId     String
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sensors    Sensor[]
   sensorData SensorData[]
+  sensors    Sensor[]
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId], map: "tanks_userId_fkey")
   @@map("tanks")
 }
 
 model Sensor {
   id              String       @id @default(cuid())
+  hardwareId      String       @unique(map: "hardwareId")
   name            String
   type            SensorType
   location        String
@@ -57,72 +52,70 @@ model Sensor {
   lastUpdate      DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
-
-  // Relaciones
   tankId          String
-  tank            Tank         @relation(fields: [tankId], references: [id], onDelete: Cascade)
-  sensorData      SensorData[]
   alerts          Alert[]
+  sensorData      SensorData[]
+  tank            Tank         @relation(fields: [tankId], references: [id], onDelete: Cascade)
 
+  @@index([tankId], map: "sensors_tankId_fkey")
   @@map("sensors")
 }
 
 model SensorData {
   id        String     @id @default(cuid())
-  value     Float      
-  type      SensorType 
+  value     Float
+  type      SensorType
   timestamp DateTime   @default(now())
   createdAt DateTime   @default(now())
-
-  // Relaciones
   sensorId  String
-  sensor    Sensor     @relation(fields: [sensorId], references: [id], onDelete: Cascade)
   tankId    String
+  sensor    Sensor     @relation(fields: [sensorId], references: [id], onDelete: Cascade)
   tank      Tank       @relation(fields: [tankId], references: [id], onDelete: Cascade)
 
-  @@map("sensor_data")
   @@index([timestamp])
   @@index([sensorId, timestamp])
+  @@index([tankId], map: "sensor_data_tankId_fkey")
+  @@map("sensor_data")
 }
 
 model Alert {
-  id          String        @id @default(cuid())
-  type        AlertType
-  severity    AlertSeverity
-  message     String        @db.Text
-  value       Float?
-  threshold   Float?
-  resolved    Boolean       @default(false)
-  resolvedAt  DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id         String        @id @default(cuid())
+  type       AlertType
+  severity   AlertSeverity
+  message    String        @db.Text
+  value      Float?
+  threshold  Float?
+  resolved   Boolean       @default(false)
+  resolvedAt DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  sensorId   String
+  userId     String?
+  sensor     Sensor        @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  user       User?         @relation(fields: [userId], references: [id])
 
-  // Relaciones
-  sensorId    String
-  sensor      Sensor        @relation(fields: [sensorId], references: [id], onDelete: Cascade)
-  userId      String?
-  user        User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  @@map("alerts")
   @@index([createdAt])
   @@index([resolved])
+  @@index([sensorId], map: "alerts_sensorId_fkey")
+  @@index([userId], map: "alerts_userId_fkey")
+  @@map("alerts")
 }
 
 model Report {
-  id          String       @id @default(cuid())
-  title       String
-  type        ReportType
-  parameters  Json
-  filePath    String?
-  status      ReportStatus @default(PENDING)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id         String       @id @default(cuid())
+  title      String
+  type       ReportType
+  parameters String       @db.LongText
+  filePath   String?
+  status     ReportStatus @default(PENDING)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  userId      String
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("reports")
   @@index([createdAt])
+  @@index([userId], map: "reports_userId_fkey")
+  @@map("reports")
 }
 
 model SystemConfig {
@@ -136,16 +129,9 @@ model SystemConfig {
   @@map("system_config")
 }
 
-// --- ENUMS ---
-
 enum Role {
   ADMIN
   USER
-}
-
-enum UserStatus {
-  ACTIVE
-  INACTIVE
 }
 
 enum TankStatus {
@@ -199,4 +185,10 @@ enum ReportStatus {
   PROCESSING
   COMPLETED
   FAILED
+}
+
+enum users_status {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
 }

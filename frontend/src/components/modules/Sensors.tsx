@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Thermometer, Droplets, Wind, Plus, Edit, Trash2, Settings, MapPin, Wifi, WifiOff, ChevronDown, Cpu, Loader, AlertCircle, Save } from 'lucide-react';
+import { Thermometer, Droplets, Wind, Plus, Edit, Trash2, Settings, MapPin, Wifi, WifiOff, ChevronDown, Cpu, Loader, AlertCircle, Save, Hash } from 'lucide-react';
 import { Card } from '../common/Card';
 import { Modal } from '../common/Modal';
 import Swal from 'sweetalert2';
@@ -13,7 +13,9 @@ const SENSOR_TYPES: Sensor['type'][] = ['TEMPERATURE', 'PH', 'OXYGEN'];
 
 /**
  * @component Sensors
- * @desc Módulo para la gestión integral de tanques y sensores con reglas de negocio.
+ * @desc Módulo para la gestión integral de tanques y sensores. Permite a los administradores
+ * crear, ver, actualizar y eliminar tanques, así como los sensores asociados a ellos,
+ * utilizando un ID de hardware físico para la vinculación.
  */
 export const Sensors: React.FC = () => {
   // --- Estados del Componente ---
@@ -31,7 +33,14 @@ export const Sensors: React.FC = () => {
 
   const [showSensorModal, setShowSensorModal] = useState(false);
   const [editingSensor, setEditingSensor] = useState<Sensor | null>(null);
-  const [sensorFormData, setSensorFormData] = useState({ name: '', type: 'TEMPERATURE' as Sensor['type'], tankId: '', calibrationDate: new Date().toISOString().split('T')[0], status: 'ACTIVE' as Sensor['status'] });
+  const [sensorFormData, setSensorFormData] = useState({
+    name: '',
+    hardwareId: '', // <-- CAMBIO: Añadido para el ID físico
+    type: 'TEMPERATURE' as Sensor['type'],
+    tankId: '',
+    calibrationDate: new Date().toISOString().split('T')[0],
+    status: 'ACTIVE' as Sensor['status'],
+  });
   const [availableSensorTypes, setAvailableSensorTypes] = useState<Sensor['type'][]>(SENSOR_TYPES);
 
   // --- Carga y Sincronización de Datos ---
@@ -54,7 +63,7 @@ export const Sensors: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [expandedTanks.size]);
 
   useEffect(() => {
     fetchData();
@@ -91,10 +100,24 @@ export const Sensors: React.FC = () => {
 
     if (sensor) {
         setEditingSensor(sensor);
-        setSensorFormData({ name: sensor.name, type: sensor.type, tankId: sensor.tankId, calibrationDate: format(new Date(sensor.calibrationDate), 'yyyy-MM-dd'), status: sensor.status });
+        setSensorFormData({ 
+            name: sensor.name, 
+            hardwareId: sensor.hardwareId, // <-- CAMBIO: Poblar hardwareId
+            type: sensor.type, 
+            tankId: sensor.tankId, 
+            calibrationDate: format(new Date(sensor.calibrationDate), 'yyyy-MM-dd'), 
+            status: sensor.status 
+        });
     } else {
         setEditingSensor(null);
-        setSensorFormData({ name: '', type: availableTypes[0] || 'TEMPERATURE', tankId: targetTankId, calibrationDate: new Date().toISOString().split('T')[0], status: 'ACTIVE' });
+        setSensorFormData({ 
+            name: '', 
+            hardwareId: '', // <-- CAMBIO: Inicializar hardwareId
+            type: availableTypes[0] || 'TEMPERATURE', 
+            tankId: targetTankId, 
+            calibrationDate: new Date().toISOString().split('T')[0], 
+            status: 'ACTIVE' 
+        });
     }
     setShowSensorModal(true);
   };
@@ -109,7 +132,8 @@ export const Sensors: React.FC = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-        const data = { ...tankFormData, capacity: 0, currentLevel: 0 };
+        // CORRECCIÓN: Se eliminan capacity y currentLevel del objeto enviado
+        const data = { ...tankFormData };
         if (editingTank) {
             await tankService.updateTank(editingTank.id, data);
         } else {
@@ -119,7 +143,8 @@ export const Sensors: React.FC = () => {
         handleCloseModals();
         fetchData();
     } catch (error) {
-        Swal.fire('Error', `No se pudo guardar el tanque.`, 'error');
+        const err = error as any;
+        Swal.fire('Error', err.response?.data?.error?.message || 'No se pudo guardar el tanque.', 'error');
     } finally {
         setIsSubmitting(false);
     }
@@ -138,7 +163,8 @@ export const Sensors: React.FC = () => {
         handleCloseModals();
         fetchData();
     } catch (error) {
-        Swal.fire('Error', `No se pudo guardar el sensor.`, 'error');
+        const err = error as any;
+        Swal.fire('Error', err.response?.data?.error?.message || 'No se pudo guardar el sensor.', 'error');
     } finally {
         setIsSubmitting(false);
     }
@@ -270,7 +296,7 @@ export const Sensors: React.FC = () => {
                         <div className="flex items-center space-x-4">
                             <button onClick={(e) => { e.stopPropagation(); handleOpenTankModal(tank); }} className="p-1.5 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md"><Edit className="w-4 h-4"/></button>
                             <button onClick={(e) => { e.stopPropagation(); handleDeleteTank(tank); }} className="p-1.5 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md"><Trash2 className="w-4 h-4"/></button>
-                            <span className="text-sm text-gray-600 dark:text-gray-300">{tankSensors.length} / 3 Sensores</span>
+                            <span className="text-sm text-gray-600 dark:text-gray-300">{tankSensors.length} / {SENSOR_TYPES.length} Sensores</span>
                             <ChevronDown className={cn("w-5 h-5 text-gray-500 transition-transform", isExpanded && "transform rotate-180")} />
                         </div>
                     </div>
@@ -291,6 +317,7 @@ export const Sensors: React.FC = () => {
                                                     {sensor.status === 'ACTIVE' ? <Wifi className="w-4 h-4 text-green-500" /> : <WifiOff className="w-4 h-4 text-red-500" />}
                                                 </div>
                                                 <div className="space-y-2 text-sm">
+                                                    <div className="flex justify-between"><span className="text-gray-500">Hardware ID:</span><span className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">{sensor.hardwareId}</span></div>
                                                     <div className="flex justify-between"><span className="text-gray-500">Estado:</span>{getStatusChip(sensor.status)}</div>
                                                     <div className="flex justify-between"><span className="text-gray-500">Lectura:</span><span className="font-medium text-gray-900 dark:text-white">{sensor.lastReading?.toFixed(1) ?? 'N/A'} {sensor.type === 'TEMPERATURE' ? '°C' : sensor.type === 'PH' ? '' : 'mg/L'}</span></div>
                                                     <div className="flex justify-between"><span className="text-gray-500">Calibrado:</span><span className="font-medium text-gray-900 dark:text-white">{format(new Date(sensor.calibrationDate), 'dd/MM/yyyy')}</span></div>
@@ -334,9 +361,9 @@ export const Sensors: React.FC = () => {
           </>
       }>
         <form id="tank-form" onSubmit={handleTankSubmit} className="space-y-4">
-            <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre del Tanque</label><input type="text" value={tankFormData.name} onChange={(e) => setTankFormData({ ...tankFormData, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700" required /></div>
-            <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ubicación</label><input type="text" value={tankFormData.location} onChange={(e) => setTankFormData({ ...tankFormData, location: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700" required /></div>
-            {editingTank && <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label><select value={tankFormData.status} onChange={(e) => setTankFormData({ ...tankFormData, status: e.target.value as any })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700"><option value="ACTIVE">Activo</option><option value="MAINTENANCE">Mantenimiento</option><option value="INACTIVE">Inactivo</option></select></div>}
+            <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre del Tanque</label><input type="text" value={tankFormData.name} onChange={(e) => setTankFormData({ ...tankFormData, name: e.target.value })} className="w-full form-input" required /></div>
+            <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ubicación</label><input type="text" value={tankFormData.location} onChange={(e) => setTankFormData({ ...tankFormData, location: e.target.value })} className="w-full form-input" required /></div>
+            {editingTank && <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label><select value={tankFormData.status} onChange={(e) => setTankFormData({ ...tankFormData, status: e.target.value as any })} className="w-full form-select"><option value="ACTIVE">Activo</option><option value="MAINTENANCE">Mantenimiento</option><option value="INACTIVE">Inactivo</option></select></div>}
         </form>
       </Modal>
 
@@ -347,25 +374,26 @@ export const Sensors: React.FC = () => {
           </>
       }>
         <form id="sensor-form" onSubmit={handleSensorSubmit} className="space-y-4">
-            <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre del Sensor</label><input type="text" value={sensorFormData.name} onChange={(e) => setSensorFormData({ ...sensorFormData, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700" required /></div>
+            <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre del Sensor</label><input type="text" value={sensorFormData.name} onChange={(e) => setSensorFormData({ ...sensorFormData, name: e.target.value })} className="w-full form-input" required /></div>
+            <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">ID del Hardware (MQTT)</label><input type="text" placeholder="Ej: TANQUE1-TEMP" value={sensorFormData.hardwareId} onChange={(e) => setSensorFormData({ ...sensorFormData, hardwareId: e.target.value })} className="w-full form-input" required /></div>
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de Sensor</label>
-                    <select value={sensorFormData.type} onChange={(e) => setSensorFormData({ ...sensorFormData, type: e.target.value as any })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700" required disabled={!!editingSensor}>
+                    <select value={sensorFormData.type} onChange={(e) => setSensorFormData({ ...sensorFormData, type: e.target.value as any })} className="w-full form-select" required disabled={!!editingSensor}>
                         {editingSensor ? <option value={editingSensor.type}>{editingSensor.type}</option> :
                           availableSensorTypes.map(type => <option key={type} value={type}>{type}</option>)}
                     </select>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Asignar a Tanque</label>
-                    <select value={sensorFormData.tankId} onChange={(e) => setSensorFormData({ ...sensorFormData, tankId: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700" required disabled={!editingSensor}>
+                    <select value={sensorFormData.tankId} onChange={(e) => setSensorFormData({ ...sensorFormData, tankId: e.target.value })} className="w-full form-select" required disabled={!editingSensor}>
                         {editingSensor ? availableTanksForSensor(editingSensor).map(tank => <option key={tank.id} value={tank.id}>{tank.name}</option>) :
                          <option value={sensorFormData.tankId}>{tanks.find(t => t.id === sensorFormData.tankId)?.name}</option>}
                     </select>
                 </div>
             </div>
-            <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de Calibración</label><input type="date" value={sensorFormData.calibrationDate} onChange={(e) => setSensorFormData({ ...sensorFormData, calibrationDate: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700" required /></div>
-            {editingSensor && <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label><select value={sensorFormData.status} onChange={(e) => setSensorFormData({ ...sensorFormData, status: e.target.value as any })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-green bg-white dark:bg-gray-700"><option value="ACTIVE">Activo</option><option value="MAINTENANCE">Mantenimiento</option><option value="INACTIVE">Inactivo</option><option value="ERROR">Error</option></select></div>}
+            <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de Calibración</label><input type="date" value={sensorFormData.calibrationDate} onChange={(e) => setSensorFormData({ ...sensorFormData, calibrationDate: e.target.value })} className="w-full form-input" required /></div>
+            {editingSensor && <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label><select value={sensorFormData.status} onChange={(e) => setSensorFormData({ ...sensorFormData, status: e.target.value as any })} className="w-full form-select"><option value="ACTIVE">Activo</option><option value="MAINTENANCE">Mantenimiento</option><option value="INACTIVE">Inactivo</option><option value="ERROR">Error</option></select></div>}
         </form>
       </Modal>
     </div>

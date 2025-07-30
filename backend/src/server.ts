@@ -1,5 +1,3 @@
-// backend/src/server.ts
-
 // --- IMPORTACIONES DE PAQUETES ---
 import express, { Request, Response, NextFunction } from 'express';
 import http from 'http';
@@ -7,30 +5,22 @@ import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import 'express-async-errors';
-import path from 'path'; // Se importa el módulo 'path'
+import path from 'path';
 
 // --- IMPORTACIONES DE LA APLICACIÓN ---
-import logger from './utils/logger';
+import { logger } from './utils/logger';
 import { initializeMQTT } from './services/mqttService';
-import { errorHandler } from './middleware/errorHandler';
+import { errorHandler, notFound } from './middleware/errorHandler';
 
 // --- IMPORTACIÓN DE RUTAS ---
 import authRoutes from './routes/auth';
-import userRoutes from './routes/users';
-import tankRoutes from './routes/tanks';
-import sensorRoutes from './routes/sensors';
-import dataRoutes from './routes/data';
-import alertRoutes from './routes/alerts';
-import reportRoutes from './routes/reports';
+// Aquí se añadirán las otras rutas más adelante
 
-// --- CORRECCIÓN AQUÍ ---
-// Cargar variables de entorno desde el archivo .env en la raíz del proyecto
+// --- CONFIGURACIÓN INICIAL ---
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-
 
 const app = express();
 const server = http.createServer(app);
-
 const io = new SocketIOServer(server, {
   cors: {
     origin: "*", 
@@ -57,23 +47,21 @@ io.on('connection', (socket) => {
 
 // --- RUTAS DE LA API ---
 app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/tanks', tankRoutes);
-app.use('/api/sensors', sensorRoutes);
-app.use('/api/data', dataRoutes);
-app.use('/api/alerts', alertRoutes);
-app.use('/api/reports', reportRoutes);
 
-app.get('/', (req: Request, res: Response) => {
+app.get('/', (req, res) => {
   res.status(200).send('El backend del sistema de Acuaponía está funcionando correctamente.');
 });
 
+// --- MANEJO DE ERRORES ---
+app.use(notFound);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5001;
 
+// --- INICIO DEL SERVIDOR ---
+// CORRECCIÓN: Se añade la llamada a server.listen para que el servidor se inicie.
 server.listen(PORT, () => {
-  logger.info(`Servidor escuchando en el puerto ${PORT}`);
+  logger.info(`🚀 Servidor escuchando en el puerto ${PORT}`);
   initializeMQTT();
 });
 

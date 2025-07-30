@@ -1,6 +1,10 @@
 import nodemailer from 'nodemailer';
 import { logger } from '../utils/logger';
 
+/**
+ * @interface MailOptions
+ * @desc Define la estructura de las opciones para enviar un correo.
+ */
 interface MailOptions {
   to: string;
   subject: string;
@@ -8,21 +12,27 @@ interface MailOptions {
   html?: string;
 }
 
+/**
+ * @class EmailService
+ * @desc Gestiona la conexión con un servidor SMTP y el envío de correos electrónicos.
+ * Está diseñado para funcionar de manera segura, deshabilitándose si no se proporcionan
+ * las credenciales SMTP en el archivo .env.
+ */
 class EmailService {
   private transporter: nodemailer.Transporter | null = null;
   private isVerified: boolean = false;
 
   constructor() {
-    // Verifica si las variables de entorno para SMTP están presentes
+    // Verifica si las variables de entorno para el correo están definidas
     if (!process.env.SMTP_HOST || !process.env.SMTP_PORT || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      logger.warn('⚠️  Credenciales SMTP no definidas en .env. El servicio de email estará deshabilitado.');
+      logger.warn('⚠️  Credenciales SMTP no definidas en .env. El servicio de envío de emails estará deshabilitado.');
       return; // No intenta crear el transporter si faltan credenciales
     }
 
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT),
-      secure: Number(process.env.SMTP_PORT) === 465,
+      secure: Number(process.env.SMTP_PORT) === 465, // true para puerto 465, false para otros
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
@@ -33,7 +43,7 @@ class EmailService {
   }
 
   /**
-   * Verifica la conexión con el servidor SMTP de forma asíncrona sin bloquear el inicio.
+   * @desc Verifica la conexión con el servidor SMTP de forma asíncrona al iniciar.
    */
   private verifyConnection(): void {
     if (!this.transporter) return;
@@ -50,12 +60,12 @@ class EmailService {
   }
 
   /**
-   * Envía un correo electrónico si el servicio está configurado y verificado.
+   * @desc Envía un correo electrónico si el servicio está configurado y verificado.
    * @param {MailOptions} options - Opciones del correo (destinatario, asunto, etc.).
    */
   public async sendMail(options: MailOptions): Promise<void> {
     if (!this.transporter || !this.isVerified) {
-      logger.error('Email no enviado: el servicio de correo no está configurado o verificado.');
+      logger.error('Email no enviado: el servicio de correo no está configurado o la conexión falló.');
       return; // Previene el envío si no hay conexión, evitando un crash.
     }
 
@@ -64,12 +74,12 @@ class EmailService {
         from: `"SENA Acuaponía" <${process.env.SMTP_USER}>`,
         ...options,
       });
-      logger.info(`📧 Email enviado: ${info.messageId}`);
+      logger.info(`📧 Email de alerta enviado a ${options.to}: ${info.messageId}`);
     } catch (error) {
-      logger.error('❌ Error enviando email:', error);
-      // No relanzamos el error para no detener otros procesos.
+      logger.error(`❌ Error enviando email a ${options.to}:`, error);
     }
   }
 }
 
+// Se exporta una única instancia del servicio para ser usada en toda la aplicación.
 export const emailService = new EmailService();
