@@ -4,13 +4,24 @@
  */
 
 /**
+ * @interface ProcessedDataPoint
+ * @desc Estructura de datos procesada para los gráficos del dashboard, agrupada por timestamp.
+ */
+ export interface ProcessedDataPoint {
+  timestamp: string;
+  temperature: number | null;
+  ph: number | null;
+  oxygen: number | null;
+}
+
+/**
  * @interface LoginCredentials
  * @desc Credenciales necesarias para que un usuario inicie sesión.
  */
  export interface LoginCredentials {
   email: string;
   password: string;
-  rememberMe?: boolean; 
+  rememberMe?: boolean;
 }
 
 /**
