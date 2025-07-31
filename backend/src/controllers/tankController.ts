@@ -21,7 +21,10 @@ export const getTanks = async (req: Request, res: Response) => {
                         name: true,
                         type: true,
                         status: true,
-                        lastReading: true
+                        lastReading: true,
+                        hardwareId: true,
+                        calibrationDate: true,
+                        lastUpdate: true
                     }
                 },
                 _count: {
@@ -98,8 +101,10 @@ export const createTank = async (req: Request, res: Response) => {
             throw new CustomError('Nombre y ubicación son requeridos', 400);
         }
 
+        // CORRECCIÓN: Si no se proporciona userId, usar el usuario actual
         const assignedUserId = userId || currentUserId;
 
+        // Verificar que el usuario existe
         const userExists = await prisma.user.findUnique({
             where: { id: assignedUserId }
         });
@@ -108,6 +113,7 @@ export const createTank = async (req: Request, res: Response) => {
             throw new CustomError('Usuario asignado no encontrado', 404);
         }
 
+        // Verificar que no existe un tanque con el mismo nombre para el usuario
         const existingTank = await prisma.tank.findFirst({
             where: { 
                 name: name.trim(),
@@ -191,6 +197,7 @@ export const updateTank = async (req: Request, res: Response) => {
         if (status) updateData.status = status;
         if (userId) updateData.userId = userId;
 
+        // Validar cambio de nombre
         if (name && name.trim() !== existingTank.name) {
             const duplicateTank = await prisma.tank.findFirst({
                 where: {
@@ -205,6 +212,7 @@ export const updateTank = async (req: Request, res: Response) => {
             }
         }
 
+        // Validar cambio de usuario
         if (userId && userId !== existingTank.userId) {
             const userExists = await prisma.user.findUnique({
                 where: { id: userId }

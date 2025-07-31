@@ -34,15 +34,15 @@ const schemas = {
 
   createSensor: Joi.object({
     name: Joi.string().min(2).max(100).required(),
-    hardwareId: Joi.string().required(), 
+    hardwareId: Joi.string().min(1).max(50).required(), // CORRECCIÓN: Validación más específica
     type: Joi.string().valid('TEMPERATURE', 'PH', 'OXYGEN', 'LEVEL', 'FLOW').required(),
     tankId: Joi.string().required(),
     calibrationDate: Joi.date().required(),
-    status: Joi.string().valid('ACTIVE', 'INACTIVE', 'MAINTENANCE', 'ERROR'),
+    status: Joi.string().valid('ACTIVE', 'INACTIVE', 'MAINTENANCE', 'ERROR').default('ACTIVE'),
   }),
   updateSensor: Joi.object({
     name: Joi.string().min(2).max(100),
-    hardwareId: Joi.string(), 
+    hardwareId: Joi.string().min(1).max(50), // CORRECCIÓN: Validación más específica
     status: Joi.string().valid('ACTIVE', 'INACTIVE', 'MAINTENANCE', 'ERROR'),
     calibrationDate: Joi.date(),
     tankId: Joi.string(),
@@ -52,19 +52,20 @@ const schemas = {
   createTank: Joi.object({
     name: Joi.string().min(2).max(100).required(),
     location: Joi.string().min(2).max(200).required(),
-    userId: Joi.string().required(),
-    status: Joi.string().valid('ACTIVE', 'MAINTENANCE', 'INACTIVE'),
+    userId: Joi.string().optional(), // CORRECCIÓN: Opcional para que use el usuario actual
+    status: Joi.string().valid('ACTIVE', 'MAINTENANCE', 'INACTIVE').default('ACTIVE'),
   }),
   updateTank: Joi.object({
     name: Joi.string().min(2).max(100),
     location: Joi.string().min(2).max(200),
     status: Joi.string().valid('ACTIVE', 'MAINTENANCE', 'INACTIVE'),
+    userId: Joi.string(),
   }),
 
   sensorData: Joi.object({
     sensorId: Joi.string().required(),
-    value: Joi.number().required(), // <-- CAMBIO: 'value' en lugar de métricas separadas
-    type: Joi.string().valid('TEMPERATURE', 'PH', 'OXYGEN', 'LEVEL', 'FLOW').required(), // <-- CAMBIO: 'type' para identificar el dato
+    value: Joi.number().required(),
+    type: Joi.string().valid('TEMPERATURE', 'PH', 'OXYGEN', 'LEVEL', 'FLOW').required(),
     timestamp: Joi.date().default(() => new Date()),
   }),
 };
