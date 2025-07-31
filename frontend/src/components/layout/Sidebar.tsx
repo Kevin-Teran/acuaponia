@@ -12,7 +12,7 @@ import {
   Sun,
   ChevronLeft,
   ChevronRight,
-  Sparkles, // Ícono para la nueva función de IA
+  Sparkles, 
   User as UserIcon
 } from 'lucide-react';
 import { cn } from '../../utils/cn';

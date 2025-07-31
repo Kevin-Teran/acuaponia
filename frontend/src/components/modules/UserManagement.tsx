@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Users, Plus, Edit, Trash2, Shield, ShieldCheck, Save, X, Loader, AlertCircle, Eye, MapPin } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, Shield, ShieldCheck, Save, Loader, AlertCircle, Eye } from 'lucide-react';
 import { useUsers } from '../../hooks/useUsers';
 import { useAuth } from '../../hooks/useAuth';
 import { User } from '../../types';

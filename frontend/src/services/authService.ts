@@ -34,7 +34,7 @@ export const login = async (credentials: LoginCredentials): Promise<User> => {
     // Verify server availability first
     try {
       await authApi.get('/auth/health', { timeout: 5000 });
-    } catch (healthError) {
+    } catch (healthError: any) { // <-- CORRECCIÓN AQUÍ
       console.error('Server not available:', healthError.message);
       throw new Error('Cannot connect to server. Verify it\'s running on http://localhost:5001');
     }
@@ -92,7 +92,7 @@ export const getCurrentUser = (): User | null => {
   try {
     const userStr = localStorage.getItem('acuaponia_user');
     return userStr ? JSON.parse(userStr) : null;
-  } catch (error) {
+  } catch (error: any) { // <-- CORRECCIÓN AQUÍ
     console.error('Error parsing user from localStorage:', error);
     return null;
   }

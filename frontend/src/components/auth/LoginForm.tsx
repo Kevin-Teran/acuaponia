@@ -12,27 +12,23 @@ export const LoginForm: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   
-  // Color verde del SENA para unificar el tema
   const senaGreen = '#39A900';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true); // Muestra el spinner de pantalla completa inmediatamente
+    setIsLoading(true); 
 
     try {
       await login({ email, password, rememberMe });
       
-      // La redirección ocurrirá después del login exitoso en el hook 'useAuth'
-      // o se puede manejar aquí directamente.
+      
       sessionStorage.setItem('showWelcomeMessage', 'true');
       
-      // Simula un pequeño delay para que la animación se aprecie y redirige
       setTimeout(() => {
         window.location.href = '/dashboard';
       }, 1200);
 
     } catch (error: any) {
-      // Si hay un error, se detiene la carga y se muestra la alerta
       setIsLoading(false); 
       
       const errorMessage = error?.response?.data?.message || error?.message || 'Error de autenticación. Por favor, verifica tus credenciales.';
@@ -42,7 +38,7 @@ export const LoginForm: React.FC = () => {
         title: 'Error de Autenticación',
         text: errorMessage,
         confirmButtonText: 'Intentar de nuevo',
-        confirmButtonColor: senaGreen, // Color unificado
+        confirmButtonColor: senaGreen,
         background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
         color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#374151',
       });
@@ -59,7 +55,6 @@ export const LoginForm: React.FC = () => {
     { email: 'usuario@sena.edu.co', password: '123456', role: 'Usuario' }
   ];
 
-  // Si está cargando, muestra el spinner en pantalla completa y oculta el resto
   if (isLoading) {
     return (
       <LoadingSpinner 

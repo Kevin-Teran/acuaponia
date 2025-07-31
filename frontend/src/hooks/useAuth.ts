@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User } from '../types';
+import { User, LoginCredentials } from '../types';
 import { 
   login as apiLogin,
   logout as apiLogout,
@@ -58,7 +58,8 @@ export const useAuth = () => {
    * @param {string} credentials.password - Contraseña del usuario
    * @returns {Promise<boolean>} Indica si el login fue exitoso
    */
-  const login = async (credentials: { email: string; password: string }): Promise<boolean> => {
+  // CORRECCIÓN 2: Usar LoginCredentials como el tipo del parámetro
+  const login = async (credentials: LoginCredentials): Promise<boolean> => {
     setLoading(true);
     setError(null);
     
