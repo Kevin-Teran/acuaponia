@@ -10,9 +10,9 @@ import api from '../config/api';
 
 /**
  * @desc Obtiene el estado de los emisores de datos sintéticos.
- * @returns {Promise<string[]>} Una promesa que resuelve a un array de emisores activos.
+ * @returns {Promise<any[]>} Una promesa que resuelve a un array de emisores activos.
  */
- export const getEmitterStatus = async (): Promise<string[]> => {
+ export const getEmitterStatus = async (): Promise<any[]> => {
     const response = await api.get('/data/synthetic/status');
     return response.data.data;
 };
@@ -22,7 +22,6 @@ import api from '../config/api';
  * @param sensorIds - Un array de IDs de sensores.
  */
  export const startEmitter = (sensorIds: string[]) => {
-    // CORRECCIÓN: El backend espera un objeto { sensorIds: [...] }
     return api.post('/data/synthetic/start', { sensorIds });
 };
 
