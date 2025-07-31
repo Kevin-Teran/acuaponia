@@ -14,21 +14,22 @@ import {
 
 const router = express.Router();
 
-// Aplicar middleware de protección y admin a todas las rutas
-router.use(protect, admin);
-
-// Rutas específicas (deben ir antes de las rutas con parámetros)
-router.get('/tank/:tankId', asyncHandler(getSensorsByTank));
-router.get('/hardware/:hardwareId', asyncHandler(getSensorByHardwareId));
+// Aplica protección a todas las rutas. CUALQUIER usuario debe estar logueado.
+router.use(protect);
 
 // Rutas principales
 router.route('/')
     .get(asyncHandler(getSensors))
     .post(sensorValidation.create, asyncHandler(createSensor));
 
+// Rutas por ID
 router.route('/:id')
     .get(asyncHandler(getSensorById))
     .put(sensorValidation.update, asyncHandler(updateSensor))
     .delete(asyncHandler(deleteSensor));
+
+// Rutas específicas
+router.get('/tank/:tankId', asyncHandler(getSensorsByTank));
+router.get('/hardware/:hardwareId', admin, asyncHandler(getSensorByHardwareId)); // Solo admin puede buscar por hardware
 
 export default router;

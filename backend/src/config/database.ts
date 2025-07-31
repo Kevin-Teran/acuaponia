@@ -1,7 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger';
 
-// Configuración del cliente Prisma
 const prisma = new PrismaClient({
   log: [
     {
@@ -44,15 +43,11 @@ prisma.$on('warn', (e) => {
   logger.warn('Database warning:', e.message);
 });
 
-// Función para conectar a la base de datos
 export async function connectDatabase(): Promise<void> {
   try {
     await prisma.$connect();
-    logger.info('✅ Conexión a MySQL establecida exitosamente');
     
-    // Verificar la conexión
     await prisma.$queryRaw`SELECT 1`;
-    logger.info('✅ Verificación de conexión MySQL exitosa');
     
   } catch (error) {
     logger.error('❌ Error conectando a MySQL:', error);
@@ -60,18 +55,15 @@ export async function connectDatabase(): Promise<void> {
   }
 }
 
-// Función para desconectar de la base de datos
 export async function disconnectDatabase(): Promise<void> {
   try {
     await prisma.$disconnect();
-    logger.info('✅ Desconexión de MySQL exitosa');
   } catch (error) {
     logger.error('❌ Error desconectando de MySQL:', error);
     throw error;
   }
 }
 
-// Función para verificar el estado de la base de datos
 export async function checkDatabaseHealth(): Promise<boolean> {
   try {
     await prisma.$queryRaw`SELECT 1`;

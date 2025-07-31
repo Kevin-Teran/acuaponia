@@ -2,422 +2,148 @@ import { Request, Response } from 'express';
 import { prisma } from '../config/database';
 import { CustomError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
+import { Role } from '@prisma/client';
+
+interface AuthenticatedRequest extends Request {
+  user: { id: string; role: Role; email: string; };
+}
 
 /**
- * @desc     Obtiene todos los sensores con información del tanque
+ * @desc     Obtiene sensores con su última lectura y tendencia.
+ * ADMIN ve todos, USER solo los de sus tanques.
  * @route    GET /api/sensors
- * @access   Private (Admin)
+ * @access   Private
  */
-export const getSensors = async (req: Request, res: Response) => {
-    try {
-        const sensors = await prisma.sensor.findMany({
-            include: {
-                tank: {
-                    select: {
-                        id: true,
-                        name: true,
-                        location: true,
-                        status: true,
-                        user: {
-                            select: { id: true, name: true, email: true }
-                        }
-                    }
-                },
-                _count: {
-                    select: { sensorData: true }
-                }
+ export const getSensors = async (req: AuthenticatedRequest, res: Response) => {
+    const { id: userId, role } = req.user;
+    const whereClause = role === 'ADMIN' ? {} : { tank: { userId: userId } };
+
+    const sensors = await prisma.sensor.findMany({
+        where: whereClause,
+        include: {
+            tank: { select: { name: true } },
+            // Obtener las 2 últimas lecturas para calcular la tendencia
+            sensorData: {
+                orderBy: { timestamp: 'desc' },
+                take: 2,
             },
-            orderBy: { createdAt: 'desc' }
-        });
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+    
+    // Mapear los sensores para añadir la tendencia y limpiar datos innecesarios
+    const sensorsWithTrend = sensors.map(sensor => {
+        const { sensorData, ...rest } = sensor;
+        let trend: 'up' | 'down' | 'neutral' = 'neutral';
+        const lastReading = sensorData[0]?.value ?? null;
+        const previousReading = sensorData[1]?.value ?? null;
 
-        res.json({
-            success: true,
-            data: sensors
-        });
-    } catch (error: unknown) {
-        logger.error('Error obteniendo sensores:', error);
-        throw new CustomError('Error al obtener los sensores', 500);
-    }
+        if (lastReading !== null && previousReading !== null) {
+            if (lastReading > previousReading) trend = 'up';
+            if (lastReading < previousReading) trend = 'down';
+        }
+
+        return {
+            ...rest,
+            lastReading,
+            trend,
+        };
+    });
+
+    res.json({ success: true, data: sensorsWithTrend });
 };
 
 /**
- * @desc     Obtiene un sensor por ID con todos sus detalles
- * @route    GET /api/sensors/:id
- * @access   Private (Admin)
- */
-export const getSensorById = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params;
-
-        const sensor = await prisma.sensor.findUnique({
-            where: { id },
-            include: {
-                tank: {
-                    include: {
-                        user: {
-                            select: { id: true, name: true, email: true }
-                        }
-                    }
-                },
-                sensorData: {
-                    take: 10,
-                    orderBy: { timestamp: 'desc' }
-                },
-                _count: {
-                    select: { sensorData: true }
-                }
-            }
-        });
-
-        if (!sensor) {
-            throw new CustomError('Sensor no encontrado', 404);
-        }
-
-        res.json({
-            success: true,
-            data: sensor
-        });
-    } catch (error: unknown) {
-        if (error instanceof CustomError) {
-            throw error;
-        }
-        logger.error('Error obteniendo sensor por ID:', error);
-        throw new CustomError('Error al obtener el sensor', 500);
-    }
-};
-
-/**
- * @desc     Crea un nuevo sensor
+ * @desc     Crea un nuevo sensor, verificando que el tipo no exista ya en el tanque.
  * @route    POST /api/sensors
- * @access   Private (Admin)
+ * @access   Private
  */
-export const createSensor = async (req: Request, res: Response) => {
-    try {
-        const { name, hardwareId, type, tankId, calibrationDate, status = 'ACTIVE' } = req.body;
-        // @ts-ignore
-        const currentUserId = req.user?.id;
+ export const createSensor = async (req: AuthenticatedRequest, res: Response) => {
+    const { name, hardwareId, type, tankId, calibrationDate } = req.body;
+    const { id: userId, role } = req.user;
 
-        if (!name || !hardwareId || !type || !tankId || !calibrationDate) {
-            throw new CustomError('Todos los campos son requeridos', 400);
-        }
+    const tank = await prisma.tank.findUnique({ where: { id: tankId } });
+    if (!tank) throw new CustomError('El tanque especificado no existe', 404);
+    if (role !== 'ADMIN' && tank.userId !== userId) throw new CustomError('No tiene permisos para este tanque', 403);
 
-        const tankExists = await prisma.tank.findUnique({
-            where: { id: tankId }
-        });
-
-        if (!tankExists) {
-            throw new CustomError('Tanque no encontrado', 404);
-        }
-
-        const existingHardwareId = await prisma.sensor.findUnique({
-            where: { hardwareId: hardwareId.trim() }
-        });
-
-        if (existingHardwareId) {
-            throw new CustomError('Ya existe un sensor con este ID de hardware', 409);
-        }
-
-        const existingTypeInTank = await prisma.sensor.findFirst({
-            where: {
-                tankId,
-                type
-            }
-        });
-
-        if (existingTypeInTank) {
-            throw new CustomError(`Ya existe un sensor de tipo ${type} en este tanque`, 409);
-        }
-
-        const sensor = await prisma.sensor.create({
-            data: {
-                name: name.trim(),
-                hardwareId: hardwareId.trim(),
-                location: tankExists.location,
-                type,
-                tankId,
-                calibrationDate: new Date(calibrationDate),
-                status
-            },
-            include: {
-                tank: {
-                    select: {
-                        id: true,
-                        name: true,
-                        location: true,
-                        user: {
-                            select: { id: true, name: true, email: true }
-                        }
-                    }
-                }
-            }
-        });
-
-        logger.info(`Sensor creado: ${sensor.name} (${sensor.hardwareId}) por usuario ${currentUserId}`);
-
-        res.status(201).json({
-            success: true,
-            data: sensor,
-            message: 'Sensor creado exitosamente'
-        });
-    } catch (error: unknown) {
-        if (error instanceof CustomError) {
-            throw error;
-        }
-
-        if (error && typeof error === 'object' && 'code' in error) {
-            const prismaError = error as { code: string; message: string };
-            if (prismaError.code === 'P2002') {
-                if (prismaError.message.includes('hardwareId')) {
-                    throw new CustomError('Ya existe un sensor con este ID de hardware', 409);
-                }
-                throw new CustomError('Ya existe un sensor con estos datos', 409);
-            }
-            if (prismaError.code === 'P2003') {
-                throw new CustomError('Tanque asignado no válido', 400);
-            }
-        }
-
-        logger.error('Error creando sensor:', error);
-        throw new CustomError('Error interno del servidor al crear el sensor', 500);
+    // NUEVA VALIDACIÓN: Asegurar que el tipo de sensor sea único por tanque
+    const existingSensorType = await prisma.sensor.findFirst({
+        where: { tankId, type }
+    });
+    if (existingSensorType) {
+        throw new CustomError(`El tanque ya tiene un sensor de tipo ${type}.`, 409); // 409 Conflict
     }
+
+    const sensor = await prisma.sensor.create({
+        data: { name, hardwareId, type, tankId, calibrationDate: new Date(calibrationDate), location: tank.location }
+    });
+
+    logger.info(`Sensor creado: ${sensor.name} por usuario ${userId}`);
+    res.status(201).json({ success: true, data: sensor, message: 'Sensor creado exitosamente.' });
 };
 
 /**
- * @desc     Actualiza un sensor existente
+ * @desc     Actualiza un sensor, verificando propiedad y unicidad de tipo si se mueve de tanque.
  * @route    PUT /api/sensors/:id
- * @access   Private (Admin)
+ * @access   Private
  */
-export const updateSensor = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params;
-        const { name, hardwareId, status, calibrationDate, tankId } = req.body;
-        // @ts-ignore
-        const currentUserId = req.user?.id;
+ export const updateSensor = async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const data = req.body;
+    const { id: userId, role } = req.user;
 
-        const existingSensor = await prisma.sensor.findUnique({
-            where: { id }
+    const sensor = await prisma.sensor.findUnique({ where: { id }, include: { tank: true } });
+    if (!sensor) throw new CustomError('Sensor no encontrado', 404);
+    if (role !== 'ADMIN' && sensor.tank.userId !== userId) throw new CustomError('No tiene permisos para modificar este sensor', 403);
+
+    if (data.tankId && data.tankId !== sensor.tankId) {
+        const destinationTank = await prisma.tank.findUnique({ where: { id: data.tankId } });
+        if (!destinationTank) throw new CustomError('Tanque de destino no encontrado', 404);
+        if (role !== 'ADMIN' && destinationTank.userId !== userId) throw new CustomError('No puede mover sensores a un tanque que no le pertenece', 403);
+
+        const existingSensorType = await prisma.sensor.findFirst({
+            where: { tankId: data.tankId, type: sensor.type }
         });
-
-        if (!existingSensor) {
-            throw new CustomError('Sensor no encontrado', 404);
+        if (existingSensorType) {
+            throw new CustomError(`El tanque de destino ya tiene un sensor de tipo ${sensor.type}.`, 409);
         }
-
-        const updateData: any = {};
-        if (name) updateData.name = name.trim();
-        if (hardwareId) updateData.hardwareId = hardwareId.trim();
-        if (status) updateData.status = status;
-        if (calibrationDate) updateData.calibrationDate = new Date(calibrationDate);
-        if (tankId) updateData.tankId = tankId;
-
-        // Si se está cambiando el hardwareId, verificar duplicados
-        if (hardwareId && hardwareId.trim() !== existingSensor.hardwareId) {
-            const duplicateHardwareId = await prisma.sensor.findUnique({
-                where: { hardwareId: hardwareId.trim() }
-            });
-
-            if (duplicateHardwareId) {
-                throw new CustomError('Ya existe un sensor con este ID de hardware', 409);
-            }
-        }
-
-        if (tankId && tankId !== existingSensor.tankId) {
-            const tankExists = await prisma.tank.findUnique({
-                where: { id: tankId }
-            });
-
-            if (!tankExists) {
-                throw new CustomError('Tanque de destino no encontrado', 404);
-            }
-
-            const conflictingSensor = await prisma.sensor.findFirst({
-                where: {
-                    tankId,
-                    type: existingSensor.type,
-                    id: { not: id }
-                }
-            });
-
-            if (conflictingSensor) {
-                throw new CustomError(`Ya existe un sensor de tipo ${existingSensor.type} en el tanque de destino`, 409);
-            }
-        }
-
-        const sensor = await prisma.sensor.update({
-            where: { id },
-            data: updateData,
-            include: {
-                tank: {
-                    select: {
-                        id: true,
-                        name: true,
-                        location: true,
-                        user: {
-                            select: { id: true, name: true, email: true }
-                        }
-                    }
-                }
-            }
-        });
-
-        logger.info(`Sensor actualizado: ${sensor.name} (${sensor.hardwareId}) por usuario ${currentUserId}`);
-
-        res.json({
-            success: true,
-            data: sensor,
-            message: 'Sensor actualizado exitosamente'
-        });
-    } catch (error: unknown) {
-        if (error instanceof CustomError) {
-            throw error;
-        }
-
-        if (error && typeof error === 'object' && 'code' in error) {
-            const prismaError = error as { code: string };
-            if (prismaError.code === 'P2002') {
-                throw new CustomError('Ya existe un sensor con este ID de hardware', 409);
-            }
-            if (prismaError.code === 'P2025') {
-                throw new CustomError('Sensor no encontrado', 404);
-            }
-        }
-
-        logger.error('Error actualizando sensor:', error);
-        throw new CustomError('Error interno del servidor al actualizar el sensor', 500);
     }
+
+    const updatedSensor = await prisma.sensor.update({ where: { id }, data });
+    res.json({ success: true, data: updatedSensor, message: 'Sensor actualizado.' });
 };
 
 /**
- * @desc     Elimina un sensor
+ * @desc     Elimina un sensor, verificando la propiedad del tanque.
  * @route    DELETE /api/sensors/:id
- * @access   Private (Admin)
+ * @access   Private
  */
-export const deleteSensor = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params;
-        // @ts-ignore
-        const currentUserId = req.user?.id;
+export const deleteSensor = async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const { id: userId, role } = req.user;
 
-        const existingSensor = await prisma.sensor.findUnique({
-            where: { id },
-            include: {
-                _count: { select: { sensorData: true } }
-            }
-        });
-
-        if (!existingSensor) {
-            throw new CustomError('Sensor no encontrado', 404);
-        }
-
-        await prisma.$transaction([
-            prisma.sensorData.deleteMany({
-                where: { sensorId: id }
-            }),
-            prisma.sensor.delete({
-                where: { id }
-            })
-        ]);
-
-        logger.info(`Sensor eliminado: ${existingSensor.name} (${existingSensor.hardwareId}) con ${existingSensor._count.sensorData} registros de datos por usuario ${currentUserId}`);
-
-        res.json({
-            success: true,
-            message: 'Sensor eliminado exitosamente'
-        });
-    } catch (error: unknown) {
-        if (error instanceof CustomError) {
-            throw error;
-        }
-
-        if (error && typeof error === 'object' && 'code' in error) {
-            const prismaError = error as { code: string };
-            if (prismaError.code === 'P2025') {
-                throw new CustomError('Sensor no encontrado', 404);
-            }
-        }
-
-        logger.error('Error eliminando sensor:', error);
-        throw new CustomError('Error interno del servidor al eliminar el sensor', 500);
+    const sensor = await prisma.sensor.findUnique({ where: { id }, include: { tank: true } });
+    if (!sensor) {
+        throw new CustomError('Sensor no encontrado', 404);
     }
+    if (role !== 'ADMIN' && sensor.tank.userId !== userId) {
+        throw new CustomError('No tiene permisos para eliminar este sensor', 403);
+    }
+    
+    await prisma.sensor.delete({ where: { id } });
+    res.json({ success: true, message: 'Sensor eliminado exitosamente.' });
 };
 
-/**
- * @desc     Obtiene sensores de un tanque específico
- * @route    GET /api/sensors/tank/:tankId
- * @access   Private (Admin)
- */
-export const getSensorsByTank = async (req: Request, res: Response) => {
-    try {
-        const { tankId } = req.params;
 
-        const tankExists = await prisma.tank.findUnique({
-            where: { id: tankId }
-        });
-
-        if (!tankExists) {
-            throw new CustomError('Tanque no encontrado', 404);
-        }
-
-        const sensors = await prisma.sensor.findMany({
-            where: { tankId },
-            include: {
-                _count: {
-                    select: { sensorData: true }
-                }
-            },
-            orderBy: { createdAt: 'desc' }
-        });
-
-        res.json({
-            success: true,
-            data: sensors
-        });
-    } catch (error: unknown) {
-        if (error instanceof CustomError) {
-            throw error;
-        }
-        logger.error('Error obteniendo sensores por tanque:', error);
-        throw new CustomError('Error al obtener los sensores del tanque', 500);
-    }
+export const getSensorById = async (req: AuthenticatedRequest, res: Response) => {
+    const sensor = await prisma.sensor.findUnique({ where: { id: req.params.id } });
+    res.json({ success: true, data: sensor });
 };
-
-/**
- * @desc     Obtiene sensores por hardwareId (para MQTT)
- * @route    GET /api/sensors/hardware/:hardwareId
- * @access   Private (Admin)
- */
-export const getSensorByHardwareId = async (req: Request, res: Response) => {
-    try {
-        const { hardwareId } = req.params;
-
-        const sensor = await prisma.sensor.findUnique({
-            where: { hardwareId },
-            include: {
-                tank: {
-                    select: {
-                        id: true,
-                        name: true,
-                        location: true,
-                        user: {
-                            select: { id: true, name: true, email: true }
-                        }
-                    }
-                }
-            }
-        });
-
-        if (!sensor) {
-            throw new CustomError('Sensor no encontrado', 404);
-        }
-
-        res.json({
-            success: true,
-            data: sensor
-        });
-    } catch (error: unknown) {
-        if (error instanceof CustomError) {
-            throw error;
-        }
-        logger.error('Error obteniendo sensor por hardwareId:', error);
-        throw new CustomError('Error al obtener el sensor', 500);
-    }
+export const getSensorsByTank = async (req: AuthenticatedRequest, res: Response) => {
+    const sensors = await prisma.sensor.findMany({ where: { tankId: req.params.tankId } });
+    res.json({ success: true, data: sensors });
+};
+export const getSensorByHardwareId = async (req: AuthenticatedRequest, res: Response) => {
+    const sensor = await prisma.sensor.findUnique({ where: { hardwareId: req.params.hardwareId } });
+    res.json({ success: true, data: sensor });
 };

@@ -3,7 +3,6 @@ import { useAuth } from './hooks/useAuth';
 import { useTheme } from './hooks/useTheme';
 import { LoginForm } from './components/auth/LoginForm';
 import { Sidebar } from './components/layout/Sidebar';
-import { LoadingSpinner } from './components/common/LoadingSpinner';
 import { Dashboard } from './components/modules/Dashboard';
 import { Reports } from './components/modules/Reports';
 import { Predictions } from './components/modules/Predictions';
@@ -13,48 +12,42 @@ import { Settings } from './components/modules/Settings';
 import { UserManagement } from './components/modules/UserManagement';
 import { Sensors } from './components/modules/Sensors';
 
+/**
+ * @component App
+ * @description Componente principal de la aplicación que maneja el enrutamiento y layout básico
+ * @returns {JSX.Element} Estructura principal de la aplicación
+ */
 function App() {
-  const { user, isAuthenticated, loading: authLoading, logout } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [currentModule, setCurrentModule] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  // Modificación mínima para agregar transición
+  /**
+   * @function handleModuleChange
+   * @description Maneja el cambio entre módulos
+   * @param {string} module - Nombre del módulo a cargar
+   */
   const handleModuleChange = (module: string) => {
     setIsTransitioning(true);
     setTimeout(() => {
       setCurrentModule(module);
       setIsTransitioning(false);
-    }, 300); // Ajusta este tiempo según necesites
+    }, 300);
   };
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <LoadingSpinner size="lg" />
-          <p className="mt-4 text-gray-600 dark:text-gray-400">
-            Cargando...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
+  // Redirige al login si no está autenticado
   if (!isAuthenticated) {
     return <LoginForm />;
   }
 
+  /**
+   * @function renderCurrentModule
+   * @description Renderiza el módulo actual basado en el estado
+   * @returns {JSX.Element} Componente del módulo actual
+   */
   const renderCurrentModule = () => {
-    if (isTransitioning) {
-      return (
-        <div className="flex items-center justify-center h-64">
-          <LoadingSpinner size="md" />
-        </div>
-      );
-    }
-
     switch (currentModule) {
       case 'dashboard': return <Dashboard />;
       case 'reports': return <Reports />;
@@ -69,11 +62,11 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
       <div className="flex h-screen">
         <Sidebar
           currentModule={currentModule}
-          onModuleChange={handleModuleChange} // Usamos la nueva función
+          onModuleChange={handleModuleChange} 
           user={user!}
           onLogout={logout}
           theme={theme}
@@ -82,9 +75,11 @@ function App() {
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
 
-        <main className="flex-1 overflow-auto">
-          <div className="p-6">
-            {renderCurrentModule()}
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-6 animate-in fade-in duration-300">
+            <Suspense fallback={null}>
+              {renderCurrentModule()}
+            </Suspense>
           </div>
         </main>
       </div>

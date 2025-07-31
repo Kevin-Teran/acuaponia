@@ -23,7 +23,7 @@ class SensorDataService {
    * @param {CreateSensorDataInput} data - Los datos de la nueva lectura.
    * @returns {Promise<any>} El registro de datos creado.
    */
-  async createSensorData(data: CreateSensorDataInput) {
+   async createSensorData(data: CreateSensorDataInput) {
     try {
       const sensor = await prisma.sensor.findUnique({
         where: { id: data.sensorId },
@@ -33,7 +33,6 @@ class SensorDataService {
         throw new Error(`Sensor con ID ${data.sensorId} no encontrado.`);
       }
 
-      // Crear el registro de datos y actualizar el sensor en una transacción
       const [sensorData] = await prisma.$transaction([
         prisma.sensorData.create({
           data: {
@@ -47,7 +46,7 @@ class SensorDataService {
         prisma.sensor.update({
           where: { id: data.sensorId },
           data: {
-            lastReading: data.value,
+            lastReading: data.value, 
             lastUpdate: new Date(),
           },
         }),

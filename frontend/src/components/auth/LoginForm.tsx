@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Lock, Eye, EyeOff, LogIn, UserCheck, AlertCircle } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, LogIn, UserCheck } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { useAuth } from '../../hooks/useAuth';
 import { LoadingSpinner } from '../common/LoadingSpinner';
@@ -10,63 +10,48 @@ export const LoginForm: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isRedirecting, setIsRedirecting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const { login } = useAuth();
+  
+  // Color verde del SENA para unificar el tema
+  const senaGreen = '#39A900';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    setError(null);
-    setIsLoading(true);
+    setIsLoading(true); // Muestra el spinner de pantalla completa inmediatamente
 
     try {
-      const success = await login({ email, password, rememberMe });
+      await login({ email, password, rememberMe });
       
-      if (success) {
-        setIsRedirecting(true);
-        
-        // Mostrar mensaje de bienvenida en la página de destino
-        sessionStorage.setItem('showWelcomeMessage', 'true');
-        
-        // Redirigir después de 1.5 segundos (para mostrar la animación)
-        setTimeout(() => {
-          window.location.href = '/dashboard';
-        }, 1500);
-      } else {
-        setError('Error inesperado. Intenta de nuevo.');
-      }
+      // La redirección ocurrirá después del login exitoso en el hook 'useAuth'
+      // o se puede manejar aquí directamente.
+      sessionStorage.setItem('showWelcomeMessage', 'true');
+      
+      // Simula un pequeño delay para que la animación se aprecie y redirige
+      setTimeout(() => {
+        window.location.href = '/dashboard';
+      }, 1200);
+
     } catch (error: any) {
-      let errorMessage = 'Error desconocido';
+      // Si hay un error, se detiene la carga y se muestra la alerta
+      setIsLoading(false); 
       
-      if (error?.response?.data) {
-        errorMessage = error.response.data.error?.message || 
-                      error.response.data.message || 
-                      'Error del servidor';
-      } else if (error?.message) {
-        errorMessage = error.message;
-      }
-      
-      setError(errorMessage);
+      const errorMessage = error?.response?.data?.message || error?.message || 'Error de autenticación. Por favor, verifica tus credenciales.';
       
       await Swal.fire({
         icon: 'error',
         title: 'Error de Autenticación',
         text: errorMessage,
         confirmButtonText: 'Intentar de nuevo',
-        confirmButtonColor: '#FF671F',
+        confirmButtonColor: senaGreen, // Color unificado
         background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
         color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#374151',
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleDemoLogin = (demoEmail: string, demoPassword: string) => {
     setEmail(demoEmail);
     setPassword(demoPassword);
-    setError(null);
   };
 
   const demoAccounts = [
@@ -74,28 +59,27 @@ export const LoginForm: React.FC = () => {
     { email: 'usuario@sena.edu.co', password: '123456', role: 'Usuario' }
   ];
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4 relative">
-      
-      {/* Loading de redirección con el nuevo componente */}
-      {isRedirecting && (
-        <LoadingSpinner 
-          fullScreen 
-          size="lg" 
-          message="Cargando sistema..." 
-        />
-      )}
+  // Si está cargando, muestra el spinner en pantalla completa y oculta el resto
+  if (isLoading) {
+    return (
+      <LoadingSpinner 
+        fullScreen 
+        size="lg" 
+        message="Cargando..." 
+      />
+    );
+  }
 
-      <div className="w-full max-w-md">
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-black flex items-center justify-center p-4 transition-colors duration-300">
+      <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-5 duration-500">
         {/* Cabecera */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full mb-4 shadow-lg bg-white dark:bg-gray-800">
-            <img 
-              src="/logo-sena.png" 
-              alt="Logo SENA" 
-              className="w-16 h-16 rounded-full object-cover"
-            />
-          </div>
+          <img 
+            src="/logo-sena.png" 
+            alt="Logo SENA" 
+            className="w-20 h-20 mx-auto mb-4"
+          />
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
             Sistema de Monitoreo
           </h1>
@@ -105,17 +89,7 @@ export const LoginForm: React.FC = () => {
         </div>
 
         {/* Formulario */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-200 dark:border-gray-700 transition-all duration-300 hover:shadow-2xl">
-          
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg animate-fade-in">
-              <div className="flex items-center">
-                <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
-                <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
-              </div>
-            </div>
-          )}
-
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-gray-200 dark:border-gray-700/50">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Campo Email */}
             <div>
@@ -123,20 +97,16 @@ export const LoginForm: React.FC = () => {
                 Correo Electrónico
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" aria-hidden="true" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setError(null);
-                  }}
+                  onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 bg-white/50 dark:bg-gray-700/50 text-gray-900 dark:text-white transition"
                   placeholder="usuario@sena.edu.co"
                   required
-                  disabled={isLoading}
                 />
               </div>
             </div>
@@ -147,26 +117,21 @@ export const LoginForm: React.FC = () => {
                 Contraseña
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" aria-hidden="true" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setError(null);
-                  }}
+                  onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
-                  className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+                  className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 bg-white/50 dark:bg-gray-700/50 text-gray-900 dark:text-white transition"
                   placeholder="••••••••"
                   required
-                  disabled={isLoading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-50"
-                  disabled={isLoading}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -174,64 +139,45 @@ export const LoginForm: React.FC = () => {
             </div>
 
             {/* Recordar sesión */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="h-4 w-4 text-orange-500 focus:ring-orange-500 border-gray-300 rounded"
-                />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                  Recordar mi sesión
-                </label>
-              </div>
+            <div className="flex items-center">
+              <input
+                id="remember-me"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+              />
+              <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                Recordar mi sesión
+              </label>
             </div>
 
             {/* Botón de Envío */}
             <button
               type="submit"
-              disabled={isLoading || !email || !password}
-              className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-[1.01]"
+              disabled={!email || !password}
+              className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-green-500/30 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {isLoading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Iniciando sesión...</span>
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-5 h-5" />
-                  <span>Iniciar Sesión</span>
-                </>
-              )}
+              <LogIn className="w-5 h-5" />
+              <span>Iniciar Sesión</span>
             </button>
           </form>
 
           {/* Cuentas de demostración */}
           <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 text-center">
-              Cuentas de demostración:
-            </p>
+            <p className="text-sm text-center text-gray-600 dark:text-gray-400 mb-3">Cuentas de demostración:</p>
             <div className="space-y-2">
-              {demoAccounts.map((account, index) => (
+              {demoAccounts.map((account) => (
                 <button
-                  key={index}
+                  key={account.email}
                   onClick={() => handleDemoLogin(account.email, account.password)}
-                  disabled={isLoading}
-                  className="w-full flex justify-between items-center text-left p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transform hover:translate-x-1"
+                  className="w-full flex items-center text-left p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600/50 transition-colors"
                 >
-                  <div className="flex items-start space-x-3">
-                    <UserCheck className="w-5 h-5 text-orange-500 mt-1" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">{account.email}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{account.role}</p>
-                    </div>
+                  <UserCheck className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                  <div className="flex-grow">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{account.email}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{account.role}</p>
                   </div>
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
-                    {isLoading ? '⏳' : 'Usar'}
-                  </span>
                 </button>
               ))}
             </div>
@@ -239,14 +185,9 @@ export const LoginForm: React.FC = () => {
         </div>
 
         {/* Pie de página */}
-        <div className="text-center mt-8">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            © {new Date().getFullYear()} SENA - Todos los derechos reservados
-          </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-            Versión 1.0.0
-          </p>
-        </div>
+        <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-8">
+          © {new Date().getFullYear()} SENA - Todos los derechos reservados
+        </p>
       </div>
     </div>
   );

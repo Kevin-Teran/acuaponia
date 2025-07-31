@@ -2,355 +2,169 @@ import { Request, Response } from 'express';
 import { prisma } from '../config/database';
 import { CustomError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
+import { Role } from '@prisma/client';
+
+
+interface AuthenticatedRequest extends Request {
+  user: { id: string; role: Role; email: string; };
+}
+
 
 /**
- * @desc     Obtiene todos los tanques con información de sensores
+ * @desc     Obtiene los tanques asignados al usuario actualmente autenticado.
+ * La vista es la misma para usuarios y administradores en este endpoint.
  * @route    GET /api/tanks
- * @access   Private (Admin)
+ * @access   Private
  */
-export const getTanks = async (req: Request, res: Response) => {
+ export const getTanks = async (req: AuthenticatedRequest, res: Response) => {
     try {
+        const { id: userId } = req.user;
+
         const tanks = await prisma.tank.findMany({
+            where: { userId }, // Siempre filtra por el usuario logueado
             include: {
-                user: {
-                    select: { id: true, name: true, email: true }
-                },
-                sensors: {
-                    select: {
-                        id: true,
-                        name: true,
-                        type: true,
-                        status: true,
-                        lastReading: true,
-                        hardwareId: true,
-                        calibrationDate: true,
-                        lastUpdate: true
-                    }
-                },
-                _count: {
-                    select: { sensors: true }
-                }
+                user: { select: { id: true, name: true, email: true } },
+                _count: { select: { sensors: true } }
             },
             orderBy: { createdAt: 'desc' }
         });
 
-        res.json({
-            success: true,
-            data: tanks
-        });
+        res.json({ success: true, data: tanks });
     } catch (error: unknown) {
-        logger.error('Error obteniendo tanques:', error);
+        logger.error('Error en getTanks:', error);
         throw new CustomError('Error al obtener los tanques', 500);
     }
 };
 
 /**
- * @desc     Obtiene un tanque por ID con todos sus detalles
- * @route    GET /api/tanks/:id
- * @access   Private (Admin)
- */
-export const getTankById = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params;
-
-        const tank = await prisma.tank.findUnique({
-            where: { id },
-            include: {
-                user: {
-                    select: { id: true, name: true, email: true }
-                },
-                sensors: {
-                    include: {
-                        _count: {
-                            select: { sensorData: true }
-                        }
-                    }
-                }
-            }
-        });
-
-        if (!tank) {
-            throw new CustomError('Tanque no encontrado', 404);
-        }
-
-        res.json({
-            success: true,
-            data: tank
-        });
-    } catch (error: unknown) {
-        if (error instanceof CustomError) {
-            throw error;
-        }
-        logger.error('Error obteniendo tanque por ID:', error);
-        throw new CustomError('Error al obtener el tanque', 500);
-    }
-};
-
-/**
- * @desc     Crea un nuevo tanque
+ * @desc     Crea un nuevo tanque. Se asigna automáticamente al usuario que lo crea.
+ * Un admin puede opcionalmente asignarlo a otro usuario.
  * @route    POST /api/tanks
- * @access   Private (Admin)
+ * @access   Private
  */
-export const createTank = async (req: Request, res: Response) => {
+export const createTank = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { name, location, userId, status = 'ACTIVE' } = req.body;
-        // @ts-ignore
-        const currentUserId = req.user?.id;
+        const { name, location, status = 'ACTIVE' } = req.body;
+        let { userId } = req.body;
+        const currentUser = req.user;
 
-        if (!name || !location) {
-            throw new CustomError('Nombre y ubicación son requeridos', 400);
-        }
-
-        // CORRECCIÓN: Si no se proporciona userId, usar el usuario actual
-        const assignedUserId = userId || currentUserId;
-
-        // Verificar que el usuario existe
-        const userExists = await prisma.user.findUnique({
-            where: { id: assignedUserId }
-        });
-
-        if (!userExists) {
-            throw new CustomError('Usuario asignado no encontrado', 404);
-        }
-
-        // Verificar que no existe un tanque con el mismo nombre para el usuario
-        const existingTank = await prisma.tank.findFirst({
-            where: { 
-                name: name.trim(),
-                userId: assignedUserId 
-            }
-        });
-
-        if (existingTank) {
-            throw new CustomError('Ya existe un tanque con este nombre para este usuario', 409);
+        // Si no es admin, no puede asignar el tanque a otro usuario
+        if (currentUser.role !== 'ADMIN') {
+            userId = currentUser.id;
+        } else if (!userId) {
+            userId = currentUser.id;
         }
 
         const tank = await prisma.tank.create({
-            data: {
-                name: name.trim(),
-                location: location.trim(),
-                status,
-                userId: assignedUserId
-            },
-            include: {
-                user: {
-                    select: { id: true, name: true, email: true }
-                },
-                _count: {
-                    select: { sensors: true }
-                }
-            }
+            data: { name, location, status, userId },
+            include: { user: { select: { id: true, name: true } } }
         });
 
-        logger.info(`Tanque creado: ${tank.name} por usuario ${currentUserId}`);
-
-        res.status(201).json({
-            success: true,
-            data: tank,
-            message: 'Tanque creado exitosamente'
-        });
-    } catch (error: unknown) {
-        if (error instanceof CustomError) {
-            throw error;
+        logger.info(`Tanque creado: ${tank.name} por usuario ${currentUser.id}`);
+        res.status(201).json({ success: true, data: tank, message: 'Tanque creado exitosamente.' });
+    } catch (error: any) {
+        logger.error('Error en createTank:', error);
+        if (error.code === 'P2002') { // Error de restricción única (nombre de tanque por usuario)
+            throw new CustomError('Ya existe un tanque con este nombre.', 409);
         }
-
-        // Manejar errores específicos de Prisma
-        if (error && typeof error === 'object' && 'code' in error) {
-            const prismaError = error as { code: string; message: string };
-            if (prismaError.code === 'P2002') {
-                throw new CustomError('Ya existe un tanque con este nombre', 409);
-            }
-            if (prismaError.code === 'P2003') {
-                throw new CustomError('Usuario asignado no válido', 400);
-            }
-        }
-
-        logger.error('Error creando tanque:', error);
-        throw new CustomError('Error interno del servidor al crear el tanque', 500);
+        throw new CustomError('Error al crear el tanque.', 500);
     }
 };
 
 /**
- * @desc     Actualiza un tanque existente
+ * @desc     Actualiza un tanque. Solo el propietario o un admin pueden hacerlo.
  * @route    PUT /api/tanks/:id
- * @access   Private (Admin)
+ * @access   Private
  */
-export const updateTank = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params;
-        const { name, location, status, userId } = req.body;
-        // @ts-ignore
-        const currentUserId = req.user?.id;
+export const updateTank = async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const { name, location, status } = req.body;
+    const { id: userId, role } = req.user;
 
-        // Verificar que el tanque existe
-        const existingTank = await prisma.tank.findUnique({
-            where: { id }
-        });
+    const tank = await prisma.tank.findUnique({ where: { id } });
 
-        if (!existingTank) {
-            throw new CustomError('Tanque no encontrado', 404);
-        }
-
-        const updateData: any = {};
-        if (name) updateData.name = name.trim();
-        if (location) updateData.location = location.trim();
-        if (status) updateData.status = status;
-        if (userId) updateData.userId = userId;
-
-        // Validar cambio de nombre
-        if (name && name.trim() !== existingTank.name) {
-            const duplicateTank = await prisma.tank.findFirst({
-                where: {
-                    name: name.trim(),
-                    userId: userId || existingTank.userId,
-                    id: { not: id }
-                }
-            });
-
-            if (duplicateTank) {
-                throw new CustomError('Ya existe un tanque con este nombre para este usuario', 409);
-            }
-        }
-
-        // Validar cambio de usuario
-        if (userId && userId !== existingTank.userId) {
-            const userExists = await prisma.user.findUnique({
-                where: { id: userId }
-            });
-
-            if (!userExists) {
-                throw new CustomError('Usuario asignado no encontrado', 404);
-            }
-        }
-
-        const tank = await prisma.tank.update({
-            where: { id },
-            data: updateData,
-            include: {
-                user: {
-                    select: { id: true, name: true, email: true }
-                },
-                _count: {
-                    select: { sensors: true }
-                }
-            }
-        });
-
-        logger.info(`Tanque actualizado: ${tank.name} por usuario ${currentUserId}`);
-
-        res.json({
-            success: true,
-            data: tank,
-            message: 'Tanque actualizado exitosamente'
-        });
-    } catch (error: unknown) {
-        if (error instanceof CustomError) {
-            throw error;
-        }
-
-        if (error && typeof error === 'object' && 'code' in error) {
-            const prismaError = error as { code: string };
-            if (prismaError.code === 'P2002') {
-                throw new CustomError('Ya existe un tanque con este nombre', 409);
-            }
-            if (prismaError.code === 'P2025') {
-                throw new CustomError('Tanque no encontrado', 404);
-            }
-        }
-
-        logger.error('Error actualizando tanque:', error);
-        throw new CustomError('Error interno del servidor al actualizar el tanque', 500);
+    if (!tank) {
+        throw new CustomError('Tanque no encontrado', 404);
     }
+
+    if (role !== 'ADMIN' && tank.userId !== userId) {
+        throw new CustomError('No tiene permisos para modificar este tanque', 403);
+    }
+
+    const updatedTank = await prisma.tank.update({
+        where: { id },
+        data: { name, location, status },
+    });
+
+    logger.info(`Tanque actualizado: ${updatedTank.name} (ID: ${id}) por usuario ${userId}`);
+    res.json({ success: true, data: updatedTank, message: 'Tanque actualizado correctamente.' });
 };
 
 /**
- * @desc     Elimina un tanque
+ * @desc     Elimina un tanque. Solo el propietario o un admin pueden hacerlo.
  * @route    DELETE /api/tanks/:id
- * @access   Private (Admin)
+ * @access   Private
  */
-export const deleteTank = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params;
-        // @ts-ignore
-        const currentUserId = req.user?.id;
+export const deleteTank = async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const { id: userId, role } = req.user;
 
-        const existingTank = await prisma.tank.findUnique({
-            where: { id },
-            include: {
-                sensors: true,
-                _count: { select: { sensors: true } }
-            }
-        });
+    const tank = await prisma.tank.findUnique({
+        where: { id },
+        include: { _count: { select: { sensors: true } } }
+    });
 
-        if (!existingTank) {
-            throw new CustomError('Tanque no encontrado', 404);
-        }
-
-        if (existingTank._count.sensors > 0) {
-            throw new CustomError('No se puede eliminar el tanque porque tiene sensores asociados. Elimine o reasigne los sensores primero.', 400);
-        }
-
-        await prisma.tank.delete({
-            where: { id }
-        });
-
-        logger.info(`Tanque eliminado: ${existingTank.name} por usuario ${currentUserId}`);
-
-        res.json({
-            success: true,
-            message: 'Tanque eliminado exitosamente'
-        });
-    } catch (error: unknown) {
-        if (error instanceof CustomError) {
-            throw error;
-        }
-
-        if (error && typeof error === 'object' && 'code' in error) {
-            const prismaError = error as { code: string };
-            if (prismaError.code === 'P2025') {
-                throw new CustomError('Tanque no encontrado', 404);
-            }
-        }
-
-        logger.error('Error eliminando tanque:', error);
-        throw new CustomError('Error interno del servidor al eliminar el tanque', 500);
+    if (!tank) {
+        throw new CustomError('Tanque no encontrado', 404);
     }
+
+    if (role !== 'ADMIN' && tank.userId !== userId) {
+        throw new CustomError('No tiene permisos para eliminar este tanque', 403);
+    }
+    
+    if (tank._count.sensors > 0) {
+        throw new CustomError('No se puede eliminar. Elimine primero los sensores asociados.', 400);
+    }
+
+    await prisma.tank.delete({ where: { id } });
+    logger.info(`Tanque eliminado: ${tank.name} (ID: ${id}) por usuario ${userId}`);
+    res.json({ success: true, message: 'Tanque eliminado exitosamente.' });
+};
+
+
+// Las siguientes funciones (getTankById, getTanksByUserId) ya manejan bien los permisos
+// o son exclusivas de admin, por lo que no requieren cambios drásticos.
+
+/**
+ * @desc     Obtiene un tanque por su ID. Verifica propiedad si no es admin.
+ * @route    GET /api/tanks/:id
+ * @access   Private
+ */
+export const getTankById = async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const { id: userId, role } = req.user;
+
+    const tank = await prisma.tank.findUnique({ where: { id } });
+
+    if (!tank) {
+        throw new CustomError('Tanque no encontrado', 404);
+    }
+
+    if (role !== 'ADMIN' && tank.userId !== userId) {
+        throw new CustomError('Acceso no autorizado', 403);
+    }
+
+    res.json({ success: true, data: tank });
 };
 
 /**
- * @desc     Obtiene tanques de un usuario específico
+ * @desc     (Admin) Obtiene los tanques de un usuario específico.
  * @route    GET /api/tanks/user/:userId
- * @access   Private (Admin)
+ * @access   Private (Admin Only)
  */
-export const getTanksByUser = async (req: Request, res: Response) => {
-    try {
-        const { userId } = req.params;
-
-        const tanks = await prisma.tank.findMany({
-            where: { userId },
-            include: {
-                sensors: {
-                    select: {
-                        id: true,
-                        name: true,
-                        type: true,
-                        status: true,
-                        lastReading: true
-                    }
-                },
-                _count: {
-                    select: { sensors: true }
-                }
-            },
-            orderBy: { createdAt: 'desc' }
-        });
-
-        res.json({
-            success: true,
-            data: tanks
-        });
-    } catch (error: unknown) {
-        logger.error('Error obteniendo tanques por usuario:', error);
-        throw new CustomError('Error al obtener los tanques del usuario', 500);
-    }
+export const getTanksByUserId = async (req: Request, res: Response) => {
+    // Esta ruta ya está protegida por el middleware `admin`
+    const { userId } = req.params;
+    const tanks = await prisma.tank.findMany({ where: { userId } });
+    res.json({ success: true, data: tanks });
 };
