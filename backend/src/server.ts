@@ -11,6 +11,7 @@ import path from 'path';
 import { logger } from './utils/logger';
 import { initializeMQTT } from './services/mqttService';
 import { errorHandler, notFound } from './middleware/errorHandler';
+import { socketService } from './services/socketService';
 
 // --- IMPORTACIÓN DE RUTAS ---
 import authRoutes from './routes/auth';
@@ -41,12 +42,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // --- LÓGICA DE WEBSOCKETS ---
-io.on('connection', (socket) => {
-  logger.info(`Nuevo cliente conectado vía WebSocket: ${socket.id}`);
-  socket.on('disconnect', () => {
-    logger.info(`Cliente desconectado: ${socket.id}`);
-  });
-});
+socketService.initialize(io);
+
 
 // --- RUTAS DE LA API ---
 app.use('/api/auth', authRoutes);

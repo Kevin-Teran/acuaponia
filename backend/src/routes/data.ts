@@ -5,16 +5,20 @@ import {
     startEmitterController,
     stopEmitterController,
     getEmittersStatusController,
-    manualEntryController
+    manualEntryController,
+    getHistoricalData
 } from '../controllers/dataController';
 
 const router = express.Router();
 
-router.use(protect, admin);
+// --- Rutas solo para Administradores ---
+router.post('/synthetic/start', protect, admin, asyncHandler(startEmitterController));
+router.post('/synthetic/stop', protect, admin, asyncHandler(stopEmitterController));
+router.get('/synthetic/status', protect, admin, asyncHandler(getEmittersStatusController));
+router.post('/manual', protect, admin, asyncHandler(manualEntryController));
 
-router.post('/synthetic/start', asyncHandler(startEmitterController));
-router.post('/synthetic/stop', asyncHandler(stopEmitterController));
-router.get('/synthetic/status', asyncHandler(getEmittersStatusController));
-router.post('/manual', asyncHandler(manualEntryController));
+// --- Rutas para cualquier usuario autenticado ---
+
+router.get('/historical', protect, asyncHandler(getHistoricalData));
 
 export default router;

@@ -76,3 +76,35 @@ export const manualEntryController = async (req: Request, res: Response) => {
         throw new CustomError(error.message, 404);
     }
 };
+
+/**
+ * @desc     Obtiene los últimos N registros de datos de sensores para el usuario autenticado.
+ * @route    GET /api/data/historical
+ * @access   Private
+ */
+ export const getHistoricalData = async (req: AuthenticatedRequest, res: Response) => {
+    const { limit = 300 } = req.query; // Permite que el frontend defina el límite
+
+    // Busca los tanques que pertenecen al usuario que hace la petición
+    const userTanks = await prisma.tank.findMany({
+        where: { userId: req.user.id },
+        select: { id: true }
+    });
+    const tankIds = userTanks.map(tank => tank.id);
+
+    // Busca los datos de sensores que pertenecen a esos tanques
+    const data = await prisma.sensorData.findMany({
+        where: {
+            tankId: {
+                in: tankIds,
+            },
+        },
+        take: Number(limit),
+        orderBy: {
+            timestamp: 'desc',
+        },
+    });
+
+    // Se revierte el array para que los gráficos los muestren en orden cronológico (del más antiguo al más nuevo)
+    res.status(200).json({ success: true, data: data.reverse() });
+};

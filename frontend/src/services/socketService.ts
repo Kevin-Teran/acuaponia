@@ -7,25 +7,37 @@ class SocketService {
   private maxReconnectAttempts = 5;
 
   connect(): void {
+    const token = localStorage.getItem('acuaponia_token');
+    if (!token) {
+      console.error('❌ No se puede conectar al socket: no hay token de autenticación.');
+      return;
+    }
+
     const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
     
     this.socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       timeout: 20000,
       forceNew: true,
+      auth: {
+        token: token
+      }
     });
 
     this.socket.on('connect', () => {
-      console.log('✅ Conectado al servidor Socket.IO');
       this.reconnectAttempts = 0;
     });
 
-    this.socket.on('disconnect', (reason) => {
+    // CORRECCIÓN AQUÍ
+    this.socket.on('disconnect', (reason: Socket.DisconnectReason) => {
       console.log('❌ Desconectado del servidor Socket.IO:', reason);
-      this.handleReconnection();
+      if (reason !== 'io server disconnect') {
+        this.handleReconnection();
+      }
     });
 
-    this.socket.on('connect_error', (error) => {
+    // CORRECCIÓN AQUÍ
+    this.socket.on('connect_error', (error: Error) => {
       console.error('❌ Error de conexión Socket.IO:', error);
       this.handleReconnection();
     });
@@ -38,7 +50,7 @@ class SocketService {
       
       setTimeout(() => {
         this.connect();
-      }, Math.pow(2, this.reconnectAttempts) * 1000); // Backoff exponencial
+      }, Math.pow(2, this.reconnectAttempts) * 1000);
     } else {
       console.error('❌ Máximo número de reintentos alcanzado');
     }
@@ -46,13 +58,13 @@ class SocketService {
 
   onSensorData(callback: (data: SensorData) => void): void {
     if (this.socket) {
-      this.socket.on('sensor_data', callback);
+      this.socket.on('new_sensor_data', callback);
     }
   }
 
   onAlert(callback: (alert: any) => void): void {
     if (this.socket) {
-      this.socket.on('alert', callback);
+      this.socket.on('new_alert', callback);
     }
   }
 
