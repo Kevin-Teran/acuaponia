@@ -102,18 +102,28 @@ export const createUser = async (req: Request, res: Response) => {
  * @route    PUT /api/users/:id
  * @access   Private (Admin)
  */
-export const updateUser = async (req: Request, res: Response) => {
+ export const updateUser = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { name, email, role, status, password } = req.body;
     // @ts-ignore
     const currentUserId = req.user?.id;
-
-    if (id === currentUserId && (role !== 'ADMIN' || status !== 'ACTIVE')) {
-        throw new CustomError('No puedes cambiar tu propio rol o estado para evitar bloquear tu cuenta.', 403);
+    // @ts-ignore
+    const currentUserRole = req.user?.role;
+    
+    if (id === currentUserId) {
+        if (role !== undefined && role !== currentUserRole) {
+            throw new CustomError('No puedes cambiar tu propio rol.', 403);
+        }
+        if (status !== undefined && status !== 'ACTIVE') {
+            throw new CustomError('No puedes desactivar o suspender tu propia cuenta.', 403);
+        }
     }
 
-    const updateData: any = { name, email: email?.toLowerCase(), role, status };
-    
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name;
+    if (email !== undefined) updateData.email = email.toLowerCase();
+    if (role !== undefined) updateData.role = role;
+    if (status !== undefined) updateData.status = status;
     if (password) {
         updateData.password = await bcrypt.hash(password, 10);
     }

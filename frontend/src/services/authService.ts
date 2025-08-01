@@ -1,16 +1,5 @@
-import axios from 'axios';
+import api from '../config/api';
 import { LoginCredentials, User } from '../types';
-
-/**
- * Axios instance configured for authentication requests
- */
-const authApi = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api',
-  timeout: 15000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
 
 interface LoginResponse {
   success: boolean;
@@ -24,110 +13,84 @@ interface LoginResponse {
 }
 
 /**
- * Authenticates a user with the provided credentials
- * @param {LoginCredentials} credentials - User login credentials
- * @returns {Promise<User>} Authenticated user object
- * @throws {Error} When authentication fails
+ * Autentica a un usuario con las credenciales proporcionadas.
+ * @param {LoginCredentials} credentials - Credenciales de inicio de sesión del usuario.
+ * @returns {Promise<User>} Objeto del usuario autenticado.
+ * @throws {Error} Cuando la autenticación falla.
  */
 export const login = async (credentials: LoginCredentials): Promise<User> => {
   try {
-    // Verify server availability first
-    try {
-      await authApi.get('/auth/health', { timeout: 5000 });
-    } catch (healthError: any) { // <-- CORRECCIÓN AQUÍ
-      console.error('Server not available:', healthError.message);
-      throw new Error('Cannot connect to server. Verify it\'s running on http://localhost:5001');
-    }
-
-    const response = await authApi.post<LoginResponse>('/auth/login', credentials);
+    const response = await api.post<LoginResponse>('/auth/login', credentials);
 
     if (response.data.success && response.data.data) {
       const { user, tokens } = response.data.data;
 
-      localStorage.setItem('acuaponia_token', tokens.accessToken);
-      localStorage.setItem('acuaponia_refresh_token', tokens.refreshToken);
-      localStorage.setItem('acuaponia_user', JSON.stringify(user));
+      // Estandarizamos las claves en localStorage
+      localStorage.setItem('token', tokens.accessToken);
+      localStorage.setItem('refreshToken', tokens.refreshToken);
+      localStorage.setItem('user', JSON.stringify(user));
 
       return user;
     } else {
-      console.error('Invalid server response:', response.data);
-      throw new Error('Server response does not contain expected data.');
+      throw new Error('La respuesta del servidor no contiene los datos esperados.');
     }
   } catch (error: any) {
-    console.error('Login error:', error);
-    
-    if (error.code === 'ECONNABORTED') {
-      throw new Error('Connection timed out. Check your internet connection.');
-    } else if (error.code === 'ECONNREFUSED') {
-      throw new Error('Cannot connect to server. Verify it\'s running.');
-    } else if (error.code === 'ERR_NETWORK') {
-      throw new Error('Network error. Check your internet connection.');
-    } else if (error.response) {
-      const errorMessage = error.response.data?.error?.message || 
-                         error.response.data?.message || 
-                         `Server error (${error.response.status})`;
-      throw new Error(errorMessage);
-    } else if (error.request) {
-      throw new Error('No response from server. Verify it\'s running.');
-    } else {
-      throw new Error(error.message || 'Unexpected login error');
-    }
+    console.error('Error de login:', error);
+    const errorMessage = error.response?.data?.error?.message || 
+                         error.response?.data?.message || 
+                         error.message ||
+                         'Error inesperado durante el inicio de sesión';
+    throw new Error(errorMessage);
   }
 };
 
 /**
- * Logs out the current user by clearing stored tokens
+ * Cierra la sesión del usuario actual eliminando los datos almacenados.
  */
 export const logout = (): void => {
-  localStorage.removeItem('acuaponia_token');
-  localStorage.removeItem('acuaponia_refresh_token');
-  localStorage.removeItem('acuaponia_user');
+  localStorage.removeItem('token');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('user');
 };
 
 /**
- * Retrieves the currently authenticated user from localStorage
- * @returns {User | null} Current user object or null if not authenticated
+ * Obtiene el usuario actualmente autenticado desde el localStorage.
+ * @returns {User | null} Objeto del usuario actual o nulo si no está autenticado.
  */
 export const getCurrentUser = (): User | null => {
   try {
-    const userStr = localStorage.getItem('acuaponia_user');
+    const userStr = localStorage.getItem('user');
     return userStr ? JSON.parse(userStr) : null;
-  } catch (error: any) { // <-- CORRECCIÓN AQUÍ
-    console.error('Error parsing user from localStorage:', error);
+  } catch (error) {
+    console.error('Error parseando el usuario desde localStorage:', error);
     return null;
   }
 };
 
 /**
- * Refreshes the authentication token using the refresh token
- * @returns {Promise<string>} New access token
- * @throws {Error} When refresh fails
+ * Refresca el token de autenticación usando el refreshToken.
+ * @returns {Promise<string>} El nuevo token de acceso.
+ * @throws {Error} Cuando la renovación del token falla.
  */
 export const refreshToken = async (): Promise<string> => {
-  const refreshTokenValue = localStorage.getItem('acuaponia_refresh_token');
+  const refreshTokenValue = localStorage.getItem('refreshToken');
   
   if (!refreshTokenValue) {
-    console.error('No refresh token available');
-    throw new Error('No refresh token available');
+    throw new Error('No hay refreshToken disponible para renovar la sesión.');
   }
 
   try {
-    const response = await authApi.post('/auth/refresh', { 
+    const response = await api.post('/auth/refresh', { 
       refreshToken: refreshTokenValue 
     });
     
     const newAccessToken = response.data.data.accessToken;
-    localStorage.setItem('acuaponia_token', newAccessToken);
+    localStorage.setItem('token', newAccessToken);
     
     return newAccessToken;
   } catch (error) {
-    console.error('Refresh token error:', error);
-    
-    // Clear all auth data if refresh fails
-    localStorage.removeItem('acuaponia_token');
-    localStorage.removeItem('acuaponia_refresh_token');
-    localStorage.removeItem('acuaponia_user');
-    
-    throw error;
+    console.error('Error al refrescar el token, la sesión ha expirado:', error);
+    logout();
+    throw new Error('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.');
   }
 };

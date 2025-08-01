@@ -79,16 +79,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className={cn("flex items-center", collapsed ? "justify-center" : "space-x-3")}>
           <div className="w-10 h-10 bg-sena-green/20 rounded-full flex items-center justify-center flex-shrink-0">
             <span className="text-sena-green font-semibold">
-              {user.name.charAt(0).toUpperCase()}
+              {/* CORRECCIÓN: Asegurarse de que user.name exista antes de usar charAt */}
+              {user?.name ? user.name.charAt(0).toUpperCase() : '?'}
             </span>
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 dark:text-white truncate" title={user.name}>
-                {user.name}
+              <p className="text-sm font-medium text-gray-900 dark:text-white truncate" title={user?.name}>
+                {user?.name || 'Cargando...'}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                {user.role === 'ADMIN' ? 'Administrador' : 'Usuario'}
+                {user?.role === 'ADMIN' ? 'Administrador' : 'Usuario'}
               </p>
             </div>
           )}
@@ -102,7 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             const Icon = module.icon;
             const isActive = currentModule === module.id;
 
-            if (module.adminOnly && user.role !== 'ADMIN') {
+            if (module.adminOnly && user?.role !== 'ADMIN') {
               return null;
             }
 

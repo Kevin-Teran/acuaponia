@@ -11,6 +11,7 @@ import { Analytics } from './components/modules/Analytics';
 import { Settings } from './components/modules/Settings';
 import { UserManagement } from './components/modules/UserManagement';
 import { Sensors } from './components/modules/Sensors';
+import { LoadingSpinner } from './components/common/LoadingSpinner';
 
 /**
  * @component App
@@ -18,11 +19,10 @@ import { Sensors } from './components/modules/Sensors';
  * @returns {JSX.Element} Estructura principal de la aplicación
  */
 function App() {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, loading: authLoading } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [currentModule, setCurrentModule] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false);
 
   /**
    * @function handleModuleChange
@@ -30,16 +30,22 @@ function App() {
    * @param {string} module - Nombre del módulo a cargar
    */
   const handleModuleChange = (module: string) => {
-    setIsTransitioning(true);
-    setTimeout(() => {
-      setCurrentModule(module);
-      setIsTransitioning(false);
-    }, 300);
+    setCurrentModule(module);
   };
+
+  // Muestra un spinner mientras se verifica el estado de autenticación
+  if (authLoading) {
+    return <LoadingSpinner fullScreen message="Verificando sesión..." />;
+  }
 
   // Redirige al login si no está autenticado
   if (!isAuthenticated) {
     return <LoginForm />;
+  }
+  
+  // CORRECCIÓN: Muestra un spinner si está autenticado pero el objeto user aún no ha cargado completamente.
+  if (!user) {
+    return <LoadingSpinner fullScreen message="Cargando datos de usuario..." />;
   }
 
   /**
@@ -67,7 +73,7 @@ function App() {
         <Sidebar
           currentModule={currentModule}
           onModuleChange={handleModuleChange} 
-          user={user!}
+          user={user} // Ahora estamos seguros de que 'user' no es nulo aquí
           onLogout={logout}
           theme={theme}
           onToggleTheme={toggleTheme}
@@ -77,7 +83,7 @@ function App() {
 
         <main className="flex-1 overflow-y-auto">
           <div className="p-6 animate-in fade-in duration-300">
-            <Suspense fallback={null}>
+            <Suspense fallback={<LoadingSpinner />}>
               {renderCurrentModule()}
             </Suspense>
           </div>

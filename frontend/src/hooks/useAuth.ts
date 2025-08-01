@@ -4,7 +4,7 @@ import {
   login as apiLogin,
   logout as apiLogout,
   getCurrentUser,
-  refreshToken
+  refreshToken 
 } from '../services/authService';
 import * as userService from '../services/userService';
 
@@ -29,9 +29,9 @@ export const useAuth = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadSession = async () => {
+    const loadSession = () => {
       try {
-        const token = localStorage.getItem('acuaponia_token');
+        const token = localStorage.getItem('token');
         const user = getCurrentUser();
         
         if (token && user) {
@@ -48,21 +48,13 @@ export const useAuth = () => {
     loadSession();
   }, []);
 
-  /**
-   * Inicia sesión con las credenciales proporcionadas
-   * @param {Object} credentials - Credenciales de acceso
-   * @param {string} credentials.email - Email del usuario
-   * @param {string} credentials.password - Contraseña del usuario
-   * @returns {Promise<boolean>} Indica si el login fue exitoso
-   */
-  // CORRECCIÓN 2: Usar LoginCredentials como el tipo del parámetro
   const login = async (credentials: LoginCredentials): Promise<boolean> => {
     setLoading(true);
     setError(null);
     
     try {
       const user = await apiLogin(credentials);
-      const token = localStorage.getItem('acuaponia_token');
+      const token = localStorage.getItem('token');
       
       if (user && token) {
         setAuthState({
@@ -72,7 +64,6 @@ export const useAuth = () => {
         });
         return true;
       } else {
-        console.error('User o token faltante después del login');
         setError('Error: datos de usuario o token faltantes');
         return false;
       }
@@ -85,9 +76,6 @@ export const useAuth = () => {
     }
   };
 
-  /**
-   * Cierra la sesión actual
-   */
   const logout = () => {
     apiLogout();
     setAuthState({
@@ -98,7 +86,8 @@ export const useAuth = () => {
   };
 
   /**
-   * Refresca el token de autenticación
+   * Refresca el token de autenticación manualmente si es necesario.
+   * Nota: El interceptor de API ya lo hace automáticamente.
    * @returns {Promise<boolean>} Indica si el refresh fue exitoso
    */
   const refreshAuth = async (): Promise<boolean> => {
@@ -116,8 +105,8 @@ export const useAuth = () => {
       }
       return false;
     } catch (err) {
-      console.error('Error en refresh:', err);
-      logout();
+      console.error('Error en refreshAuth manual:', err);
+      logout(); 
       return false;
     }
   };
@@ -127,9 +116,10 @@ export const useAuth = () => {
 
     try {
       const updatedUser = await userService.updateUser(authState.user.id, userData);
-      setAuthState(prev => ({ ...prev, user: updatedUser }));
-      localStorage.setItem('acuaponia_user', JSON.stringify(updatedUser));
-      return updatedUser;
+      const finalUser = { ...authState.user, ...updatedUser };
+      setAuthState(prev => ({ ...prev, user: finalUser }));
+      localStorage.setItem('user', JSON.stringify(finalUser));
+      return finalUser;
     } catch (error) {
       console.error('Error actualizando el perfil:', error);
       throw error; 
@@ -142,7 +132,7 @@ export const useAuth = () => {
     error,
     login,
     logout,
-    refreshAuth,
+    refreshAuth, 
     updateProfile,
   };
 };

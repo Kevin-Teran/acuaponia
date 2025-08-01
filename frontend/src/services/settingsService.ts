@@ -1,38 +1,34 @@
 import api from '../config/api';
 
-// --- Perfil de Usuario ---
-// (La actualización del perfil se maneja a través de userService, pero la lógica de contraseña podría ir aquí)
+/**
+ * @interface Settings
+ * @desc Define la estructura de las configuraciones del sistema.
+ */
+export interface Settings {
+  key: string;
+  value: any;
+}
 
-// --- Umbrales (Thresholds) ---
-export const getThresholds = async () => {
-  // En el futuro, esto llamará a: const response = await api.get('/settings/thresholds');
-  // Por ahora, simulamos una respuesta exitosa con valores por defecto.
-  console.log('Simulando carga de umbrales desde la API...');
-  return Promise.resolve({
-    temperature: { min: 20, max: 28, optimal: { min: 22, max: 26 } },
-    ph: { min: 6.0, max: 8.5, optimal: { min: 6.8, max: 7.6 } },
-    oxygen: { min: 4, max: 12, optimal: { min: 6, max: 10 } }
-  });
+/**
+ * @desc Obtiene todas las configuraciones del sistema desde la API.
+ * @returns {Promise<Record<string, any>>} Un objeto con todas las configuraciones.
+ */
+export const getSettings = async (): Promise<Record<string, any>> => {
+  const response = await api.get('/settings');
+  // Transforma el array de clave-valor en un objeto fácil de usar
+  return response.data.data.reduce((acc: Record<string, any>, setting: Settings) => {
+    acc[setting.key] = setting.value;
+    return acc;
+  }, {});
 };
 
-export const saveThresholds = async (thresholds: any) => {
-  // En el futuro: return api.put('/settings/thresholds', { thresholds });
-  console.log('Simulando guardado de umbrales en la API:', thresholds);
-  return Promise.resolve({ success: true, data: thresholds });
-};
-
-// --- Notificaciones ---
-export const getNotificationSettings = async () => {
-  console.log('Simulando carga de notificaciones...');
-  return Promise.resolve({
-    email: true,
-    critical: true,
-    reports: false,
-    maintenance: true
-  });
-};
-
-export const saveNotificationSettings = async (settings: any) => {
-  console.log('Simulando guardado de notificaciones:', settings);
-  return Promise.resolve({ success: true, data: settings });
+/**
+ * @desc Actualiza una configuración específica en el sistema.
+ * @param {string} key - La clave de la configuración a actualizar (ej. 'thresholds').
+ * @param {any} value - El nuevo valor para la configuración.
+ * @returns {Promise<Settings>} La configuración actualizada.
+ */
+export const updateSetting = async (key: string, value: any): Promise<Settings> => {
+  const response = await api.put('/settings', { key, value });
+  return response.data.data;
 };

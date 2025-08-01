@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, User, Bell, Database, Gauge, Save, Edit, X, Loader } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Settings as SettingsIcon, User, Bell, Gauge, Save, Edit, X, Loader } from 'lucide-react';
 import { Card } from '../common/Card';
 import { useAuth } from '../../hooks/useAuth';
 import * as settingsService from '../../services/settingsService';
@@ -8,7 +8,7 @@ import { LoadingSpinner } from '../common/LoadingSpinner';
 
 // --- Componente para un campo de configuración reutilizable ---
 const SettingRow = ({ title, description, children }: { title: string, description: string, children: React.ReactNode }) => (
-    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50">
         <div className="mb-2 sm:mb-0">
             <h3 className="font-medium text-gray-900 dark:text-white">{title}</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>
@@ -17,40 +17,57 @@ const SettingRow = ({ title, description, children }: { title: string, descripti
     </div>
 );
 
+// --- Valores por defecto para las configuraciones ---
+const defaultThresholds = {
+    temperature: { min: 20, max: 28 },
+    ph: { min: 6.8, max: 7.6 },
+    oxygen: { min: 6, max: 10 }
+};
+
+const defaultNotifications = {
+    email: true,
+    critical: true,
+    reports: false
+};
+
+
 // --- Componente principal ---
 export const Settings: React.FC = () => {
   const { user, updateProfile } = useAuth();
-  const isAdmin = user?.role === 'ADMIN';
 
   const [activeTab, setActiveTab] = useState('profile');
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
-  // Estados para cada sección
+  // Estados para cada sección con valores por defecto
   const [profileData, setProfileData] = useState({ name: user?.name || '', email: user?.email || '', newPassword: '', confirmPassword: '' });
-  const [thresholds, setThresholds] = useState<any>(null);
-  const [notifications, setNotifications] = useState<any>(null);
+  const [thresholds, setThresholds] = useState<any>(defaultThresholds);
+  const [notifications, setNotifications] = useState<any>(defaultNotifications);
   
-  // Cargar configuraciones al inicio (simulado por ahora)
-  useEffect(() => {
-    const loadSettings = async () => {
-      setIsLoadingData(true);
-      try {
-        const [thresholdsData, notificationsData] = await Promise.all([
-          settingsService.getThresholds(),
-          settingsService.getNotificationSettings(),
-        ]);
-        setThresholds(thresholdsData);
-        setNotifications(notificationsData);
-      } catch (error) {
-        Swal.fire('Error', 'No se pudieron cargar las configuraciones.', 'error');
-      } finally {
-        setIsLoadingData(false);
+  // Cargar configuraciones desde el backend
+  const loadSettings = useCallback(async () => {
+    setIsLoadingData(true);
+    try {
+      const settings = await settingsService.getSettings();
+      // Si existen configuraciones guardadas, las usamos. Si no, mantenemos los valores por defecto.
+      if (settings.thresholds) {
+        setThresholds(settings.thresholds);
       }
-    };
-    loadSettings();
+      if (settings.notifications) {
+        setNotifications(settings.notifications);
+      }
+    } catch (error) {
+      console.error("Error al cargar configuraciones:", error);
+      Swal.fire('Error', 'No se pudieron cargar las configuraciones desde el servidor. Se usarán los valores por defecto.', 'error');
+    } finally {
+      setIsLoadingData(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   // Sincronizar el formulario con los datos del usuario si cambian
   useEffect(() => {
@@ -67,7 +84,6 @@ export const Settings: React.FC = () => {
     }
     setIsSubmitting(true);
     try {
-      // Objeto limpio solo con los datos permitidos
       const dataToUpdate: { name: string, email: string, password?: string } = {
         name: profileData.name,
         email: profileData.email,
@@ -87,14 +103,14 @@ export const Settings: React.FC = () => {
     }
   };
 
-  const handleSaveSettings = async (settingsName: string, data: any) => {
+  const handleSaveSettings = async (settingsKey: string, data: any, friendlyName: string) => {
     setIsSubmitting(true);
     try {
-        console.log(`Guardando ${settingsName}:`, data);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        Swal.fire({ icon: 'success', title: '¡Configuración Guardada!', text: `Tus ajustes de ${settingsName} han sido guardados.`, toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+        await settingsService.updateSetting(settingsKey, data);
+        Swal.fire({ icon: 'success', title: '¡Configuración Guardada!', text: `Tus ajustes de ${friendlyName} han sido guardados.`, toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
     } catch (error) {
-        Swal.fire('Error', `No se pudieron guardar los ajustes de ${settingsName}.`, 'error');
+        console.error(`Error guardando ${settingsKey}:`, error);
+        Swal.fire('Error', `No se pudieron guardar los ajustes de ${friendlyName}.`, 'error');
     } finally {
         setIsSubmitting(false);
     }
@@ -106,7 +122,7 @@ export const Settings: React.FC = () => {
     { id: 'notifications', label: 'Notificaciones', icon: Bell },
   ];
 
-  if (isLoadingData || !thresholds || !notifications) {
+  if (isLoadingData) {
     return <LoadingSpinner fullScreen message="Cargando configuraciones..." />;
   }
 
@@ -160,14 +176,14 @@ export const Settings: React.FC = () => {
                 ) : (
                   <form onSubmit={handleProfileSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre Completo</label><input type="text" value={profileData.name} onChange={(e) => setProfileData({ ...profileData, name: e.target.value })} className="w-full form-input" required /></div>
-                      <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label><input type="email" value={profileData.email} onChange={(e) => setProfileData({ ...profileData, email: e.target.value })} className="w-full form-input" required /></div>
+                      <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre Completo</label><input type="text" value={profileData.name} onChange={(e) => setProfileData({ ...profileData, name: e.target.value })} className="form-input" required /></div>
+                      <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label><input type="email" value={profileData.email} onChange={(e) => setProfileData({ ...profileData, email: e.target.value })} className="form-input" required /></div>
                     </div>
                     <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                       <h4 className="text-md font-medium text-gray-900 dark:text-white mb-3">Cambiar Contraseña</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nueva Contraseña</label><input type="password" value={profileData.newPassword} onChange={(e) => setProfileData({ ...profileData, newPassword: e.target.value })} className="w-full form-input" placeholder="Dejar en blanco para no cambiar" /></div>
-                        <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirmar Contraseña</label><input type="password" value={profileData.confirmPassword} onChange={(e) => setProfileData({ ...profileData, confirmPassword: e.target.value })} className="w-full form-input" /></div>
+                        <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nueva Contraseña</label><input type="password" value={profileData.newPassword} onChange={(e) => setProfileData({ ...profileData, newPassword: e.target.value })} className="form-input" placeholder="Dejar en blanco para no cambiar" /></div>
+                        <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirmar Contraseña</label><input type="password" value={profileData.confirmPassword} onChange={(e) => setProfileData({ ...profileData, confirmPassword: e.target.value })} className="form-input" /></div>
                       </div>
                     </div>
                     <div className="flex justify-end">
@@ -181,7 +197,7 @@ export const Settings: React.FC = () => {
             )}
             
             {activeTab === 'thresholds' && (
-              <form onSubmit={(e) => { e.preventDefault(); handleSaveSettings('Umbrales', thresholds); }} className="space-y-6">
+              <form onSubmit={(e) => { e.preventDefault(); handleSaveSettings('thresholds', thresholds, 'Umbrales'); }} className="space-y-6">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Rangos Aceptables</h2>
                 {Object.entries(thresholds).map(([key, values]: [string, any]) => (
                   <div key={key} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
@@ -220,7 +236,7 @@ export const Settings: React.FC = () => {
                         </SettingRow>
                     </div>
                     <div className="flex justify-end mt-6">
-                        <button onClick={() => handleSaveSettings('Notificaciones', notifications)} disabled={isSubmitting} className="flex items-center space-x-2 px-4 py-2 bg-sena-green hover:bg-green-700 text-white rounded-lg disabled:opacity-50">
+                        <button onClick={() => handleSaveSettings('notifications', notifications, 'Notificaciones')} disabled={isSubmitting} className="flex items-center space-x-2 px-4 py-2 bg-sena-green hover:bg-green-700 text-white rounded-lg disabled:opacity-50">
                             {isSubmitting ? <Loader className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}<span>Guardar Notificaciones</span>
                         </button>
                     </div>

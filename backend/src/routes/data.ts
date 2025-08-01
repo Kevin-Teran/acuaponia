@@ -16,7 +16,7 @@ const router = express.Router();
 router.post('/synthetic/start', protect, admin, asyncHandler(startEmitterController));
 router.post('/synthetic/stop', protect, admin, asyncHandler(stopEmitterController));
 router.get('/synthetic/status', protect, admin, asyncHandler(getEmittersStatusController));
-router.post('/manual', protect, admin, asyncHandler(manualEntryController));
+router.post('/manual-entry', protect, admin, asyncHandler(manualEntryController));
 
 // --- Rutas para cualquier usuario autenticado ---
 

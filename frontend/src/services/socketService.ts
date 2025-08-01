@@ -7,7 +7,7 @@ class SocketService {
   private maxReconnectAttempts = 5;
 
   connect(): void {
-    const token = localStorage.getItem('acuaponia_token');
+    const token = localStorage.getItem('token');
     if (!token) {
       console.error('❌ No se puede conectar al socket: no hay token de autenticación.');
       return;
@@ -28,7 +28,6 @@ class SocketService {
       this.reconnectAttempts = 0;
     });
 
-    // CORRECCIÓN AQUÍ
     this.socket.on('disconnect', (reason: Socket.DisconnectReason) => {
       console.log('❌ Desconectado del servidor Socket.IO:', reason);
       if (reason !== 'io server disconnect') {
@@ -36,7 +35,6 @@ class SocketService {
       }
     });
 
-    // CORRECCIÓN AQUÍ
     this.socket.on('connect_error', (error: Error) => {
       console.error('❌ Error de conexión Socket.IO:', error);
       this.handleReconnection();
@@ -93,4 +91,3 @@ class SocketService {
 }
 
 export const socketService = new SocketService();
-export default socketService;

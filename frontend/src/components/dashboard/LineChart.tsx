@@ -9,10 +9,14 @@ import {
   Tooltip,
   Legend,
   Filler,
+  ChartOptions,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { ProcessedDataPoint } from '../../types';
 import { Card } from '../common/Card';
+import { Thermometer, Droplets, Wind, WifiOff } from 'lucide-react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 ChartJS.register(
   CategoryScale,
@@ -25,78 +29,156 @@ ChartJS.register(
   Filler
 );
 
+/**
+ * @typedef {object} Thresholds
+ * @property {{min: number, max: number}} temperature - Umbrales para temperatura.
+ * @property {{min: number, max: number}} ph - Umbrales para pH.
+ * @property {{min: number, max: number}} oxygen - Umbrales para oxígeno.
+ */
+
+/**
+ * @typedef {object} LineChartProps
+ * @property {ProcessedDataPoint[]} data - Array de puntos de datos procesados y muestreados para graficar.
+ * @property {string[]} labels - Array de etiquetas para el eje X, correspondientes a los datos muestreados.
+ * @property {Thresholds} [thresholds] - Objeto con los umbrales de alerta para dibujar las zonas óptimas.
+ * @property {number} [height=350] - Altura del contenedor del gráfico en píxeles.
+ */
 interface LineChartProps {
   data: ProcessedDataPoint[];
   labels: string[];
+  thresholds?: any;
   height?: number;
 }
 
 /**
- * Tarjeta para mostrar cuando un sensor no tiene datos en el período seleccionado.
+ * @component InactiveSensorCard
+ * @description Tarjeta informativa que se muestra cuando un sensor no tiene datos para el período seleccionado.
+ * @param {{title: string, icon: React.ElementType}} props - Propiedades del componente.
+ * @returns {JSX.Element}
  */
-const InactiveSensorCard: React.FC<{ title: string }> = ({ title }) => (
-    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 flex flex-col justify-center items-center h-[450px]">
+const InactiveSensorCard: React.FC<{ title: string, icon: React.ElementType }> = ({ title, icon: Icon }) => (
+    <Card className="flex flex-col justify-center items-center h-full min-h-[300px]">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{title}</h3>
         <div className="text-center text-gray-500 dark:text-gray-400">
-            <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 11-12.728 0M12 12h.01M12 9v.01" />
-            </svg>
+            <Icon className="mx-auto h-12 w-12 text-gray-400" strokeWidth={1.5} />
             <p className="mt-2 text-sm">Sensor inactivo o sin datos para este período.</p>
         </div>
-    </div>
+    </Card>
 );
 
 /**
- * El componente de gráfico reutilizable y dividido por parámetro.
+ * @component LineChart
+ * @description Componente de gráfico de línea que muestra la tendencia de los sensores.
+ * Se divide en gráficos individuales para cada parámetro, manejando dinámicamente la
+ * visualización basada en la disponibilidad de datos y los umbrales de configuración.
+ * @param {LineChartProps} props - Propiedades para configurar el gráfico.
+ * @returns {JSX.Element}
  */
-export const LineChart: React.FC<LineChartProps> = ({ data, labels, height = 350 }) => {
-  const limits = {
-    temperature: { min: 20, max: 28, optimal: { min: 22, max: 26 } },
-    ph: { min: 6.0, max: 8.5, optimal: { min: 6.8, max: 7.6 } },
-    oxygen: { min: 4, max: 12, optimal: { min: 6, max: 10 } }
+export const LineChart: React.FC<LineChartProps> = ({ data, labels, thresholds, height = 350 }) => {
+  
+  const defaultThresholds = {
+    temperature: { min: 22, max: 26 },
+    ph: { min: 6.8, max: 7.6 },
+    oxygen: { min: 6, max: 10 }
   };
 
-  const optimalColor = '#10B98133'; // Verde SENA con transparencia
-  const limitColor = '#FF671F';   // Naranja SENA
+  const finalThresholds = thresholds || defaultThresholds;
 
-  const createChartOptions = (paramKey: keyof typeof limits): any => {
-    const paramLimits = limits[paramKey];
-    const range = paramLimits.max - paramLimits.min;
+  const optimalColor = 'rgba(57, 169, 0, 0.2)'; // Verde SENA con transparencia
+
+  /**
+   * @function createChartOptions
+   * @description Crea las opciones de configuración para un gráfico de Chart.js.
+   * @returns {ChartOptions<'line'>} Opciones del gráfico.
+   */
+  const createChartOptions = (): ChartOptions<'line'> => {
     return {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-          x: { type: 'category', labels, grid: { color: document.documentElement.classList.contains('dark') ? '#374151' : '#f3f4f6' }, ticks: { color: document.documentElement.classList.contains('dark') ? '#9ca3af' : '#6b7280', autoSkip: true, maxTicksLimit: 10 } },
-          y: { grid: { color: document.documentElement.classList.contains('dark') ? '#374151' : '#f3f4f6' }, ticks: { color: document.documentElement.classList.contains('dark') ? '#9ca3af' : '#6b7280' }, suggestedMin: paramLimits.min - range * 0.2, suggestedMax: paramLimits.max + range * 0.2 }
+          x: { 
+            labels, 
+            grid: { color: document.documentElement.classList.contains('dark') ? '#374151' : '#f3f4f6' }, 
+            ticks: { color: document.documentElement.classList.contains('dark') ? '#9ca3af' : '#6b7280', autoSkip: true, maxTicksLimit: 12 } 
+          },
+          y: { 
+            grid: { color: document.documentElement.classList.contains('dark') ? '#374151' : '#f3f4f6' }, 
+            ticks: { color: document.documentElement.classList.contains('dark') ? '#9ca3af' : '#6b7280' }
+          }
         },
         plugins: {
           legend: { display: false },
-          tooltip: { backgroundColor: document.documentElement.classList.contains('dark') ? '#374151' : '#ffffff', titleColor: document.documentElement.classList.contains('dark') ? '#ffffff' : '#374151', bodyColor: document.documentElement.classList.contains('dark') ? '#d1d5db' : '#6b7280', borderColor: document.documentElement.classList.contains('dark') ? '#4b5563' : '#e5e7eb', borderWidth: 1 }
+          tooltip: { 
+            backgroundColor: document.documentElement.classList.contains('dark') ? '#374151' : '#ffffff', 
+            titleColor: document.documentElement.classList.contains('dark') ? '#ffffff' : '#374151', 
+            bodyColor: document.documentElement.classList.contains('dark') ? '#d1d5db' : '#6b7280', 
+            borderColor: document.documentElement.classList.contains('dark') ? '#4b5563' : '#e5e7eb', 
+            borderWidth: 1,
+            callbacks: {
+              title: (tooltipItems) => {
+                const index = tooltipItems[0].dataIndex;
+                const timestamp = data[index]?.timestamp;
+                return timestamp ? format(new Date(timestamp), 'dd MMM yyyy, HH:mm', { locale: es }) : '';
+              },
+              label: (context) => {
+                let label = context.dataset.label || '';
+                if (label) {
+                  label += ': ';
+                }
+                if (context.parsed.y !== null) {
+                  label += `${context.parsed.y.toFixed(2)}`;
+                }
+                return label;
+              }
+            }
+          }
         }
       };
   };
 
+  /**
+   * @function createChartDatasets
+   * @description Crea los datasets para un gráfico, incluyendo la línea de datos y las zonas de umbrales.
+   * @param {'temperature' | 'ph' | 'oxygen'} param - El tipo de sensor.
+   * @param {string} color - El color principal para la línea del gráfico.
+   * @returns {any[]} Array de datasets para Chart.js.
+   */
   const createChartDatasets = (param: 'temperature' | 'ph' | 'oxygen', color: string) => {
-    const paramLimits = limits[param];
+    const paramLimits = finalThresholds[param];
+    if (!paramLimits) return []; // Seguridad si los umbrales no están definidos
+    
     return [
-        // La línea de datos principal, sin fondo de color (fill: false)
-        { label: 'Valor', data: data.map(d => d[param]), borderColor: color, tension: 0.4, pointRadius: 2, pointBackgroundColor: color, fill: false, spanGaps: true, order: 2 },
-        // Dataset para dibujar la zona óptima sombreada
-        { data: new Array(labels.length).fill(paramLimits.optimal.max), pointRadius: 0, fill: { target: { value: paramLimits.optimal.min }, above: optimalColor }, order: 1 },
-        // Datasets para dibujar las líneas de límite (no óptimo)
-        { data: new Array(labels.length).fill(paramLimits.max), borderColor: limitColor, borderDash: [5, 5], borderWidth: 1.5, pointRadius: 0 },
-        { data: new Array(labels.length).fill(paramLimits.min), borderColor: limitColor, borderDash: [5, 5], borderWidth: 1.5, pointRadius: 0 }
+        { 
+          label: param.charAt(0).toUpperCase() + param.slice(1), 
+          data: data.map(d => d[param]), 
+          borderColor: color, 
+          tension: 0.4, 
+          pointRadius: 2, 
+          pointBackgroundColor: color, 
+          fill: false, 
+          spanGaps: true // Conecta puntos aunque haya datos nulos intermedios
+        },
+        { 
+          label: 'Zona Óptima',
+          data: new Array(labels.length).fill(paramLimits.max), 
+          pointRadius: 0, 
+          fill: { target: { value: paramLimits.min }, above: optimalColor },
+          borderColor: 'transparent',
+          backgroundColor: optimalColor
+        }
       ];
   };
   
-  const ChartCard = ({ title, chartData, options, optimalLimits, unit }: any) => (
+  const ChartCard = ({ title, chartData, options, thresholds, unit }: any) => (
       <Card className="p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
-          <div className="flex items-center space-x-4 text-xs sm:text-sm">
-            <div className="flex items-center space-x-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: optimalColor }}></div><span className="text-gray-600 dark:text-gray-400">Óptima: {optimalLimits.min} - {optimalLimits.max}{unit}</span></div>
-            <div className="flex items-center space-x-2"><div className="w-3 h-0.5 border-t-2 border-dashed" style={{ borderColor: limitColor, width: '0.75rem' }}></div><span className="text-gray-600 dark:text-gray-400">Límites</span></div>
-          </div>
+          {thresholds && (
+            <div className="flex items-center space-x-2 text-xs sm:text-sm">
+              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: optimalColor }}></div>
+              <span className="text-gray-600 dark:text-gray-400">Óptima: {thresholds.min} - {thresholds.max}{unit}</span>
+            </div>
+          )}
         </div>
         <div style={{ height: `${height}px` }}><Line data={chartData} options={options} /></div>
       </Card>
@@ -109,12 +191,17 @@ export const LineChart: React.FC<LineChartProps> = ({ data, labels, height = 350
   const isTemperatureDataValid = data.some(d => d.temperature != null);
   const isPhDataValid = data.some(d => d.ph != null);
   const isOxygenDataValid = data.some(d => d.oxygen != null);
+  const hasAnyData = isTemperatureDataValid || isPhDataValid || isOxygenDataValid;
+
+  if (!hasAnyData) {
+    return <InactiveSensorCard title="Sin Datos de Sensores" icon={WifiOff} />;
+  }
 
   return (
     <div className="space-y-6">
-      {isTemperatureDataValid ? <ChartCard title="Temperatura (°C)" chartData={{ labels, datasets: createChartDatasets('temperature', '#3B82F6') }} options={createChartOptions('temperature')} optimalLimits={limits.temperature.optimal} unit="°C" /> : <InactiveSensorCard title="Temperatura (°C)" />}
-      {isPhDataValid ? <ChartCard title="Nivel de pH" chartData={{ labels, datasets: createChartDatasets('ph', '#10B981') }} options={createChartOptions('ph')} optimalLimits={limits.ph.optimal} unit="" /> : <InactiveSensorCard title="Nivel de pH" />}
-      {isOxygenDataValid ? <ChartCard title="Oxígeno Disuelto (mg/L)" chartData={{ labels, datasets: createChartDatasets('oxygen', '#F97316') }} options={createChartOptions('oxygen')} optimalLimits={limits.oxygen.optimal} unit=" mg/L" /> : <InactiveSensorCard title="Oxígeno Disuelto (mg/L)" />}
+      {isTemperatureDataValid ? <ChartCard title="Temperatura (°C)" chartData={{ labels, datasets: createChartDatasets('temperature', '#3B82F6') }} options={createChartOptions()} thresholds={finalThresholds.temperature} unit="°C" /> : <InactiveSensorCard title="Temperatura (°C)" icon={Thermometer} />}
+      {isPhDataValid ? <ChartCard title="Nivel de pH" chartData={{ labels, datasets: createChartDatasets('ph', '#10B981') }} options={createChartOptions()} thresholds={finalThresholds.ph} unit="" /> : <InactiveSensorCard title="Nivel de pH" icon={Droplets} />}
+      {isOxygenDataValid ? <ChartCard title="Oxígeno Disuelto (mg/L)" chartData={{ labels, datasets: createChartDatasets('oxygen', '#F97316') }} options={createChartOptions()} thresholds={finalThresholds.oxygen} unit=" mg/L" /> : <InactiveSensorCard title="Oxígeno Disuelto (mg/L)" icon={Wind} />}
     </div>
   );
 };

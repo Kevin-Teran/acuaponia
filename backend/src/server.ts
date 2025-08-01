@@ -19,6 +19,7 @@ import userRoutes from './routes/users';
 import tankRoutes from './routes/tanks';
 import sensorRoutes from './routes/sensors';
 import dataRoutes from './routes/data';
+import settingsRoutes from './routes/settings'; 
 
 // --- CONFIGURACIÓN INICIAL ---
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -28,7 +29,7 @@ const server = http.createServer(app);
 const io = new SocketIOServer(server, {
   cors: {
     origin: "*", 
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST", "PUT"] 
   }
 });
 
@@ -51,6 +52,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/tanks', tankRoutes); 
 app.use('/api/sensors', sensorRoutes);
 app.use('/api/data', dataRoutes);
+app.use('/api/settings', settingsRoutes); 
 
 app.get('/', (req, res) => {
   res.status(200).send('El backend del sistema de Acuaponía está funcionando correctamente.');
