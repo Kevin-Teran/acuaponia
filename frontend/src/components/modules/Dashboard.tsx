@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useSensorData } from '../../hooks/useSensorData';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { Card } from '../common/Card';
@@ -9,145 +8,213 @@ import { SummaryCards } from '../dashboard/SummaryCards';
 import { DashboardFilters } from '../dashboard/DashboardFilters';
 import * as userService from '../../services/userService';
 import * as tankService from '../../services/tankService';
-import { User, Tank, ProcessedDataPoint } from '../../types';
+import { User, Tank, ProcessedDataPoint, DataSummary, SensorData } from '../../types';
 import { format, subDays } from 'date-fns';
+import { es } from 'date-fns/locale';
+import api from '../../config/api';
+import { socketService } from '../../services/socketService';
+import { calculateDataSummary, processRawData } from '../../hooks/useSensorData';
 
 export const Dashboard: React.FC = () => {
-  const { user, loading: authLoading } = useAuth(); // Obtener también el estado de carga del hook de autenticación
+  // --- Hooks de Estado y Contexto (Siempre en el nivel superior) ---
+  const { user, loading: authLoading } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
 
-  // --- Estados para los filtros ---
   const today = format(new Date(), 'yyyy-MM-dd');
-  const [startDate, setStartDate] = useState(format(subDays(new Date(), 1), 'yyyy-MM-dd')); // Iniciar con las últimas 24h
+  const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
   const [selectedTankId, setSelectedTankId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
-  // --- Estados para poblar los selectores ---
   const [users, setUsers] = useState<User[]>([]);
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [loadingFilters, setLoadingFilters] = useState(true);
 
-  // --- Carga de datos para los filtros y establece selecciones iniciales ---
-  useEffect(() => {
-    // No hacer nada hasta que el usuario esté cargado
-    if (!user) return;
+  const [summary, setSummary] = useState<DataSummary | null>(null);
+  const [chartData, setChartData] = useState<ProcessedDataPoint[]>([]);
+  const [loadingChart, setLoadingChart] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-    // Establecer el usuario seleccionado inicial
-    const initialUserId = isAdmin ? user.id : user.id;
-    setSelectedUserId(initialUserId);
+  // --- Hooks de Efectos y Memos (Siempre en el nivel superior) ---
+
+  useEffect(() => {
+    if (!user) return;
+    setSelectedUserId(user.id);
 
     const fetchFilterData = async () => {
       try {
         setLoadingFilters(true);
         const [tanksData, usersData] = await Promise.all([
-          tankService.getTanks(), // El backend filtra por rol, así que esta llamada es segura
+          tankService.getTanks(),
           isAdmin ? userService.getAllUsers() : Promise.resolve([]),
         ]);
         
         setTanks(tanksData);
-        if (isAdmin) {
-          setUsers(usersData);
-        }
+        if (isAdmin) setUsers(usersData);
         
-        // Seleccionar el primer tanque de la lista por defecto
-        if (tanksData.length > 0) {
-          setSelectedTankId(tanksData[0].id);
+        const tanksForUser = tanksData.filter(t => t.userId === user.id);
+        if (tanksForUser.length > 0) {
+          setSelectedTankId(tanksForUser[0].id);
         } else {
-          setSelectedTankId(null); // No hay tanques para mostrar
+          setSelectedTankId(null);
         }
-
-      } catch (error) {
-        console.error("Error fetching filter data:", error);
-      } finally {
-        setLoadingFilters(false);
-      }
+      } catch (error) { console.error("Error fetching filter data:", error); } 
+      finally { setLoadingFilters(false); }
     };
     
     fetchFilterData();
   }, [user, isAdmin]);
-  
-  // --- Hook de datos que reacciona a los cambios en los filtros ---
-  const { data, summary, loading, lastUpdate, refreshData } = useSensorData({
-    tankId: selectedTankId,
-    startDate,
-    endDate,
-    userId: selectedUserId, // Ahora es seguro usarlo porque esperamos a que 'user' se cargue
-  });
 
-  // Filtra la lista de tanques a mostrar cuando un admin selecciona un usuario
-  const filteredTanks = useMemo(() => {
-    if (isAdmin && selectedUserId) {
-        return tanks.filter(tank => tank.userId === selectedUserId);
+  const fetchChartData = useCallback(async () => {
+    if (!selectedTankId || !startDate || !endDate) {
+      setChartData([]);
+      return;
     }
+    setLoadingChart(true);
+    try {
+      const params = new URLSearchParams({ startDate, endDate, tankId: selectedTankId });
+      if (isAdmin && selectedUserId) params.append('userId', selectedUserId);
+      const response = await api.get(`/data/historical?${params.toString()}`);
+      setChartData(processRawData(response.data.data));
+    } catch (error) {
+      console.error("Error fetching chart data:", error);
+      setChartData([]);
+    } finally { setLoadingChart(false); }
+  }, [selectedTankId, selectedUserId, startDate, endDate, isAdmin]);
+
+  useEffect(() => { fetchChartData(); }, [fetchChartData]);
+
+  useEffect(() => {
+    if (!selectedTankId) return;
+    const initializeRealtime = async () => {
+      try {
+        const response = await api.get(`/data/latest?tankId=${selectedTankId}`);
+        setSummary(response.data.data);
+      } catch (error) { console.error("Error fetching latest data:", error); setSummary(null); }
+    };
+    initializeRealtime();
+    socketService.connect();
+    const handleNewData = (newDataPoint: SensorData) => {
+      if (newDataPoint.tankId === selectedTankId) {
+        setSummary(prevSummary => {
+          if (!prevSummary) return null;
+          const key = newDataPoint.type.toLowerCase() as keyof DataSummary;
+          return { ...prevSummary, [key]: { ...prevSummary[key], previous: prevSummary[key].current, current: newDataPoint.value } };
+        });
+        setLastUpdate(new Date());
+      }
+    };
+    socketService.onSensorData(handleNewData);
+    return () => socketService.disconnect();
+  }, [selectedTankId]);
+
+  const filteredTanks = useMemo(() => {
+    if (isAdmin && selectedUserId) return tanks.filter(tank => tank.userId === selectedUserId);
     return tanks;
   }, [tanks, selectedUserId, isAdmin]);
 
   const handleUserChange = (userId: string) => {
     setSelectedUserId(userId);
-    setSelectedTankId(null); // Forzar la reselección del primer tanque en el useEffect del filtro
-  }
-
-  // Muestra un estado de carga general mientras se determina el usuario y se cargan los filtros
-  if (authLoading || loadingFilters || !selectedTankId) {
-    return <LoadingSpinner fullScreen message="Cargando configuración del dashboard..." />;
-  }
-
-  const thresholds = {
-    temperature: { low: 20, high: 28 },
-    ph: { low: 6.8, high: 7.6 },
-    oxygen: { low: 6, high: 10 },
+    setSelectedTankId(null);
   };
+  
+  const { sampledChartData, chartLabels } = useMemo(() => {
+    const dataLength = chartData.length;
+    if (dataLength === 0) return { sampledChartData: [], chartLabels: [] };
+    const diffDays = (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 3600 * 24);
+    let maxPoints = 150;
+    if (diffDays > 30) maxPoints = 100;
+    if (diffDays > 90) maxPoints = 60;
+    const sampleInterval = Math.max(1, Math.floor(dataLength / maxPoints));
+    const sampledData = chartData.filter((_, index) => index % sampleInterval === 0);
+    let formatString = 'HH:mm';
+    if (diffDays > 2) formatString = 'd MMM';
+    if (diffDays > 90) formatString = 'MMM yy';
+    const labels = sampledData.map(d => format(new Date(d.timestamp), formatString, { locale: es }));
+    return { sampledChartData: sampledData, chartLabels: labels };
+  }, [chartData, startDate, endDate]);
+  
+  const historicalSummary = useMemo(() => calculateDataSummary(chartData), [chartData]);
+
+  const availableGauges = useMemo(() => {
+    if (!summary) return [];
+    const gauges = [];
+    if (summary.temperature.current !== 0 || summary.temperature.previous !== undefined) {
+        gauges.push({ key: 'temperature', label: 'Temperatura', unit: '°C', min: 15, max: 35, thresholds: { low: 20, high: 28 }, data: summary.temperature });
+    }
+    if (summary.ph.current !== 0 || summary.ph.previous !== undefined) {
+        gauges.push({ key: 'ph', label: 'pH', unit: '', min: 6, max: 9, thresholds: { low: 6.8, high: 7.6 }, data: summary.ph });
+    }
+    if (summary.oxygen.current !== 0 || summary.oxygen.previous !== undefined) {
+        gauges.push({ key: 'oxygen', label: 'Oxígeno Disuelto', unit: 'mg/L', min: 0, max: 15, thresholds: { low: 6, high: 10 }, data: summary.oxygen });
+    }
+    return gauges;
+  }, [summary]);
+
+  // --- Lógica de Renderizado ---
+  if (authLoading || loadingFilters) {
+    return <LoadingSpinner fullScreen message="Cargando configuración..." />;
+  }
+  
+  const noTanksForSelectedUser = filteredTanks.length === 0;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Dashboard de Monitoreo
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Visualización de variables acuáticas por rango de fecha y estanque.
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard de Monitoreo</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Visualización de variables acuáticas.</p>
         </div>
       </div>
 
-      {/* --- Componente de Filtros --- */}
       <DashboardFilters
-        startDate={startDate}
-        endDate={endDate}
-        selectedTankId={selectedTankId}
-        selectedUserId={selectedUserId}
-        onStartDateChange={setStartDate}
-        onEndDateChange={setEndDate}
-        onTankChange={setSelectedTankId}
-        onUserChange={handleUserChange}
-        tanks={filteredTanks}
-        users={users}
-        isAdmin={isAdmin}
+        startDate={startDate} endDate={endDate} selectedTankId={selectedTankId}
+        selectedUserId={selectedUserId} onStartDateChange={setStartDate} onEndDateChange={setEndDate}
+        onTankChange={setSelectedTankId} onUserChange={handleUserChange}
+        tanks={filteredTanks} users={users} isAdmin={isAdmin}
       />
 
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <LoadingSpinner size="lg" message="Cargando datos del estanque..." />
-        </div>
+      {noTanksForSelectedUser ? (
+        <Card><p className="text-center text-gray-500 py-10">Este usuario no tiene estanques asignados.</p></Card>
+      ) : !selectedTankId ? (
+        <Card><p className="text-center text-gray-500 py-10">Seleccione un estanque para ver los datos.</p></Card>
       ) : (
         <>
-          {/* --- Contenido del Dashboard --- */}
           <Card title="Valores Actuales" subtitle="Mediciones en tiempo real con indicadores de estado">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <GaugeChart value={summary?.temperature.current ?? 0} min={15} max={35} label="Temperatura" unit="°C" thresholds={thresholds.temperature} />
-              <GaugeChart value={summary?.ph.current ?? 0} min={6} max={9} label="pH" unit="" thresholds={thresholds.ph} />
-              <GaugeChart value={summary?.oxygen.current ?? 0} min={0} max={15} label="Oxígeno Disuelto" unit="mg/L" thresholds={thresholds.oxygen} />
-            </div>
+            {!summary ? <LoadingSpinner message="Cargando valores actuales..." /> : availableGauges.length > 0 ? (
+              <div className={`grid grid-cols-1 md:grid-cols-3 gap-8`}>
+                {availableGauges.map(gauge => (
+                  <GaugeChart
+                    key={gauge.key}
+                    value={gauge.data.current}
+                    previousValue={gauge.data.previous}
+                    min={gauge.min}
+                    max={gauge.max}
+                    label={gauge.label}
+                    unit={gauge.unit}
+                    thresholds={gauge.thresholds}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-center text-gray-500 py-8">No hay datos de sensores en tiempo real para este estanque.</p>
+            )}
           </Card>
 
           <Card title="Tendencia Temporal" subtitle={`Mostrando datos desde ${startDate} hasta ${endDate}`}>
-            <LineChart data={data as ProcessedDataPoint[]} height={400} />
+            {loadingChart ? <LoadingSpinner message="Cargando historial..." /> : 
+              <LineChart data={sampledChartData} labels={chartLabels} height={350} />
+            }
           </Card>
 
-          {summary && (
-             <SummaryCards summary={summary} lastUpdate={lastUpdate} onRefresh={refreshData} />
+          {summary && historicalSummary && (
+            <SummaryCards 
+              summary={summary} 
+              historicalSummary={historicalSummary}
+              lastUpdate={lastUpdate} 
+              onRefresh={fetchChartData} 
+              loading={loadingChart}
+            />
           )}
         </>
       )}

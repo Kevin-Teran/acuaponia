@@ -71,10 +71,10 @@ export interface AuthState {
  * @desc Agrupa estadísticas clave (mínimo, máximo, promedio, actual) para cada
  * tipo de dato principal, utilizado en los dashboards.
  */
-export interface DataSummary {
-  temperature: { min: number; max: number; avg: number; current: number; };
-  ph: { min: number; max: number; avg: number; current: number; };
-  oxygen: { min: number; max: number; avg: number; current: number; };
+ export interface DataSummary {
+  temperature: { min: number; max: number; avg: number; current: number; previous?: number; };
+  ph: { min: number; max: number; avg: number; current: number; previous?: number; };
+  oxygen: { min: number; max: number; avg: number; current: number; previous?: number; };
 }
 
 /**

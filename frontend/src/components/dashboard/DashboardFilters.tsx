@@ -76,7 +76,7 @@ export const DashboardFilters: React.FC<DashboardFiltersProps> = ({
         <div>
           <label className="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             <Droplets className="w-4 h-4 mr-2" />
-            Estanque
+            Tanque
           </label>
           <select
             value={selectedTankId || ''}

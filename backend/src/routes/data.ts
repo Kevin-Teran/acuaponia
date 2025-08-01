@@ -6,7 +6,8 @@ import {
     stopEmitterController,
     getEmittersStatusController,
     manualEntryController,
-    getHistoricalData
+    getHistoricalData,
+    getLatestData
 } from '../controllers/dataController';
 
 const router = express.Router();
@@ -20,5 +21,6 @@ router.post('/manual', protect, admin, asyncHandler(manualEntryController));
 // --- Rutas para cualquier usuario autenticado ---
 
 router.get('/historical', protect, asyncHandler(getHistoricalData));
+router.get('/latest', protect, asyncHandler(getLatestData));
 
 export default router;

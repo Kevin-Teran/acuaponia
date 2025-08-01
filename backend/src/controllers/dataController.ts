@@ -108,3 +108,34 @@ export const manualEntryController = async (req: Request, res: Response) => {
     // Se revierte el array para que los gráficos los muestren en orden cronológico (del más antiguo al más nuevo)
     res.status(200).json({ success: true, data: data.reverse() });
 };
+
+/**
+ * @desc     Obtiene la última lectura de cada tipo de sensor para un tanque.
+ * @route    GET /api/data/latest
+ * @access   Private
+ */
+ export const getLatestData = async (req: AuthenticatedRequest, res: Response) => {
+    const { tankId } = req.query;
+
+    if (!tankId) {
+        throw new CustomError('El ID del tanque es requerido', 400);
+    }
+    
+    const sensorTypes = ['TEMPERATURE', 'PH', 'OXYGEN'];
+    const summary: any = {};
+
+    for (const type of sensorTypes) {
+        const data = await prisma.sensorData.findMany({
+            where: { tankId: String(tankId), type: type as any },
+            orderBy: { timestamp: 'desc' },
+            take: 2 // Tomamos los dos últimos para tener el actual y el previo
+        });
+
+        summary[type.toLowerCase()] = {
+            current: data[0]?.value ?? 0,
+            previous: data[1]?.value, // Puede ser undefined si no hay segundo valor
+        };
+    }
+
+    res.status(200).json({ success: true, data: summary });
+};

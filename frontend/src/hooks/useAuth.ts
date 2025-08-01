@@ -6,6 +6,7 @@ import {
   getCurrentUser,
   refreshToken
 } from '../services/authService';
+import * as userService from '../services/userService';
 
 interface AuthState {
   user: User | null;
@@ -34,11 +35,7 @@ export const useAuth = () => {
         const user = getCurrentUser();
         
         if (token && user) {
-          setAuthState({
-            user,
-            token,
-            isAuthenticated: true,
-          });
+          setAuthState({ user, token, isAuthenticated: true });
         }
       } catch (err) {
         console.error('Error cargando sesión:', err);
@@ -125,6 +122,20 @@ export const useAuth = () => {
     }
   };
 
+  const updateProfile = async (userData: Partial<User>): Promise<User> => {
+    if (!authState.user) throw new Error("Usuario no autenticado");
+
+    try {
+      const updatedUser = await userService.updateUser(authState.user.id, userData);
+      setAuthState(prev => ({ ...prev, user: updatedUser }));
+      localStorage.setItem('acuaponia_user', JSON.stringify(updatedUser));
+      return updatedUser;
+    } catch (error) {
+      console.error('Error actualizando el perfil:', error);
+      throw error; 
+    }
+  };
+
   return {
     ...authState,
     loading,
@@ -132,5 +143,6 @@ export const useAuth = () => {
     login,
     logout,
     refreshAuth,
+    updateProfile,
   };
 };

@@ -1,470 +1,242 @@
-import React, { useState } from 'react';
-import { Settings as SettingsIcon, User, Bell, Database, Gauge, Save, Edit, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Settings as SettingsIcon, User, Bell, Database, Gauge, Save, Edit, X, Loader } from 'lucide-react';
 import { Card } from '../common/Card';
 import { useAuth } from '../../hooks/useAuth';
+import * as settingsService from '../../services/settingsService';
+import Swal from 'sweetalert2';
+import { LoadingSpinner } from '../common/LoadingSpinner';
 
+// --- Componente para un campo de configuración reutilizable ---
+const SettingRow = ({ title, description, children }: { title: string, description: string, children: React.ReactNode }) => (
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+        <div className="mb-2 sm:mb-0">
+            <h3 className="font-medium text-gray-900 dark:text-white">{title}</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>
+        </div>
+        {children}
+    </div>
+);
+
+// --- Componente principal ---
 export const Settings: React.FC = () => {
   const { user, updateProfile } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
+
   const [activeTab, setActiveTab] = useState('profile');
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [profileData, setProfileData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
-  const [thresholds, setThresholds] = useState({
-    temperature: { min: 20, max: 30, optimal: { min: 24, max: 28 } },
-    ph: { min: 6.0, max: 8.5, optimal: { min: 6.5, max: 7.5 } },
-    oxygen: { min: 4, max: 12, optimal: { min: 6, max: 10 } }
-  });
+  // Estados para cada sección
+  const [profileData, setProfileData] = useState({ name: user?.name || '', email: user?.email || '', newPassword: '', confirmPassword: '' });
+  const [thresholds, setThresholds] = useState<any>(null);
+  const [notifications, setNotifications] = useState<any>(null);
+  
+  // Cargar configuraciones al inicio (simulado por ahora)
+  useEffect(() => {
+    const loadSettings = async () => {
+      setIsLoadingData(true);
+      try {
+        const [thresholdsData, notificationsData] = await Promise.all([
+          settingsService.getThresholds(),
+          settingsService.getNotificationSettings(),
+        ]);
+        setThresholds(thresholdsData);
+        setNotifications(notificationsData);
+      } catch (error) {
+        Swal.fire('Error', 'No se pudieron cargar las configuraciones.', 'error');
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+    loadSettings();
+  }, []);
 
-  const [notifications, setNotifications] = useState({
-    email: true,
-    critical: true,
-    reports: false,
-    maintenance: true
-  });
+  // Sincronizar el formulario con los datos del usuario si cambian
+  useEffect(() => {
+    if (user) {
+      setProfileData(prev => ({ ...prev, name: user.name, email: user.email }));
+    }
+  }, [user]);
 
-  const [systemSettings, setSystemSettings] = useState({
-    updateInterval: 30,
-    dataRetention: 365,
-    autoBackup: true,
-    maintenanceMode: false
-  });
-
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (profileData.newPassword && profileData.newPassword !== profileData.confirmPassword) {
-      alert('Las contraseñas no coinciden');
+      Swal.fire('Error', 'Las nuevas contraseñas no coinciden.', 'error');
       return;
     }
+    setIsSubmitting(true);
+    try {
+      // Objeto limpio solo con los datos permitidos
+      const dataToUpdate: { name: string, email: string, password?: string } = {
+        name: profileData.name,
+        email: profileData.email,
+      };
+      if (profileData.newPassword) {
+        dataToUpdate.password = profileData.newPassword;
+      }
+      
+      await updateProfile(dataToUpdate);
+      Swal.fire({ icon: 'success', title: '¡Perfil Actualizado!', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+      setShowEditProfile(false);
+      setProfileData({ ...profileData, newPassword: '', confirmPassword: '' });
+    } catch (error: any) {
+      Swal.fire('Error', error.response?.data?.error?.message || 'No se pudo actualizar el perfil.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-    updateProfile({
-      name: profileData.name,
-      email: profileData.email,
-      ...(profileData.newPassword && { password: profileData.newPassword })
-    });
-
-    setShowEditProfile(false);
-    setProfileData({ ...profileData, currentPassword: '', newPassword: '', confirmPassword: '' });
+  const handleSaveSettings = async (settingsName: string, data: any) => {
+    setIsSubmitting(true);
+    try {
+        console.log(`Guardando ${settingsName}:`, data);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        Swal.fire({ icon: 'success', title: '¡Configuración Guardada!', text: `Tus ajustes de ${settingsName} han sido guardados.`, toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+    } catch (error) {
+        Swal.fire('Error', `No se pudieron guardar los ajustes de ${settingsName}.`, 'error');
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   const tabs = [
-    { id: 'profile', label: 'Perfil', icon: User },
-    { id: 'thresholds', label: 'Umbrales', icon: Gauge },
+    { id: 'profile', label: 'Mi Perfil', icon: User },
+    { id: 'thresholds', label: 'Umbrales de Alerta', icon: Gauge },
     { id: 'notifications', label: 'Notificaciones', icon: Bell },
-    { id: 'system', label: 'Sistema', icon: Database }
   ];
+
+  if (isLoadingData || !thresholds || !notifications) {
+    return <LoadingSpinner fullScreen message="Cargando configuraciones..." />;
+  }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Configuración
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-1">
-          Personalizar configuraciones del sistema y perfil
-        </p>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Configuración</h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-1">Personaliza tu perfil y las preferencias del sistema.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Sidebar */}
         <div className="lg:col-span-1">
-          <Card className="p-0">
+          <Card className="p-2">
             <nav className="space-y-1">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 text-left rounded-lg transition-colors ${
-                      activeTab === tab.id
-                        ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span className="font-medium">{tab.label}</span>
-                  </button>
-                );
-              })}
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 text-left rounded-lg transition-colors ${
+                    activeTab === tab.id ? 'bg-sena-green text-white shadow' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  <tab.icon className="w-5 h-5" />
+                  <span className="font-medium">{tab.label}</span>
+                </button>
+              ))}
             </nav>
           </Card>
         </div>
 
-        {/* Content */}
         <div className="lg:col-span-3">
           <Card>
-            {/* Profile Tab */}
             {activeTab === 'profile' && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                    Información del Perfil
-                  </h2>
-                  <button
-                    onClick={() => setShowEditProfile(!showEditProfile)}
-                    className="flex items-center space-x-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
-                  >
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Información del Perfil</h2>
+                  <button onClick={() => setShowEditProfile(!showEditProfile)} className="flex items-center space-x-2 px-4 py-2 bg-sena-orange hover:bg-orange-600 text-white rounded-lg transition-colors">
                     {showEditProfile ? <X className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
                     <span>{showEditProfile ? 'Cancelar' : 'Editar'}</span>
                   </button>
                 </div>
-
                 {!showEditProfile ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-16 h-16 bg-gradient-to-r from-orange-500 to-orange-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                        {user?.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                          {user?.name}
-                        </h3>
-                        <p className="text-gray-600 dark:text-gray-400">{user?.email}</p>
-                        <p className="text-sm text-orange-600 dark:text-orange-400">
-                          {user?.role === 'admin' ? 'Administrador' : 'Usuario'}
-                        </p>
-                      </div>
+                  <div className="flex items-center space-x-4">
+                    <div className="w-16 h-16 bg-gradient-to-r from-sena-orange to-orange-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">{user?.name.charAt(0).toUpperCase()}</div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{user?.name}</h3>
+                      <p className="text-gray-600 dark:text-gray-400">{user?.email}</p>
+                      <p className="text-sm text-sena-orange font-medium">{user?.role === 'ADMIN' ? 'Administrador' : 'Usuario'}</p>
                     </div>
                   </div>
                 ) : (
                   <form onSubmit={handleProfileSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Nombre Completo
-                        </label>
-                        <input
-                          type="text"
-                          value={profileData.name}
-                          onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Email
-                        </label>
-                        <input
-                          type="email"
-                          value={profileData.email}
-                          onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          required
-                        />
-                      </div>
+                      <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre Completo</label><input type="text" value={profileData.name} onChange={(e) => setProfileData({ ...profileData, name: e.target.value })} className="w-full form-input" required /></div>
+                      <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label><input type="email" value={profileData.email} onChange={(e) => setProfileData({ ...profileData, email: e.target.value })} className="w-full form-input" required /></div>
                     </div>
-
                     <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                      <h4 className="text-md font-medium text-gray-900 dark:text-white mb-3">
-                        Cambiar Contraseña
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Contraseña Actual
-                          </label>
-                          <input
-                            type="password"
-                            value={profileData.currentPassword}
-                            onChange={(e) => setProfileData({ ...profileData, currentPassword: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Nueva Contraseña
-                          </label>
-                          <input
-                            type="password"
-                            value={profileData.newPassword}
-                            onChange={(e) => setProfileData({ ...profileData, newPassword: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Confirmar Contraseña
-                          </label>
-                          <input
-                            type="password"
-                            value={profileData.confirmPassword}
-                            onChange={(e) => setProfileData({ ...profileData, confirmPassword: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          />
-                        </div>
+                      <h4 className="text-md font-medium text-gray-900 dark:text-white mb-3">Cambiar Contraseña</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nueva Contraseña</label><input type="password" value={profileData.newPassword} onChange={(e) => setProfileData({ ...profileData, newPassword: e.target.value })} className="w-full form-input" placeholder="Dejar en blanco para no cambiar" /></div>
+                        <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirmar Contraseña</label><input type="password" value={profileData.confirmPassword} onChange={(e) => setProfileData({ ...profileData, confirmPassword: e.target.value })} className="w-full form-input" /></div>
                       </div>
                     </div>
-
                     <div className="flex justify-end">
-                      <button
-                        type="submit"
-                        className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-lg transition-all duration-200"
-                      >
-                        <Save className="w-4 h-4" />
-                        <span>Guardar Cambios</span>
+                      <button type="submit" disabled={isSubmitting} className="flex items-center space-x-2 px-4 py-2 bg-sena-green hover:bg-green-700 text-white rounded-lg disabled:opacity-50">
+                        {isSubmitting ? <Loader className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}<span>Guardar Cambios</span>
                       </button>
                     </div>
                   </form>
                 )}
               </div>
             )}
-
-            {/* Thresholds Tab */}
+            
             {activeTab === 'thresholds' && (
-              <div className="space-y-6">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Configuración de Umbrales
-                </h2>
-                
-                <div className="space-y-6">
-                  {Object.entries(thresholds).map(([key, values]) => (
-                    <div key={key} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4 capitalize">
-                        {key === 'ph' ? 'pH' : key === 'oxygen' ? 'Oxígeno Disuelto' : 'Temperatura'}
-                      </h3>
-                      
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Mínimo
-                          </label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={values.min}
-                            onChange={(e) => setThresholds({
-                              ...thresholds,
-                              [key]: { ...values, min: parseFloat(e.target.value) }
-                            })}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          />
+              <form onSubmit={(e) => { e.preventDefault(); handleSaveSettings('Umbrales', thresholds); }} className="space-y-6">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Rangos Aceptables</h2>
+                {Object.entries(thresholds).map(([key, values]: [string, any]) => (
+                  <div key={key} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white capitalize">{key === 'ph' ? 'pH' : key === 'oxygen' ? 'Oxígeno Disuelto' : 'Temperatura'}</h3>
+                    <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Define los valores mínimos y máximos. Una lectura fuera de este rango generará una alerta.</p>
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Mínimo:</label>
+                          <input type="number" step="0.1" value={values.min} onChange={(e) => setThresholds({ ...thresholds, [key]: { ...values, min: parseFloat(e.target.value) } })} className="w-full form-input" />
+                          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Máximo:</label>
+                          <input type="number" step="0.1" value={values.max} onChange={(e) => setThresholds({ ...thresholds, [key]: { ...values, max: parseFloat(e.target.value) } })} className="w-full form-input" />
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Máximo
-                          </label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={values.max}
-                            onChange={(e) => setThresholds({
-                              ...thresholds,
-                              [key]: { ...values, max: parseFloat(e.target.value) }
-                            })}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Óptimo Min
-                          </label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={values.optimal.min}
-                            onChange={(e) => setThresholds({
-                              ...thresholds,
-                              [key]: { 
-                                ...values, 
-                                optimal: { ...values.optimal, min: parseFloat(e.target.value) }
-                              }
-                            })}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Óptimo Max
-                          </label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={values.optimal.max}
-                            onChange={(e) => setThresholds({
-                              ...thresholds,
-                              [key]: { 
-                                ...values, 
-                                optimal: { ...values.optimal, max: parseFloat(e.target.value) }
-                              }
-                            })}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          />
-                        </div>
-                      </div>
                     </div>
-                  ))}
-                </div>
-
-                <div className="flex justify-end">
-                  <button className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-lg transition-all duration-200">
-                    <Save className="w-4 h-4" />
-                    <span>Guardar Umbrales</span>
+                  </div>
+                ))}
+                <div className="flex justify-end mt-6">
+                  <button type="submit" disabled={isSubmitting} className="flex items-center space-x-2 px-4 py-2 bg-sena-green hover:bg-green-700 text-white rounded-lg disabled:opacity-50">
+                    {isSubmitting ? <Loader className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}<span>Guardar Umbrales</span>
                   </button>
                 </div>
-              </div>
+              </form>
             )}
 
-            {/* Notifications Tab */}
             {activeTab === 'notifications' && (
-              <div className="space-y-6">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Configuración de Notificaciones
-                </h2>
-                
-                <div className="space-y-4">
-                  {Object.entries(notifications).map(([key, value]) => (
-                    <div key={key} className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                      <div>
-                        <h3 className="font-medium text-gray-900 dark:text-white">
-                          {key === 'email' && 'Notificaciones por Email'}
-                          {key === 'critical' && 'Alertas Críticas'}
-                          {key === 'reports' && 'Reportes Automáticos'}
-                          {key === 'maintenance' && 'Mantenimiento del Sistema'}
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {key === 'email' && 'Recibir notificaciones por correo electrónico'}
-                          {key === 'critical' && 'Alertas inmediatas para valores críticos'}
-                          {key === 'reports' && 'Envío automático de reportes semanales'}
-                          {key === 'maintenance' && 'Notificaciones de mantenimiento programado'}
-                        </p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={value}
-                          onChange={(e) => setNotifications({
-                            ...notifications,
-                            [key]: e.target.checked
-                          })}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 dark:peer-focus:ring-orange-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-600"></div>
-                      </label>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex justify-end">
-                  <button className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-lg transition-all duration-200">
-                    <Save className="w-4 h-4" />
-                    <span>Guardar Configuración</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* System Tab */}
-            {activeTab === 'system' && (
-              <div className="space-y-6">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Configuración del Sistema
-                </h2>
-                
                 <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Intervalo de Actualización (segundos)
-                      </label>
-                      <input
-                        type="number"
-                        min="10"
-                        max="300"
-                        value={systemSettings.updateInterval}
-                        onChange={(e) => setSystemSettings({
-                          ...systemSettings,
-                          updateInterval: parseInt(e.target.value)
-                        })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Configuración de Notificaciones</h2>
+                    <div className="space-y-4">
+                        <SettingRow title="Notificaciones por Email" description="Recibir alertas y reportes por correo electrónico.">
+                            <input type="checkbox" checked={notifications.email} onChange={(e) => setNotifications({...notifications, email: e.target.checked})} className="toggle-checkbox" />
+                        </SettingRow>
+                        <SettingRow title="Alertas Críticas" description="Recibir notificaciones inmediatas para valores críticos.">
+                            <input type="checkbox" checked={notifications.critical} onChange={(e) => setNotifications({...notifications, critical: e.target.checked})} className="toggle-checkbox" />
+                        </SettingRow>
+                        <SettingRow title="Reportes Automáticos" description="Envío automático de reportes semanales.">
+                            <input type="checkbox" checked={notifications.reports} onChange={(e) => setNotifications({...notifications, reports: e.target.checked})} className="toggle-checkbox" />
+                        </SettingRow>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Retención de Datos (días)
-                      </label>
-                      <input
-                        type="number"
-                        min="30"
-                        max="1095"
-                        value={systemSettings.dataRetention}
-                        onChange={(e) => setSystemSettings({
-                          ...systemSettings,
-                          dataRetention: parseInt(e.target.value)
-                        })}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      />
+                    <div className="flex justify-end mt-6">
+                        <button onClick={() => handleSaveSettings('Notificaciones', notifications)} disabled={isSubmitting} className="flex items-center space-x-2 px-4 py-2 bg-sena-green hover:bg-green-700 text-white rounded-lg disabled:opacity-50">
+                            {isSubmitting ? <Loader className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}<span>Guardar Notificaciones</span>
+                        </button>
                     </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                      <div>
-                        <h3 className="font-medium text-gray-900 dark:text-white">
-                          Respaldo Automático
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Realizar respaldos automáticos de la base de datos
-                        </p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={systemSettings.autoBackup}
-                          onChange={(e) => setSystemSettings({
-                            ...systemSettings,
-                            autoBackup: e.target.checked
-                          })}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 dark:peer-focus:ring-orange-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-600"></div>
-                      </label>
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                      <div>
-                        <h3 className="font-medium text-gray-900 dark:text-white">
-                          Modo Mantenimiento
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Activar modo mantenimiento para actualizaciones del sistema
-                        </p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={systemSettings.maintenanceMode}
-                          onChange={(e) => setSystemSettings({
-                            ...systemSettings,
-                            maintenanceMode: e.target.checked
-                          })}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 dark:peer-focus:ring-orange-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-600"></div>
-                      </label>
-                    </div>
-                  </div>
                 </div>
-
-                <div className="flex justify-end">
-                  <button className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-lg transition-all duration-200">
-                    <Save className="w-4 h-4" />
-                    <span>Guardar Configuración</span>
-                  </button>
-                </div>
-              </div>
             )}
           </Card>
         </div>
       </div>
+      <style>{`
+        .form-input { @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-sena-orange focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-colors duration-200; }
+        .toggle-checkbox { appearance: none; width: 2.75rem; height: 1.5rem; background-color: #e5e7eb; border-radius: 9999px; position: relative; transition: background-color 0.2s ease-in-out; cursor: pointer; }
+        .toggle-checkbox:checked { background-color: #39A900; }
+        .toggle-checkbox::before { content: ''; position: absolute; top: 2px; left: 2px; width: 1.25rem; height: 1.25rem; background-color: white; border-radius: 9999px; transition: transform 0.2s ease-in-out; }
+        .toggle-checkbox:checked::before { transform: translateX(1.25rem); }
+        .dark .toggle-checkbox { background-color: #4b5563; }
+      `}</style>
     </div>
   );
 };
