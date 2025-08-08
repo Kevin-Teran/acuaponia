@@ -1,117 +1,56 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User, LoginCredentials } from '../types';
+import * as userService from '../services/userService';
 import { 
   login as apiLogin,
   logout as apiLogout,
   getCurrentUser,
-  refreshToken 
 } from '../services/authService';
-import * as userService from '../services/userService';
-
-interface AuthState {
-  user: User | null;
-  token: string | null;
-  isAuthenticated: boolean;
-}
 
 /**
- * Hook personalizado para manejar la autenticación
- * @returns {Object} Objeto con estado de autenticación y métodos relacionados
+ * @hook useAuth
+ * @description Hook centralizado para gestionar la autenticación y los datos del usuario actual.
  */
 export const useAuth = () => {
-  const [authState, setAuthState] = useState<AuthState>({
-    user: null,
-    token: null,
-    isAuthenticated: false,
-  });
-  
+  const [authState, setAuthState] = useState<{ user: User | null; isAuthenticated: boolean; }>({ user: null, isAuthenticated: false });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const loadSession = () => {
-      try {
-        const token = localStorage.getItem('token');
-        const user = getCurrentUser();
-        
-        if (token && user) {
-          setAuthState({ user, token, isAuthenticated: true });
-        }
-      } catch (err) {
-        console.error('Error cargando sesión:', err);
-        setError('Error al cargar la sesión');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadSession();
+    const token = localStorage.getItem('token');
+    const user = getCurrentUser();
+    if (token && user) {
+      setAuthState({ user, isAuthenticated: true });
+    }
+    setLoading(false);
   }, []);
 
-  const login = async (credentials: LoginCredentials): Promise<boolean> => {
-    setLoading(true);
-    setError(null);
-    
+  const login = async (credentials: LoginCredentials): Promise<void> => {
     try {
       const user = await apiLogin(credentials);
-      const token = localStorage.getItem('token');
-      
-      if (user && token) {
-        setAuthState({
-          user,
-          token,
-          isAuthenticated: true,
-        });
-        return true;
-      } else {
-        setError('Error: datos de usuario o token faltantes');
-        return false;
-      }
-    } catch (err: any) {
-      console.error('Error en useAuth.login:', err);
-      setError(err.message || 'Error desconocido en login');
+      setAuthState({ user, isAuthenticated: true });
+      sessionStorage.setItem('showWelcomeMessage', 'true');
+      navigate('/dashboard');
+    } catch (err) {
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
   const logout = () => {
     apiLogout();
-    setAuthState({
-      user: null,
-      token: null,
-      isAuthenticated: false,
-    });
+    setAuthState({ user: null, isAuthenticated: false });
+    navigate('/login');
   };
 
   /**
-   * Refresca el token de autenticación manualmente si es necesario.
-   * Nota: El interceptor de API ya lo hace automáticamente.
-   * @returns {Promise<boolean>} Indica si el refresh fue exitoso
+   * @function updateProfile
+   * @description Permite al usuario actual actualizar su propia información (nombre, email, contraseña).
+   * Actualiza el estado local y el localStorage para reflejar los cambios inmediatamente.
+   * @param {Partial<User>} userData - Los datos del perfil a actualizar.
+   * @returns {Promise<User>} El usuario con los datos actualizados.
    */
-  const refreshAuth = async (): Promise<boolean> => {
-    try {
-      const newToken = await refreshToken();
-      const user = getCurrentUser();
-      
-      if (newToken && user) {
-        setAuthState({
-          user,
-          token: newToken,
-          isAuthenticated: true,
-        });
-        return true;
-      }
-      return false;
-    } catch (err) {
-      console.error('Error en refreshAuth manual:', err);
-      logout(); 
-      return false;
-    }
-  };
-
-  const updateProfile = async (userData: Partial<User>): Promise<User> => {
+  const updateProfile = useCallback(async (userData: Partial<User>): Promise<User> => {
     if (!authState.user) throw new Error("Usuario no autenticado");
 
     try {
@@ -124,15 +63,13 @@ export const useAuth = () => {
       console.error('Error actualizando el perfil:', error);
       throw error; 
     }
-  };
+  }, [authState.user]);
 
   return {
     ...authState,
     loading,
-    error,
     login,
     logout,
-    refreshAuth, 
     updateProfile,
   };
 };

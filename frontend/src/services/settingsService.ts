@@ -1,34 +1,22 @@
 import api from '../config/api';
 
 /**
- * @interface Settings
- * @desc Define la estructura de las configuraciones del sistema.
+ * @desc     Obtiene las configuraciones del usuario actual desde la API.
+ * @returns  {Promise<any>} Una promesa que resuelve a un objeto de configuraciones.
  */
-export interface Settings {
-  key: string;
-  value: any;
-}
-
-/**
- * @desc Obtiene todas las configuraciones del sistema desde la API.
- * @returns {Promise<Record<string, any>>} Un objeto con todas las configuraciones.
- */
-export const getSettings = async (): Promise<Record<string, any>> => {
-  const response = await api.get('/settings');
-  // Transforma el array de clave-valor en un objeto fácil de usar
-  return response.data.data.reduce((acc: Record<string, any>, setting: Settings) => {
-    acc[setting.key] = setting.value;
-    return acc;
-  }, {});
+export const getSettings = async (): Promise<any> => {
+    const response = await api.get('/settings');
+    return response.data;
 };
 
 /**
- * @desc Actualiza una configuración específica en el sistema.
- * @param {string} key - La clave de la configuración a actualizar (ej. 'thresholds').
- * @param {any} value - El nuevo valor para la configuración.
- * @returns {Promise<Settings>} La configuración actualizada.
+ * @desc     Actualiza una clave específica en las configuraciones del usuario.
+ * @param    {string} settingsKey - La clave principal de configuración (ej. 'thresholds').
+ * @param    {any} data - El objeto de datos a guardar bajo esa clave.
+ * @returns  {Promise<any>} Las configuraciones actualizadas.
  */
-export const updateSetting = async (key: string, value: any): Promise<Settings> => {
-  const response = await api.put('/settings', { key, value });
-  return response.data.data;
+export const updateSetting = async (settingsKey: string, data: any): Promise<any> => {
+    const payload = { [settingsKey]: data };
+    const response = await api.put('/settings', payload);
+    return response.data;
 };

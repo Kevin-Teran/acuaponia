@@ -1,93 +1,71 @@
 import { io, Socket } from 'socket.io-client';
 import { SensorData } from '../types';
 
+/**
+ * @class SocketService
+ * @description Servicio singleton para gestionar la conexión WebSocket con el backend.
+ * Se encarga de conectar, desconectar y manejar los eventos de datos de sensores en tiempo real.
+ */
 class SocketService {
   private socket: Socket | null = null;
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
+  private readonly apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
-  connect(): void {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      console.error('❌ No se puede conectar al socket: no hay token de autenticación.');
+  /**
+   * @method connect
+   * @description Establece la conexión con el servidor de sockets.
+   * Si ya existe una conexión, no hace nada.
+   */
+  public connect(): void {
+    if (this.socket && this.socket.connected) {
       return;
     }
-
-    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
-    
-    this.socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
-      timeout: 20000,
-      forceNew: true,
-      auth: {
-        token: token
-      }
+    this.socket = io(this.apiUrl, {
+      transports: ['websocket'],
+      reconnectionAttempts: 5,
     });
 
     this.socket.on('connect', () => {
-      this.reconnectAttempts = 0;
+      console.log('🔌 Conectado al servidor Socket.IO');
     });
 
-    this.socket.on('disconnect', (reason: Socket.DisconnectReason) => {
-      console.log('❌ Desconectado del servidor Socket.IO:', reason);
-      if (reason !== 'io server disconnect') {
-        this.handleReconnection();
-      }
-    });
-
-    this.socket.on('connect_error', (error: Error) => {
-      console.error('❌ Error de conexión Socket.IO:', error);
-      this.handleReconnection();
+    this.socket.on('disconnect', (reason) => {
+      console.log(`❌ Desconectado del servidor Socket.IO: ${reason}`);
     });
   }
 
-  private handleReconnection(): void {
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      console.log(`🔄 Reintentando conexión... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-      
-      setTimeout(() => {
-        this.connect();
-      }, Math.pow(2, this.reconnectAttempts) * 1000);
-    } else {
-      console.error('❌ Máximo número de reintentos alcanzado');
-    }
-  }
-
-  onSensorData(callback: (data: SensorData) => void): void {
-    if (this.socket) {
-      this.socket.on('new_sensor_data', callback);
-    }
-  }
-
-  onAlert(callback: (alert: any) => void): void {
-    if (this.socket) {
-      this.socket.on('new_alert', callback);
-    }
-  }
-
-  onSystemStatus(callback: (status: any) => void): void {
-    if (this.socket) {
-      this.socket.on('system_status', callback);
-    }
-  }
-
-  emit(event: string, data: any): void {
-    if (this.socket) {
-      this.socket.emit(event, data);
-    }
-  }
-
-  disconnect(): void {
+  /**
+   * @method disconnect
+   * @description Cierra la conexión activa del socket.
+   */
+  public disconnect(): void {
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
     }
   }
 
-  isConnected(): boolean {
-    return this.socket?.connected || false;
+  /**
+   * @method onSensorData
+   * @description Se suscribe a los eventos 'new_sensor_data' del servidor.
+   * @param {(data: SensorData) => void} callback - La función que se ejecutará cada vez que lleguen nuevos datos.
+   */
+  public onSensorData(callback: (data: SensorData) => void): void {
+    if (this.socket) {
+      this.socket.on('new_sensor_data', callback);
+    }
+  }
+
+  /**
+   * @method offSensorData
+   * @description Se desuscribe de los eventos 'new_sensor_data' para evitar fugas de memoria.
+   * @param {(data: SensorData) => void} callback - La misma función de callback usada en onSensorData.
+   */
+  public offSensorData(callback: (data: SensorData) => void): void {
+    if (this.socket) {
+      this.socket.off('new_sensor_data', callback);
+    }
   }
 }
 
+// Exportamos una única instancia del servicio (patrón Singleton)
 export const socketService = new SocketService();

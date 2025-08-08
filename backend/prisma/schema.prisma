@@ -17,6 +17,7 @@ model User {
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
   lastLogin DateTime?
+  settings  Json?
   alerts    Alert[]
   reports   Report[]
   tanks     Tank[]

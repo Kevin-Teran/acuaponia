@@ -1,31 +1,33 @@
 import api from '../config/api';
 import { LoginCredentials, User } from '../types';
 
+/**
+ * @interface LoginResponse
+ * @description Define la estructura de la respuesta exitosa que se espera del endpoint de login del backend de NestJS.
+ */
 interface LoginResponse {
-  success: boolean;
-  data: {
-    user: User;
-    tokens: {
-      accessToken: string;
-      refreshToken: string;
-    };
+  user: User;
+  tokens: {
+    accessToken: string;
+    refreshToken: string;
   };
 }
 
 /**
- * Autentica a un usuario con las credenciales proporcionadas.
- * @param {LoginCredentials} credentials - Credenciales de inicio de sesión del usuario.
- * @returns {Promise<User>} Objeto del usuario autenticado.
- * @throws {Error} Cuando la autenticación falla.
+ * @function login
+ * @description Envía las credenciales de un usuario al backend para autenticarlo.
+ * Si la autenticación es exitosa, guarda los tokens y los datos del usuario en el localStorage.
+ * @param {LoginCredentials} credentials - Objeto con email, password y la bandera opcional rememberMe.
+ * @returns {Promise<User>} Una promesa que resuelve con el objeto del usuario autenticado.
+ * @throws {Error} Lanza un error con el mensaje específico proporcionado por la API si la autenticación falla.
  */
 export const login = async (credentials: LoginCredentials): Promise<User> => {
   try {
     const response = await api.post<LoginResponse>('/auth/login', credentials);
 
-    if (response.data.success && response.data.data) {
-      const { user, tokens } = response.data.data;
+    if (response.data && response.data.user && response.data.tokens) {
+      const { user, tokens } = response.data;
 
-      // Estandarizamos las claves en localStorage
       localStorage.setItem('token', tokens.accessToken);
       localStorage.setItem('refreshToken', tokens.refreshToken);
       localStorage.setItem('user', JSON.stringify(user));
@@ -35,17 +37,15 @@ export const login = async (credentials: LoginCredentials): Promise<User> => {
       throw new Error('La respuesta del servidor no contiene los datos esperados.');
     }
   } catch (error: any) {
-    console.error('Error de login:', error);
-    const errorMessage = error.response?.data?.error?.message || 
-                         error.response?.data?.message || 
-                         error.message ||
-                         'Error inesperado durante el inicio de sesión';
+    const errorMessage = error.response?.data?.message || error.message || 'Ocurrió un error inesperado.';
+    
     throw new Error(errorMessage);
   }
 };
 
 /**
- * Cierra la sesión del usuario actual eliminando los datos almacenados.
+ * @function logout
+ * @description Cierra la sesión del usuario actual eliminando los datos de autenticación del localStorage.
  */
 export const logout = (): void => {
   localStorage.removeItem('token');
@@ -54,8 +54,9 @@ export const logout = (): void => {
 };
 
 /**
- * Obtiene el usuario actualmente autenticado desde el localStorage.
- * @returns {User | null} Objeto del usuario actual o nulo si no está autenticado.
+ * @function getCurrentUser
+ * @description Obtiene el usuario actualmente autenticado desde el localStorage.
+ * @returns {User | null} El objeto del usuario actual o nulo si no está autenticado o si los datos están corruptos.
  */
 export const getCurrentUser = (): User | null => {
   try {
@@ -63,14 +64,17 @@ export const getCurrentUser = (): User | null => {
     return userStr ? JSON.parse(userStr) : null;
   } catch (error) {
     console.error('Error parseando el usuario desde localStorage:', error);
+    logout();
     return null;
   }
 };
 
 /**
- * Refresca el token de autenticación usando el refreshToken.
+ * @function refreshToken
+ * @description Refresca el token de autenticación usando el refreshToken almacenado.
+ * Esta función es utilizada por el interceptor de Axios para mantener la sesión activa.
  * @returns {Promise<string>} El nuevo token de acceso.
- * @throws {Error} Cuando la renovación del token falla.
+ * @throws {Error} Lanza un error si la renovación del token falla, lo que usualmente significa que la sesión ha expirado.
  */
 export const refreshToken = async (): Promise<string> => {
   const refreshTokenValue = localStorage.getItem('refreshToken');
@@ -84,7 +88,7 @@ export const refreshToken = async (): Promise<string> => {
       refreshToken: refreshTokenValue 
     });
     
-    const newAccessToken = response.data.data.accessToken;
+    const newAccessToken = response.data.accessToken;
     localStorage.setItem('token', newAccessToken);
     
     return newAccessToken;

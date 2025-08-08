@@ -1,8 +1,10 @@
-import React, { useState, Suspense } from 'react';
+import React, { Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
-import { useTheme } from './hooks/useTheme';
 import { LoginForm } from './components/auth/LoginForm';
-import { Sidebar } from './components/layout/Sidebar';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { PublicRoute } from './components/auth/PublicRoute';
+import { AppLayout } from './components/layout/AppLayout';
 import { Dashboard } from './components/modules/Dashboard';
 import { Reports } from './components/modules/Reports';
 import { Predictions } from './components/modules/Predictions';
@@ -15,82 +17,61 @@ import { LoadingSpinner } from './components/common/LoadingSpinner';
 
 /**
  * @component App
- * @description Componente principal de la aplicación que maneja el enrutamiento y layout básico
- * @returns {JSX.Element} Estructura principal de la aplicación
+ * @description Componente principal que define la estructura de enrutamiento de la aplicación.
+ * Utiliza rutas públicas y protegidas para gestionar el acceso de forma segura y eficiente.
  */
 function App() {
-  const { user, isAuthenticated, logout, loading: authLoading } = useAuth();
-  const { theme, toggleTheme } = useTheme();
-  const [currentModule, setCurrentModule] = useState('dashboard');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  /**
-   * @function handleModuleChange
-   * @description Maneja el cambio entre módulos
-   * @param {string} module - Nombre del módulo a cargar
-   */
-  const handleModuleChange = (module: string) => {
-    setCurrentModule(module);
-  };
-
-  // Muestra un spinner mientras se verifica el estado de autenticación
-  if (authLoading) {
-    return <LoadingSpinner fullScreen message="Verificando sesión..." />;
-  }
-
-  // Redirige al login si no está autenticado
-  if (!isAuthenticated) {
-    return <LoginForm />;
-  }
-  
-  // CORRECCIÓN: Muestra un spinner si está autenticado pero el objeto user aún no ha cargado completamente.
-  if (!user) {
-    return <LoadingSpinner fullScreen message="Cargando datos de usuario..." />;
-  }
-
-  /**
-   * @function renderCurrentModule
-   * @description Renderiza el módulo actual basado en el estado
-   * @returns {JSX.Element} Componente del módulo actual
-   */
-  const renderCurrentModule = () => {
-    switch (currentModule) {
-      case 'dashboard': return <Dashboard />;
-      case 'reports': return <Reports />;
-      case 'predictions': return <Predictions />;
-      case 'data-entry': return <DataEntry />;
-      case 'users': return <UserManagement />;
-      case 'analytics': return <Analytics />;
-      case 'sensors': return <Sensors />;
-      case 'settings': return <Settings />;
-      default: return <Dashboard />;
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-      <div className="flex h-screen">
-        <Sidebar
-          currentModule={currentModule}
-          onModuleChange={handleModuleChange} 
-          user={user} // Ahora estamos seguros de que 'user' no es nulo aquí
-          onLogout={logout}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
+    <BrowserRouter>
+      <Suspense fallback={<LoadingSpinner fullScreen />}>
+        <Routes>
+          {/* GRUPO DE RUTAS PÚBLICAS */}
+          {/* Si el usuario está logueado, lo redirige a /dashboard */}
+          <Route element={<PublicRoute />}>
+            <Route path="/login" element={<LoginForm />} />
+          </Route>
 
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-6 animate-in fade-in duration-300">
-            <Suspense fallback={<LoadingSpinner />}>
-              {renderCurrentModule()}
-            </Suspense>
-          </div>
-        </main>
-      </div>
-    </div>
+          {/* GRUPO DE RUTAS PROTEGIDAS */}
+          {/* Si el usuario NO está logueado, lo redirige a /login */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/*" element={<MainAppRoutes />} />
+          </Route>
+        </Routes>
+      </Suspense>
+    </BrowserRouter>
   );
 }
+
+/**
+ * @component MainAppRoutes
+ * @description Define las sub-rutas de la aplicación principal que se renderizan
+ * dentro del layout principal (con Sidebar).
+ */
+const MainAppRoutes = () => {
+  const { user, logout } = useAuth();
+
+ 
+  if (!user) {
+    return <LoadingSpinner fullScreen message="Cargando..." />;
+  }
+
+  return (
+    <AppLayout user={user} onLogout={logout}>
+      <Routes>
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/reports" element={<Reports />} />
+        <Route path="/predictions" element={<Predictions />} />
+        <Route path="/data-entry" element={<DataEntry />} />
+        <Route path="/users" element={<UserManagement />} />
+        <Route path="/analytics" element={<Analytics />} />
+        <Route path="/sensors" element={<Sensors />} />
+        <Route path="/settings" element={<Settings />} />
+        
+        {/* Cualquier otra ruta redirige al dashboard por defecto */}
+        <Route path="*" element={<Navigate to="/dashboard" />} />
+      </Routes>
+    </AppLayout>
+  );
+};
 
 export default App;

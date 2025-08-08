@@ -4,6 +4,11 @@ import Swal from 'sweetalert2';
 import { useAuth } from '../../hooks/useAuth';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 
+/**
+ * @component LoginForm
+ * @description Componente de UI para el formulario de inicio de sesión. Incluye validaciones
+ * del lado del cliente para feedback inmediato y maneja errores específicos del backend.
+ */
 export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -14,37 +19,49 @@ export const LoginForm: React.FC = () => {
   
   const senaGreen = '#39A900';
 
+  /**
+   * @function handleSubmit
+   * @description Valida los campos del formulario y envía las credenciales.
+   * Muestra notificaciones claras y específicas al usuario sobre el resultado.
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validación del lado del cliente para feedback instantáneo y evitar peticiones innecesarias.
+    if (password.length < 6) {
+      Swal.fire({
+        icon: 'info',
+        title: 'Contraseña muy corta',
+        text: 'La contraseña debe tener al menos 6 caracteres.',
+        confirmButtonColor: senaGreen,
+      });
+      return;
+    }
+
     setIsLoading(true); 
 
     try {
+      // El hook `useAuth` ahora se encarga de todo, incluida la redirección.
       await login({ email, password, rememberMe });
-      
-      
-      sessionStorage.setItem('showWelcomeMessage', 'true');
-      
-      setTimeout(() => {
-        window.location.href = '/dashboard';
-      }, 1200);
-
     } catch (error: any) {
+      // Gracias a la corrección en useAuth, este bloque ahora se ejecuta cuando hay un error.
       setIsLoading(false); 
       
-      const errorMessage = error?.response?.data?.message || error?.message || 'Error de autenticación. Por favor, verifica tus credenciales.';
-      
       await Swal.fire({
-        icon: 'error',
-        title: 'Error de Autenticación',
-        text: errorMessage,
-        confirmButtonText: 'Intentar de nuevo',
+        icon: 'warning',
+        title: 'Acceso Denegado',
+        // Mostramos el mensaje de error específico que viene del backend.
+        text: error.message || 'Error de autenticación. Intente de nuevo más tarde.',
+        confirmButtonText: 'Entendido',
         confirmButtonColor: senaGreen,
-        background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
-        color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#374151',
       });
     }
   };
 
+  /**
+   * @function handleDemoLogin
+   * @description Rellena el formulario con credenciales de demostración.
+   */
   const handleDemoLogin = (demoEmail: string, demoPassword: string) => {
     setEmail(demoEmail);
     setPassword(demoPassword);
@@ -56,25 +73,14 @@ export const LoginForm: React.FC = () => {
   ];
 
   if (isLoading) {
-    return (
-      <LoadingSpinner 
-        fullScreen 
-        size="lg" 
-        message="Cargando..." 
-      />
-    );
+    return <LoadingSpinner fullScreen size="lg" message="Validando credenciales..." />;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-black flex items-center justify-center p-4 transition-colors duration-300">
       <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-5 duration-500">
-        {/* Cabecera */}
         <div className="text-center mb-8">
-          <img 
-            src="/logo-sena.png" 
-            alt="Logo SENA" 
-            className="w-20 h-20 mx-auto mb-4"
-          />
+          <img src="/logo-sena.png" alt="Logo SENA" className="w-20 h-20 mx-auto mb-4" />
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
             Sistema de Monitoreo
           </h1>
@@ -83,10 +89,8 @@ export const LoginForm: React.FC = () => {
           </p>
         </div>
 
-        {/* Formulario */}
         <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-gray-200 dark:border-gray-700/50">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Campo Email */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" htmlFor="email">
                 Correo Electrónico
@@ -106,7 +110,6 @@ export const LoginForm: React.FC = () => {
               </div>
             </div>
 
-            {/* Campo Contraseña */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" htmlFor="password">
                 Contraseña
@@ -120,20 +123,20 @@ export const LoginForm: React.FC = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
                   className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 bg-white/50 dark:bg-gray-700/50 text-gray-900 dark:text-white transition"
-                  placeholder="••••••••"
+                  placeholder="Mínimo 6 caracteres"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
-            {/* Recordar sesión */}
             <div className="flex items-center">
               <input
                 id="remember-me"
@@ -147,10 +150,9 @@ export const LoginForm: React.FC = () => {
               </label>
             </div>
 
-            {/* Botón de Envío */}
             <button
               type="submit"
-              disabled={!email || !password}
+              disabled={!email || !password || isLoading}
               className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-green-500/30 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <LogIn className="w-5 h-5" />
@@ -158,7 +160,6 @@ export const LoginForm: React.FC = () => {
             </button>
           </form>
 
-          {/* Cuentas de demostración */}
           <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
             <p className="text-sm text-center text-gray-600 dark:text-gray-400 mb-3">Cuentas de demostración:</p>
             <div className="space-y-2">
@@ -179,7 +180,6 @@ export const LoginForm: React.FC = () => {
           </div>
         </div>
 
-        {/* Pie de página */}
         <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-8">
           © {new Date().getFullYear()} SENA - Todos los derechos reservados
         </p>
