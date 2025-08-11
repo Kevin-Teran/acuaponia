@@ -1,27 +1,32 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { User as UserIcon, Droplets, Calendar } from 'lucide-react';
 import { User, Tank } from '../../types';
 import { format } from 'date-fns';
+import { Card } from '../common/Card';
 
+/**
+ * @interface DashboardFiltersProps
+ * @description Define las propiedades que recibe el componente de filtros del dashboard.
+ */
 interface DashboardFiltersProps {
-  // Estados de los filtros
   startDate: string;
   endDate: string;
   selectedTankId: string | null;
   selectedUserId?: string | null;
-  
-  // Callbacks para cambiar los filtros
   onStartDateChange: (date: string) => void;
   onEndDateChange: (date: string) => void;
   onTankChange: (tankId: string) => void;
   onUserChange?: (userId: string) => void;
-  
-  // Datos para poblar los selectores
-  tanks: Tank[];
+  tanks: Tank[]; // Recibe la lista de tanques YA FILTRADA para el usuario seleccionado.
   users?: User[];
   isAdmin: boolean;
 }
 
+/**
+ * @component DashboardFilters
+ * @description Componente de UI para seleccionar los filtros. Es un componente "controlado" que
+ * solo muestra las props que recibe y notifica los cambios al componente padre.
+ */
 export const DashboardFilters: React.FC<DashboardFiltersProps> = ({
   startDate,
   endDate,
@@ -35,35 +40,26 @@ export const DashboardFilters: React.FC<DashboardFiltersProps> = ({
   users,
   isAdmin,
 }) => {
-
-  // Efecto para auto-seleccionar el primer tanque si la selección actual no es válida o no existe
-  useEffect(() => {
-    if (tanks.length > 0 && !tanks.some(t => t.id === selectedTankId)) {
-      onTankChange(tanks[0].id);
-    } else if (tanks.length === 0 && selectedTankId !== null) {
-      onTankChange(''); // Limpiar si no hay tanques disponibles para el usuario seleccionado
-    }
-  }, [tanks, selectedTankId, onTankChange]);
-
   const today = format(new Date(), 'yyyy-MM-dd');
 
   return (
-    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+    <Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-end">
         
-        {/* Filtro de Usuario (Solo Admin) */}
-        {isAdmin && (
-          <div>
-            <label className="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        {/* Filtro de Usuario (Solo para Administradores) */}
+        {isAdmin && users && (
+          <div className="lg:col-span-1">
+            <label className="label flex items-center mb-2">
               <UserIcon className="w-4 h-4 mr-2" />
               Usuario
             </label>
             <select
               value={selectedUserId || ''}
               onChange={e => onUserChange && onUserChange(e.target.value)}
-              className="w-full form-select"
+              className="form-select w-full"
             >
-              {users?.map(user => (
+              {/* Muestra la lista de todos los usuarios disponibles */}
+              {users.map(user => (
                 <option key={user.id} value={user.id}>
                   {user.name}
                 </option>
@@ -73,20 +69,21 @@ export const DashboardFilters: React.FC<DashboardFiltersProps> = ({
         )}
 
         {/* Filtro de Tanque */}
-        <div>
-          <label className="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        <div className="lg:col-span-1">
+          <label className="label flex items-center mb-2">
             <Droplets className="w-4 h-4 mr-2" />
             Tanque
           </label>
           <select
             value={selectedTankId || ''}
             onChange={e => onTankChange(e.target.value)}
-            className="w-full form-select"
+            className="form-select w-full"
             disabled={tanks.length === 0}
           >
             {tanks.length === 0 ? (
-                <option>No hay estanques disponibles</option>
+                <option value="">No hay tanques disponibles</option>
             ) : (
+                // Muestra únicamente los tanques que le llegan a través de la prop 'tanks'
                 tanks.map(tank => (
                     <option key={tank.id} value={tank.id}>
                         {tank.name}
@@ -96,9 +93,9 @@ export const DashboardFilters: React.FC<DashboardFiltersProps> = ({
           </select>
         </div>
 
-        {/* Filtro de Tiempo con Rango de Fechas */}
-        <div className={isAdmin ? 'col-span-1' : 'md:col-span-2'}>
-            <label className="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        {/* Filtro de Rango de Fechas (Restaurado) */}
+        <div className="md:col-span-2 lg:col-span-2">
+            <label className="label flex items-center mb-2">
                 <Calendar className="w-4 h-4 mr-2" />
                 Rango de Fechas
             </label>
@@ -107,21 +104,21 @@ export const DashboardFilters: React.FC<DashboardFiltersProps> = ({
                     type="date"
                     value={startDate}
                     onChange={(e) => onStartDateChange(e.target.value)}
-                    className="w-full form-input"
-                    max={endDate || today} // No puede ser mayor que la fecha de fin o que hoy
+                    className="form-input w-full"
+                    max={endDate || today}
                 />
                 <span className="text-gray-500 dark:text-gray-400">-</span>
                 <input
                     type="date"
                     value={endDate}
                     onChange={(e) => onEndDateChange(e.target.value)}
-                    className="w-full form-input"
-                    min={startDate} // No puede ser menor que la fecha de inicio
-                    max={today}     // No puede ser una fecha futura
+                    className="form-input w-full"
+                    min={startDate}
+                    max={today}
                 />
             </div>
         </div>
       </div>
-    </div>
+    </Card>
   );
 };

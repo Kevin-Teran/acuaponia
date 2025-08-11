@@ -1,3 +1,5 @@
+// frontend/src/types/index.ts
+
 /**
  * @fileoverview Archivo central que define las interfaces y tipos de TypeScript
  * compartidos en toda la aplicación para garantizar la consistencia de los datos.
@@ -16,6 +18,8 @@ export interface LoginCredentials {
   password: string;
   rememberMe?: boolean;
 }
+
+export type Theme = 'light' | 'dark';
 
 // --- Tipos de Entidades Principales ---
 export interface User {
@@ -61,10 +65,39 @@ export interface Sensor {
   readingStatus?: 'Óptimo' | 'Bajo' | 'Alto';
 }
 
-// --- Tipos de Datos en Tiempo Real (MQTT/WebSockets) ---
+// --- Tipos de Datos y Reportes ---
+
 export interface SensorData {
-  hardwareId: string;
+  timestamp: string;
   value: number;
   type: SensorType;
   tankId: string;
+  sensorId: string;
+}
+
+export interface ProcessedDataPoint {
+  timestamp: string;
+  temperature: number | null;
+  ph: number | null;
+  oxygen: number | null;
+}
+
+export interface DataSummaryValues {
+  min: number;
+  max: number;
+  avg: number;
+  current: number;
+  previous?: number; 
+}
+
+export interface DataSummary {
+  temperature: DataSummaryValues;
+  ph: DataSummaryValues;
+  oxygen: DataSummaryValues;
+}
+
+export interface PredictionData {
+  timestamp: string;
+  actual?: number;
+  predicted: number;
 }

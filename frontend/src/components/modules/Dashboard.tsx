@@ -1,156 +1,145 @@
+// frontend/src/components/modules/Dashboard.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { useSensorData } from '../../hooks/useSensorData';
 import { useAuth } from '../../hooks/useAuth';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { Card } from '../common/Card';
-import { GaugeChart } from '../dashboard/GaugeChart';
-import { LineChart } from '../dashboard/LineChart';
-import { SummaryCards } from '../dashboard/SummaryCards';
 import { DashboardFilters } from '../dashboard/DashboardFilters';
+import { SummaryCards } from '../dashboard/SummaryCards';
+import { AdminStatCards } from '../dashboard/AdminStatCards';
 import * as userService from '../../services/userService';
 import * as tankService from '../../services/tankService';
-import { User, Tank, ProcessedDataPoint } from '../../types';
+import * as sensorService from '../../services/sensorService';
+import * as settingsService from '../../services/settingsService';
+import { User, Tank, Sensor } from '../../types';
+import { MapPin, Cpu } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 
+const DEFAULT_THRESHOLDS = {
+    temperature: { low: 22, high: 26 },
+    ph: { low: 6.8, high: 7.6 },
+    oxygen: { low: 6, high: 10 },
+};
+
 export const Dashboard: React.FC = () => {
-  const { user, loading: authLoading } = useAuth(); // Obtener también el estado de carga del hook de autenticación
+  const { user, loading: authLoading } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
 
-  // --- Estados para los filtros ---
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const [startDate, setStartDate] = useState(format(subDays(new Date(), 1), 'yyyy-MM-dd')); // Iniciar con las últimas 24h
-  const [endDate, setEndDate] = useState(today);
+  const [startDate, setStartDate] = useState(format(subDays(new Date(), 1), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [selectedTankId, setSelectedTankId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  
+  // Estos estados guardan la lista COMPLETA de datos sin filtrar
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [allTanks, setAllTanks] = useState<Tank[]>([]); 
+  const [allSensors, setAllSensors] = useState<Sensor[]>([]);
 
-  // --- Estados para poblar los selectores ---
-  const [users, setUsers] = useState<User[]>([]);
-  const [tanks, setTanks] = useState<Tank[]>([]);
-  const [loadingFilters, setLoadingFilters] = useState(true);
+  const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
+  const [loadingInitialData, setLoadingInitialData] = useState(true);
 
-  // --- Carga de datos para los filtros y establece selecciones iniciales ---
+  // Carga inicial de TODOS los datos (tanques, sensores, usuarios)
   useEffect(() => {
-    // No hacer nada hasta que el usuario esté cargado
     if (!user) return;
 
-    // Establecer el usuario seleccionado inicial
-    const initialUserId = isAdmin ? user.id : user.id;
-    setSelectedUserId(initialUserId);
-
-    const fetchFilterData = async () => {
+    const fetchInitialData = async () => {
       try {
-        setLoadingFilters(true);
-        const [tanksData, usersData] = await Promise.all([
-          tankService.getTanks(), // El backend filtra por rol, así que esta llamada es segura
+        setLoadingInitialData(true);
+        const [tanksData, usersData, sensorsData, settingsData] = await Promise.all([
+          tankService.getTanks(),
           isAdmin ? userService.getAllUsers() : Promise.resolve([]),
+          sensorService.getSensors(),
+          settingsService.getSettings(),
         ]);
         
-        setTanks(tanksData);
-        if (isAdmin) {
-          setUsers(usersData);
-        }
+        setAllTanks(tanksData);
+        setAllSensors(sensorsData);
+        setAllUsers(isAdmin ? usersData : [user]);
+        if (settingsData?.thresholds) setThresholds(settingsData.thresholds);
+
+        // Establece el estado inicial la primera vez que carga
+        const initialUserId = user.id;
+        setSelectedUserId(initialUserId);
         
-        // Seleccionar el primer tanque de la lista por defecto
-        if (tanksData.length > 0) {
-          setSelectedTankId(tanksData[0].id);
-        } else {
-          setSelectedTankId(null); // No hay tanques para mostrar
+        const userTanks = tanksData.filter(t => t.userId === initialUserId);
+        if (userTanks.length > 0) {
+            setSelectedTankId(userTanks[0].id);
         }
 
       } catch (error) {
-        console.error("Error fetching filter data:", error);
+        console.error("Error al cargar datos iniciales del dashboard:", error);
       } finally {
-        setLoadingFilters(false);
+        setLoadingInitialData(false);
       }
     };
     
-    fetchFilterData();
+    fetchInitialData();
   }, [user, isAdmin]);
-  
-  // --- Hook de datos que reacciona a los cambios en los filtros ---
-  const { data, summary, loading, lastUpdate, refreshData } = useSensorData({
-    tankId: selectedTankId,
-    startDate,
-    endDate,
-    userId: selectedUserId, // Ahora es seguro usarlo porque esperamos a que 'user' se cargue
-  });
 
-  // Filtra la lista de tanques a mostrar cuando un admin selecciona un usuario
-  const filteredTanks = useMemo(() => {
-    if (isAdmin && selectedUserId) {
-        return tanks.filter(tank => tank.userId === selectedUserId);
-    }
-    return tanks;
-  }, [tanks, selectedUserId, isAdmin]);
-
+  /**
+   * @function handleUserChange
+   * @description Lógica centralizada para manejar el cambio de usuario por parte de un admin.
+   */
   const handleUserChange = (userId: string) => {
     setSelectedUserId(userId);
-    setSelectedTankId(null); // Forzar la reselección del primer tanque en el useEffect del filtro
-  }
+    const tanksOfNewUser = allTanks.filter(tank => tank.userId === userId);
+    // Asigna el primer tanque del nuevo usuario o null si no tiene.
+    setSelectedTankId(tanksOfNewUser.length > 0 ? tanksOfNewUser[0].id : null);
+  };
 
-  // Muestra un estado de carga general mientras se determina el usuario y se cargan los filtros
-  if (authLoading || loadingFilters || !selectedTankId) {
+  // --- Listas filtradas que se recalculan automáticamente ---
+
+  const filteredTanksForSelectedUser = useMemo(() => {
+    if (!selectedUserId) return [];
+    return allTanks.filter(tank => tank.userId === selectedUserId);
+  }, [allTanks, selectedUserId]);
+
+  const sensorsForSelectedTank = useMemo(() => {
+    if (!selectedTankId) return [];
+    return allSensors.filter(sensor => sensor.tankId === selectedTankId);
+  }, [allSensors, selectedTankId]);
+
+  if (authLoading || loadingInitialData) {
     return <LoadingSpinner fullScreen message="Cargando configuración del dashboard..." />;
   }
-
-  const thresholds = {
-    temperature: { low: 20, high: 28 },
-    ph: { low: 6.8, high: 7.6 },
-    oxygen: { low: 6, high: 10 },
+  
+  const renderContent = () => {
+    if (!selectedTankId) {
+      return <Card><div className="text-center py-16 text-gray-500 dark:text-gray-400"><MapPin className="w-12 h-12 mx-auto mb-4" /><h3 className="text-lg font-semibold">No hay tanques para mostrar</h3><p className="mt-1 text-sm">{isAdmin ? "El usuario seleccionado no tiene tanques asignados." : "Aún no tienes tanques asignados."}</p></div></Card>;
+    }
+    if (sensorsForSelectedTank.length === 0) {
+      return <Card><div className="text-center py-16 text-gray-500 dark:text-gray-400"><Cpu className="w-12 h-12 mx-auto mb-4" /><h3 className="text-lg font-semibold">No hay sensores disponibles</h3><p className="mt-1 text-sm">Este estanque no tiene ningún sensor registrado.</p></div></Card>;
+    }
+    
+    return <SummaryCards sensors={sensorsForSelectedTank} thresholds={thresholds} />;
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-2">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Dashboard de Monitoreo
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Visualización de variables acuáticas por rango de fecha y estanque.
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard de Monitoreo</h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-1">Estado en tiempo real de los sensores por estanque.</p>
       </div>
-
-      {/* --- Componente de Filtros --- */}
+      
       <DashboardFilters
         startDate={startDate}
         endDate={endDate}
         selectedTankId={selectedTankId}
-        selectedUserId={selectedUserId}
+        selectedUserId={selectedUserId} 
         onStartDateChange={setStartDate}
         onEndDateChange={setEndDate}
         onTankChange={setSelectedTankId}
-        onUserChange={handleUserChange}
-        tanks={filteredTanks}
-        users={users}
+        onUserChange={handleUserChange} 
+        tanks={filteredTanksForSelectedUser}
+        users={allUsers} 
         isAdmin={isAdmin}
       />
 
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <LoadingSpinner size="lg" message="Cargando datos del estanque..." />
-        </div>
-      ) : (
-        <>
-          {/* --- Contenido del Dashboard --- */}
-          <Card title="Valores Actuales" subtitle="Mediciones en tiempo real con indicadores de estado">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <GaugeChart value={summary?.temperature.current ?? 0} min={15} max={35} label="Temperatura" unit="°C" thresholds={thresholds.temperature} />
-              <GaugeChart value={summary?.ph.current ?? 0} min={6} max={9} label="pH" unit="" thresholds={thresholds.ph} />
-              <GaugeChart value={summary?.oxygen.current ?? 0} min={0} max={15} label="Oxígeno Disuelto" unit="mg/L" thresholds={thresholds.oxygen} />
-            </div>
-          </Card>
-
-          <Card title="Tendencia Temporal" subtitle={`Mostrando datos desde ${startDate} hasta ${endDate}`}>
-            <LineChart data={data as ProcessedDataPoint[]} height={400} />
-          </Card>
-
-          {summary && (
-             <SummaryCards summary={summary} lastUpdate={lastUpdate} onRefresh={refreshData} />
-          )}
-        </>
-      )}
+      {/* Las estadísticas ahora usan los sensores del tanque seleccionado */}
+      {isAdmin && <AdminStatCards sensors={sensorsForSelectedTank} />}
+      
+      <div className="mt-6">
+        {renderContent()}
+      </div>
     </div>
   );
 };
