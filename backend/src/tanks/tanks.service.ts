@@ -6,7 +6,8 @@ import { User } from '@prisma/client';
 
 /**
  * @class TanksService
- * @description Contiene toda la lógica de negocio para la gestión de tanques.
+ * @description Contiene toda la lógica de negocio para la gestión de tanques. Interactúa con la base de datos a través de Prisma para realizar operaciones CRUD sobre la entidad Tank.
+ * @technical_requirements PrismaService para la interacción con la base de datos. DTOs para validación de datos. Manejo de excepciones de NestJS.
  */
 @Injectable()
 export class TanksService {
@@ -14,8 +15,10 @@ export class TanksService {
 
   /**
    * @description Crea un nuevo tanque, validando permisos y unicidad del nombre.
-   * @param createTankDto Datos para la creación del tanque.
-   * @param user Usuario autenticado que realiza la acción.
+   * @param {CreateTankDto} createTankDto - Datos para la creación del tanque.
+   * @param {User} user - Usuario autenticado que realiza la acción.
+   * @returns {Promise<Tank>} El tanque creado.
+   * @throws {ConflictException} Si el usuario ya tiene un tanque con el mismo nombre.
    */
   async create(createTankDto: CreateTankDto, user: User) {
     const userIdToAssign = (user.role === 'ADMIN' && createTankDto.userId) ? createTankDto.userId : user.id;
@@ -31,15 +34,25 @@ export class TanksService {
   }
 
   /**
-   * @description Obtiene todos los tanques para un usuario específico, ordenados por fecha de creación.
-   * @param currentUser Usuario que realiza la petición.
-   * @param targetUserId ID del usuario (opcional, para administradores) cuyos tanques se quieren ver.
+   * @description Obtiene una lista de tanques. Si el usuario es ADMIN, devuelve todos los tanques o filtra por un `targetUserId`. Si no es ADMIN, solo obtiene sus propios tanques.
+   * @param {User} currentUser - El usuario que realiza la petición.
+   * @param {string} [targetUserId] - (Opcional) El ID del usuario por el cual un administrador desea filtrar los tanques.
+   * @returns {Promise<Tank[]>} Una lista de tanques con información del usuario y conteo de sensores.
    */
   findAllForUser(currentUser: User, targetUserId?: string) {
-    const userIdToQuery = (currentUser.role === 'ADMIN' && targetUserId) ? targetUserId : currentUser.id;
-    
+    const whereClause: { userId?: string } = {};
+
+    if (currentUser.role !== 'ADMIN') {
+      // Los usuarios no-administradores solo pueden ver sus propios tanques.
+      whereClause.userId = currentUser.id;
+    } else if (targetUserId) {
+      // Un administrador puede solicitar los tanques de un usuario específico.
+      whereClause.userId = targetUserId;
+    }
+    // Si es ADMIN y no se provee targetUserId, whereClause queda vacío para obtener todos los tanques.
+
     return this.prisma.tank.findMany({ 
-        where: { userId: userIdToQuery },
+        where: whereClause,
         include: { user: { select: { name: true } }, _count: { select: { sensors: true } } },
         orderBy: { createdAt: 'desc' }
     });
@@ -47,8 +60,11 @@ export class TanksService {
 
   /**
    * @description Busca un único tanque por su ID, validando los permisos de acceso.
-   * @param id El ID del tanque a buscar.
-   * @param user El usuario autenticado.
+   * @param {string} id - El ID del tanque a buscar.
+   * @param {User} user - El usuario autenticado.
+   * @returns {Promise<Tank>} El tanque encontrado.
+   * @throws {NotFoundException} Si el tanque no se encuentra.
+   * @throws {ForbiddenException} Si el usuario no tiene permisos sobre el tanque.
    */
   async findOne(id: string, user: User) {
     const tank = await this.prisma.tank.findUnique({ where: { id }, include: { user: { select: { name: true } } } });
@@ -61,9 +77,11 @@ export class TanksService {
 
   /**
    * @description Actualiza los datos de un tanque, validando permisos y unicidad del nuevo nombre.
-   * @param id El ID del tanque a actualizar.
-   * @param updateTankDto Los datos para actualizar.
-   * @param user El usuario autenticado.
+   * @param {string} id - El ID del tanque a actualizar.
+   * @param {UpdateTankDto} updateTankDto - Los datos para actualizar.
+   * @param {User} user - El usuario autenticado.
+   * @returns {Promise<Tank>} El tanque actualizado.
+   * @throws {ConflictException} Si el nuevo nombre ya existe para ese usuario.
    */
   async update(id: string, updateTankDto: UpdateTankDto, user: User) {
     const tank = await this.findOne(id, user); 
@@ -82,8 +100,10 @@ export class TanksService {
 
   /**
    * @description Elimina un tanque, validando que no tenga sensores asociados.
-   * @param id El ID del tanque a eliminar.
-   * @param user El usuario autenticado.
+   * @param {string} id - El ID del tanque a eliminar.
+   * @param {User} user - El usuario autenticado.
+   * @returns {Promise<Tank>} El tanque que fue eliminado.
+   * @throws {ConflictException} Si el tanque aún tiene sensores asociados.
    */
   async remove(id: string, user: User) {
     await this.findOne(id, user);

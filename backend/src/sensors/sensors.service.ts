@@ -6,6 +6,7 @@ import { User, SensorType } from '@prisma/client';
 
 /**
  * @description Umbrales por defecto si el usuario no ha configurado los suyos.
+ * @technical_requirements Usado como fallback en caso de que la configuración del usuario no esté disponible.
  */
 const DEFAULT_THRESHOLDS = {
     temperature: { min: 22, max: 28 },
@@ -16,6 +17,7 @@ const DEFAULT_THRESHOLDS = {
 /**
  * @class SensorsService
  * @description Contiene la lógica de negocio para la gestión de sensores.
+ * @technical_requirements Interactúa con PrismaService, maneja la lógica de negocio y permisos, y enriquece los datos de los sensores con información adicional como lecturas y tendencias.
  */
 @Injectable()
 export class SensorsService {
@@ -23,8 +25,12 @@ export class SensorsService {
 
   /**
    * @description Crea un nuevo sensor, validando permisos y reglas de negocio.
-   * @param createSensorDto Datos para crear el sensor.
-   * @param user Usuario autenticado que realiza la acción.
+   * @param {CreateSensorDto} createSensorDto - Datos para crear el sensor.
+   * @param {User} user - Usuario autenticado que realiza la acción.
+   * @returns {Promise<Sensor>} El sensor creado.
+   * @throws {NotFoundException} Si el tanque especificado no existe.
+   * @throws {ForbiddenException} Si el usuario no tiene permisos sobre el tanque.
+   * @throws {ConflictException} Si ya existe un sensor del mismo tipo en el tanque.
    */
   async create(createSensorDto: CreateSensorDto, user: User) {
     const tank = await this.prisma.tank.findUnique({ where: { id: createSensorDto.tankId } });
@@ -49,12 +55,20 @@ export class SensorsService {
   }
 
   /**
-   * @description Obtiene todos los sensores de un usuario, enriqueciendo los datos con la última lectura y estado.
-   * @param currentUser Usuario que realiza la petición.
-   * @param targetUserId ID del usuario (opcional, para administradores) cuyos sensores se quieren ver.
+   * @description Obtiene todos los sensores. Si el usuario es ADMIN, devuelve todos los sensores o filtra por `targetUserId`. Si no, solo los suyos.
+   * @param {User} currentUser - Usuario que realiza la petición.
+   * @param {string} [targetUserId] - ID del usuario (opcional, para administradores) cuyos sensores se quieren ver.
+   * @returns {Promise<any[]>} Una lista de sensores enriquecida con su última lectura, tendencia y estado.
    */
   async findAllForUser(currentUser: User, targetUserId?: string) {
     const userIdToQuery = (currentUser.role === 'ADMIN' && targetUserId) ? targetUserId : currentUser.id;
+
+    const whereClause: any = {};
+    if (currentUser.role !== 'ADMIN') {
+      whereClause.tank = { userId: currentUser.id };
+    } else if (targetUserId) {
+      whereClause.tank = { userId: targetUserId };
+    }
 
     const userWithSettings = await this.prisma.user.findUnique({
         where: { id: userIdToQuery },
@@ -64,7 +78,7 @@ export class SensorsService {
     const userThresholds = (userWithSettings?.settings as any)?.thresholds || DEFAULT_THRESHOLDS;
     
     const sensors = await this.prisma.sensor.findMany({ 
-        where: { tank: { userId: userIdToQuery } }, 
+        where: whereClause, 
         include: { tank: { select: { name: true } } },
         orderBy: { createdAt: 'desc' }
     });
@@ -105,8 +119,9 @@ export class SensorsService {
 
   /**
    * @description Busca un sensor por su ID, validando permisos.
-   * @param id ID del sensor a buscar.
-   * @param user Usuario autenticado.
+   * @param {string} id - ID del sensor a buscar.
+   * @param {User} user - Usuario autenticado.
+   * @returns {Promise<Sensor & { tank: Tank }>} El sensor encontrado con su tanque asociado.
    */
   async findOne(id: string, user: User) {
     const sensor = await this.prisma.sensor.findUnique({ where: { id }, include: { tank: true } });
@@ -117,9 +132,10 @@ export class SensorsService {
   
   /**
    * @description Actualiza los datos de un sensor.
-   * @param id ID del sensor a actualizar.
-   * @param updateSensorDto Datos a actualizar.
-   * @param user Usuario autenticado.
+   * @param {string} id - ID del sensor a actualizar.
+   * @param {UpdateSensorDto} updateSensorDto - Datos a actualizar.
+   * @param {User} user - Usuario autenticado.
+   * @returns {Promise<Sensor>} El sensor actualizado.
    */
   async update(id: string, updateSensorDto: UpdateSensorDto, user: User) {
     const sensor = await this.findOne(id, user);
@@ -141,8 +157,9 @@ export class SensorsService {
 
   /**
    * @description Elimina un sensor.
-   * @param id ID del sensor a eliminar.
-   * @param user Usuario autenticado.
+   * @param {string} id - ID del sensor a eliminar.
+   * @param {User} user - Usuario autenticado.
+   * @returns {Promise<Sensor>} El sensor eliminado.
    */
   async remove(id: string, user: User) {
     await this.findOne(id, user);

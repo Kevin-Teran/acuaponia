@@ -6,7 +6,9 @@ import { Card } from '../common/Card';
 
 /**
  * @interface DashboardFiltersProps
- * @description Define las propiedades que recibe el componente de filtros del dashboard.
+ * @description Define las propiedades (props) que recibe el componente de filtros del dashboard.
+ * Este es un "componente controlado", lo que significa que su estado es manejado por el componente padre (Dashboard).
+ * @technical_requirements Debe recibir y manejar listas de usuarios y tanques, así como funciones callback para notificar cambios en los filtros.
  */
 interface DashboardFiltersProps {
   startDate: string;
@@ -24,8 +26,10 @@ interface DashboardFiltersProps {
 
 /**
  * @component DashboardFilters
- * @description Componente de UI para seleccionar los filtros. Es un componente "controlado" que
- * solo muestra las props que recibe y notifica los cambios al componente padre.
+ * @description Componente de UI para seleccionar los filtros de visualización del dashboard.
+ * Permite filtrar por usuario (si es admin), por tanque y por rango de fechas.
+ * @param {DashboardFiltersProps} props - Las propiedades del componente.
+ * @returns {React.ReactElement} El componente de filtros renderizado.
  */
 export const DashboardFilters: React.FC<DashboardFiltersProps> = ({
   startDate,
@@ -46,7 +50,7 @@ export const DashboardFilters: React.FC<DashboardFiltersProps> = ({
     <Card>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-end">
         
-        {/* Filtro de Usuario (Solo para Administradores) */}
+        {/* Filtro de Usuario (Renderizado condicional solo para Administradores) */}
         {isAdmin && users && (
           <div className="lg:col-span-1">
             <label className="label flex items-center mb-2">
@@ -93,7 +97,7 @@ export const DashboardFilters: React.FC<DashboardFiltersProps> = ({
           </select>
         </div>
 
-        {/* Filtro de Rango de Fechas (Restaurado) */}
+        {/* Filtro de Rango de Fechas */}
         <div className="md:col-span-2 lg:col-span-2">
             <label className="label flex items-center mb-2">
                 <Calendar className="w-4 h-4 mr-2" />
