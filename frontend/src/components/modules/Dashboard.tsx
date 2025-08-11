@@ -1,4 +1,3 @@
-// frontend/src/components/modules/Dashboard.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { LoadingSpinner } from '../common/LoadingSpinner';
@@ -29,7 +28,6 @@ export const Dashboard: React.FC = () => {
   const [selectedTankId, setSelectedTankId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   
-  // Estos estados guardan la lista COMPLETA de datos sin filtrar
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [allTanks, setAllTanks] = useState<Tank[]>([]); 
   const [allSensors, setAllSensors] = useState<Sensor[]>([]);
@@ -37,7 +35,6 @@ export const Dashboard: React.FC = () => {
   const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
   const [loadingInitialData, setLoadingInitialData] = useState(true);
 
-  // Carga inicial de TODOS los datos (tanques, sensores, usuarios)
   useEffect(() => {
     if (!user) return;
 
@@ -56,7 +53,6 @@ export const Dashboard: React.FC = () => {
         setAllUsers(isAdmin ? usersData : [user]);
         if (settingsData?.thresholds) setThresholds(settingsData.thresholds);
 
-        // Establece el estado inicial la primera vez que carga
         const initialUserId = user.id;
         setSelectedUserId(initialUserId);
         
@@ -64,7 +60,6 @@ export const Dashboard: React.FC = () => {
         if (userTanks.length > 0) {
             setSelectedTankId(userTanks[0].id);
         }
-
       } catch (error) {
         console.error("Error al cargar datos iniciales del dashboard:", error);
       } finally {
@@ -81,12 +76,9 @@ export const Dashboard: React.FC = () => {
    */
   const handleUserChange = (userId: string) => {
     setSelectedUserId(userId);
-    const tanksOfNewUser = allTanks.filter(tank => tank.userId === userId);
-    // Asigna el primer tanque del nuevo usuario o null si no tiene.
-    setSelectedTankId(tanksOfNewUser.length > 0 ? tanksOfNewUser[0].id : null);
+    const userTanks = allTanks.filter(tank => tank.userId === userId);
+    setSelectedTankId(userTanks.length > 0 ? userTanks[0].id : null);
   };
-
-  // --- Listas filtradas que se recalculan automáticamente ---
 
   const filteredTanksForSelectedUser = useMemo(() => {
     if (!selectedUserId) return [];
@@ -134,7 +126,6 @@ export const Dashboard: React.FC = () => {
         isAdmin={isAdmin}
       />
 
-      {/* Las estadísticas ahora usan los sensores del tanque seleccionado */}
       {isAdmin && <AdminStatCards sensors={sensorsForSelectedTank} />}
       
       <div className="mt-6">
