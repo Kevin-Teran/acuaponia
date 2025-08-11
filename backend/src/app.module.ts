@@ -8,6 +8,7 @@ import { SensorsModule } from './sensors/sensors.module';
 import { SettingsModule } from './settings/settings.module';
 import { EventsModule } from './events/events.module';
 import { DataModule } from './data/data.module';
+import { MqttModule } from './mqtt/mqtt.module';
 
 import * as path from 'path';
 
@@ -25,6 +26,7 @@ import * as path from 'path';
     DataModule,
     EventsModule,
     SettingsModule,
+    MqttModule,
   ],
 })
 export class AppModule {}
