@@ -3,7 +3,7 @@ import { LoginCredentials, User } from '../types';
 
 /**
  * @interface LoginResponse
- * @description Define la estructura de la respuesta exitosa que se espera del endpoint de login del backend de NestJS.
+ * @description Define la estructura de la respuesta exitosa del endpoint de login.
  */
 interface LoginResponse {
   user: User;
@@ -15,37 +15,30 @@ interface LoginResponse {
 
 /**
  * @function login
- * @description Envía las credenciales de un usuario al backend para autenticarlo.
- * Si la autenticación es exitosa, guarda los tokens y los datos del usuario en el localStorage.
- * @param {LoginCredentials} credentials - Objeto con email, password y la bandera opcional rememberMe.
+ * @description Envía las credenciales al backend para autenticar al usuario.
  * @returns {Promise<User>} Una promesa que resuelve con el objeto del usuario autenticado.
- * @throws {Error} Lanza un error con el mensaje específico proporcionado por la API si la autenticación falla.
  */
 export const login = async (credentials: LoginCredentials): Promise<User> => {
   try {
     const response = await api.post<LoginResponse>('/auth/login', credentials);
-
     if (response.data && response.data.user && response.data.tokens) {
       const { user, tokens } = response.data;
-
       localStorage.setItem('token', tokens.accessToken);
       localStorage.setItem('refreshToken', tokens.refreshToken);
       localStorage.setItem('user', JSON.stringify(user));
-
       return user;
     } else {
       throw new Error('La respuesta del servidor no contiene los datos esperados.');
     }
   } catch (error: any) {
     const errorMessage = error.response?.data?.message || error.message || 'Ocurrió un error inesperado.';
-    
     throw new Error(errorMessage);
   }
 };
 
 /**
  * @function logout
- * @description Cierra la sesión del usuario actual eliminando los datos de autenticación del localStorage.
+ * @description Cierra la sesión del usuario eliminando los datos del localStorage.
  */
 export const logout = (): void => {
   localStorage.removeItem('token');
@@ -55,8 +48,8 @@ export const logout = (): void => {
 
 /**
  * @function getCurrentUser
- * @description Obtiene el usuario actualmente autenticado desde el localStorage.
- * @returns {User | null} El objeto del usuario actual o nulo si no está autenticado o si los datos están corruptos.
+ * @description Obtiene el usuario actual desde el localStorage.
+ * @returns {User | null} El objeto del usuario o nulo si no está autenticado.
  */
 export const getCurrentUser = (): User | null => {
   try {
@@ -72,9 +65,9 @@ export const getCurrentUser = (): User | null => {
 /**
  * @function refreshToken
  * @description Refresca el token de autenticación usando el refreshToken almacenado.
- * Esta función es utilizada por el interceptor de Axios para mantener la sesión activa.
+ * Es utilizada por el interceptor de Axios para mantener la sesión activa.
  * @returns {Promise<string>} El nuevo token de acceso.
- * @throws {Error} Lanza un error si la renovación del token falla, lo que usualmente significa que la sesión ha expirado.
+ * @throws {Error} Lanza un error si la renovación falla, lo que usualmente significa que la sesión ha expirado.
  */
 export const refreshToken = async (): Promise<string> => {
   const refreshTokenValue = localStorage.getItem('refreshToken');
@@ -94,7 +87,7 @@ export const refreshToken = async (): Promise<string> => {
     return newAccessToken;
   } catch (error) {
     console.error('Error al refrescar el token, la sesión ha expirado:', error);
-    logout();
+    logout(); 
     throw new Error('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.');
   }
 };

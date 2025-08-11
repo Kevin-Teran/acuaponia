@@ -1,11 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '@prisma/client'; // Importación explícita para el tipo
 
 /**
  * @class SettingsService
  * @description Contiene la lógica de negocio para las configuraciones de usuario.
- * Interactúa con el campo 'settings' de tipo JSON/LONGTEXT en la base de datos.
+ * Interactúa con el campo 'settings' de tipo JSON en la base de datos para almacenar
+ * preferencias como umbrales de alerta y notificaciones.
  */
 @Injectable()
 export class SettingsService {
@@ -13,9 +13,10 @@ export class SettingsService {
 
   /**
    * @method getSettings
-   * @description Obtiene las configuraciones de un usuario.
+   * @description Obtiene las configuraciones de un usuario específico.
    * @param {string} userId - El ID del usuario autenticado.
    * @returns {Promise<any>} Un objeto con las configuraciones. Devuelve un objeto vacío si no hay nada guardado.
+   * @throws {NotFoundException} Si el usuario no es encontrado en la base de datos.
    */
   async getSettings(userId: string): Promise<any> {
     const user = await this.prisma.user.findUnique({
@@ -38,6 +39,7 @@ export class SettingsService {
    * @param {string} userId - El ID del usuario autenticado.
    * @param {any} settings - El objeto con las nuevas configuraciones a guardar.
    * @returns {Promise<{settings: any}>} Las configuraciones actualizadas.
+   * @throws {NotFoundException} Si el usuario no es encontrado.
    */
   async updateSettings(userId: string, settings: any): Promise<{ settings: any }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -45,6 +47,7 @@ export class SettingsService {
       throw new NotFoundException('Usuario no encontrado.');
     }
 
+    // Fusiona las configuraciones actuales con las nuevas para evitar perder datos
     const currentSettings = (user.settings as object) || {};
     const newSettings = { ...currentSettings, ...settings };
 
@@ -53,7 +56,7 @@ export class SettingsService {
       data: { 
         settings: newSettings 
       },
-      select: { settings: true }
+      select: { settings: true } // Devuelve solo las configuraciones actualizadas
     });
   }
 }

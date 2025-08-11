@@ -27,7 +27,26 @@ export const LoginForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validación del lado del cliente para feedback instantáneo y evitar peticiones innecesarias.
+    // Validaciones frontales exhaustivas con mensajes en español.
+    if (!email.trim() || !password.trim()) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Campos Incompletos',
+        text: 'Por favor, ingrese su correo electrónico y su contraseña.',
+        confirmButtonColor: senaGreen,
+      });
+      return;
+    }
+    // Expresión regular para una validación básica de formato de email.
+    if (!/\S+@\S+\.\S+/.test(email)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Correo Inválido',
+            text: 'Por favor, ingrese un formato de correo electrónico válido.',
+            confirmButtonColor: senaGreen,
+        });
+        return;
+    }
     if (password.length < 6) {
       Swal.fire({
         icon: 'info',
@@ -47,11 +66,17 @@ export const LoginForm: React.FC = () => {
       // Gracias a la corrección en useAuth, este bloque ahora se ejecuta cuando hay un error.
       setIsLoading(false); 
       
+      // Mensaje de error más detallado y con una opción final
+      let finalMessage = error.message || 'Ocurrió un error inesperado.';
+      if (error.message.includes('Network Error')) {
+        finalMessage = 'No se pudo conectar con el servidor. Verifique su conexión a internet. Si el problema persiste, contacte a soporte técnico.';
+      }
+      
       await Swal.fire({
         icon: 'warning',
         title: 'Acceso Denegado',
         // Mostramos el mensaje de error específico que viene del backend.
-        text: error.message || 'Error de autenticación. Intente de nuevo más tarde.',
+        text: finalMessage,
         confirmButtonText: 'Entendido',
         confirmButtonColor: senaGreen,
       });
@@ -152,7 +177,7 @@ export const LoginForm: React.FC = () => {
 
             <button
               type="submit"
-              disabled={!email || !password || isLoading}
+              disabled={isLoading}
               className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-green-500/30 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <LogIn className="w-5 h-5" />
@@ -179,7 +204,6 @@ export const LoginForm: React.FC = () => {
             </div>
           </div>
         </div>
-
         <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-8">
           © {new Date().getFullYear()} SENA - Todos los derechos reservados
         </p>

@@ -4,23 +4,24 @@ import { SensorData } from '../types';
 /**
  * @class SocketService
  * @description Servicio singleton para gestionar la conexión WebSocket con el backend.
- * Se encarga de conectar, desconectar y manejar los eventos de datos de sensores en tiempo real.
  */
 class SocketService {
   private socket: Socket | null = null;
-  private readonly apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+  private readonly apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
 
   /**
    * @method connect
    * @description Establece la conexión con el servidor de sockets.
-   * Si ya existe una conexión, no hace nada.
    */
   public connect(): void {
     if (this.socket && this.socket.connected) {
       return;
     }
     this.socket = io(this.apiUrl, {
+      // Forzar el transporte a websocket puede ayudar a evitar problemas de conectividad.
       transports: ['websocket'],
+      // Desactivar reintentos automáticos para tener más control en la UI si es necesario.
+      reconnection: true,
       reconnectionAttempts: 5,
     });
 
@@ -30,6 +31,10 @@ class SocketService {
 
     this.socket.on('disconnect', (reason) => {
       console.log(`❌ Desconectado del servidor Socket.IO: ${reason}`);
+    });
+
+    this.socket.on('connect_error', (err) => {
+        console.error(`Error de conexión de Socket.IO: ${err.message}`);
     });
   }
 
@@ -47,7 +52,6 @@ class SocketService {
   /**
    * @method onSensorData
    * @description Se suscribe a los eventos 'new_sensor_data' del servidor.
-   * @param {(data: SensorData) => void} callback - La función que se ejecutará cada vez que lleguen nuevos datos.
    */
   public onSensorData(callback: (data: SensorData) => void): void {
     if (this.socket) {
@@ -57,8 +61,7 @@ class SocketService {
 
   /**
    * @method offSensorData
-   * @description Se desuscribe de los eventos 'new_sensor_data' para evitar fugas de memoria.
-   * @param {(data: SensorData) => void} callback - La misma función de callback usada en onSensorData.
+   * @description Se desuscribe de los eventos 'new_sensor_data'.
    */
   public offSensorData(callback: (data: SensorData) => void): void {
     if (this.socket) {
@@ -67,5 +70,4 @@ class SocketService {
   }
 }
 
-// Exportamos una única instancia del servicio (patrón Singleton)
 export const socketService = new SocketService();

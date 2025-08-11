@@ -1,34 +1,30 @@
 import api from '../config/api';
 
 /**
- * @desc Envía una o más entradas de datos manuales.
- * @param entries - Un array de objetos, cada uno con `sensorId` y `value`.
+ * @description Envía un conjunto de lecturas manuales al backend.
  */
- export const submitManualEntry = (entries: { sensorId: string, value: number }[]) => {
-    return api.post('/data/manual-entry', { entries });
+export const submitManualEntry = (entries: { sensorId: string; value: number }[]) => {
+  return api.post('/data/manual', { entries });
 };
 
 /**
- * @desc Obtiene el estado de los emisores de datos sintéticos.
- * @returns {Promise<any[]>} Una promesa que resuelve a un array de emisores activos.
+ * @description Solicita al backend que inicie la simulación para una lista de sensores.
  */
- export const getEmitterStatus = async (): Promise<any[]> => {
-    const response = await api.get('/data/synthetic/status');
-    return response.data.data;
+export const startEmitter = (sensorIds: string[]) => {
+  return api.post('/data/emitter/start', { sensorIds });
 };
 
 /**
- * @desc Inicia la simulación para un conjunto de sensores.
- * @param sensorIds - Un array de IDs de sensores.
+ * @description Solicita al backend que detenga la simulación para un sensor.
  */
- export const startEmitter = (sensorIds: string[]) => {
-    return api.post('/data/synthetic/start', { sensorIds });
+export const stopEmitter = (sensorId: string) => {
+  return api.post('/data/emitter/stop', { sensorId });
 };
 
 /**
- * @desc Detiene la simulación para un sensor específico.
- * @param sensorId - El ID del sensor a detener.
+ * @description Obtiene la lista de todas las simulaciones activas desde el backend.
  */
- export const stopEmitter = (sensorId: string) => {
-    return api.post('/data/synthetic/stop', { sensorId });
+export const getEmitterStatus = async () => {
+  const response = await api.get('/data/emitter/status');
+  return response.data;
 };

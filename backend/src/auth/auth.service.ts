@@ -24,6 +24,9 @@ export class AuthService {
   /**
    * @method validateUser
    * @description Comprueba si un usuario existe y si la contraseña coincide.
+   * Utiliza bcrypt para comparar de forma segura la contraseña proporcionada con el hash almacenado.
+   * @param {string} email - El correo electrónico del usuario.
+   * @param {string} pass - La contraseña en texto plano a validar.
    * @returns {Promise<User | null>} El objeto de usuario completo si es válido, o null si no lo es.
    */
   async validateUser(email: string, pass: string): Promise<User | null> {
@@ -37,6 +40,15 @@ export class AuthService {
   /**
    * @method login
    * @description Orquesta el proceso de inicio de sesión completo.
+   * 1. Valida que el correo y la contraseña sean correctos.
+   * 2. Verifica que la cuenta del usuario esté activa.
+   * 3. Genera un token de acceso y un token de refresco con expiraciones configurables.
+   * 4. Actualiza la fecha del último inicio de sesión del usuario.
+   * 5. Devuelve los datos del usuario (sin contraseña) y los tokens.
+   * @param {string} email - El correo del usuario.
+   * @param {string} pass - La contraseña del usuario.
+   * @param {boolean} [rememberMe=false] - Si es true, extiende la duración del token de refresco.
+   * @returns {Promise<object>} Un objeto con los datos del usuario y los tokens.
    * @throws {UnauthorizedException} Si las credenciales son incorrectas.
    * @throws {ForbiddenException} Si la cuenta del usuario no está activa.
    */
@@ -60,15 +72,15 @@ export class AuthService {
 
     const payload = { email: user.email, sub: user.id, role: user.role };
     const accessTokenExpiresIn = this.configService.get<string>('JWT_EXPIRES_IN') || '1h';
-    const refreshTokenExpiresIn = rememberMe 
+    const refreshTokenExpiresIn = rememberMe
       ? this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d'
       : accessTokenExpiresIn;
-    
+
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_SECRET'),
       expiresIn: accessTokenExpiresIn,
     });
-    
+
     const refreshToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
       expiresIn: refreshTokenExpiresIn,
@@ -78,18 +90,37 @@ export class AuthService {
       where: { id: user.id },
       data: { lastLogin: new Date() },
     }).catch(err => logger.error(`Error al actualizar lastLogin para ${user.email}:`, err));
-    
+
     logger.info(`Login exitoso para: ${user.email}`);
 
+    // Excluimos la contraseña del objeto de usuario que se devuelve al cliente.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...userResult } = user;
-    
+
     return {
       user: userResult,
       tokens: {
         accessToken,
         refreshToken,
       },
+    };
+  }
+
+  /**
+   * @method refreshToken
+   * @description Genera un nuevo token de acceso a partir de un token de refresco válido.
+   * @param {User} user - El objeto de usuario extraído del token de refresco validado.
+   * @returns {Promise<{accessToken: string}>} Un objeto con el nuevo token de acceso.
+   */
+  async refreshToken(user: User) {
+    const payload = { email: user.email, sub: user.id, role: user.role };
+    const newAccessToken = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_SECRET'),
+      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') || '1h',
+    });
+
+    return {
+      accessToken: newAccessToken,
     };
   }
 }

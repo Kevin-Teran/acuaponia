@@ -13,20 +13,9 @@ import * as dataService from '../../services/dataService';
 import { User, Tank, Sensor } from '../../types';
 
 // --- FUNCIONES DE UTILIDAD ---
-
-/**
- * @desc Traduce el tipo de sensor a un formato legible en español.
- * @param {Sensor['type']} type - El tipo de sensor desde la API.
- * @returns {string} El nombre del sensor en español.
- */
-const translateSensorType = (type: Sensor['type']): string => {
-    const names: Record<string, string> = {
-        TEMPERATURE: 'temperatura',
-        PH: 'pH',
-        OXYGEN: 'oxígeno'
-    };
-    return names[type] || type.toLowerCase();
-};
+const translateSensorType = (type: Sensor['type']): string => ({
+    TEMPERATURE: 'temperatura', PH: 'pH', OXYGEN: 'oxígeno'
+})[type] || type.toLowerCase();
 
 /**
  * @component DataEntry
@@ -60,37 +49,37 @@ export const DataEntry: React.FC = () => {
 
     useEffect(() => { fetchInitialData(); }, [fetchInitialData]);
 
-    const handleSelectUser = async (userId: string) => {
+    const handleSelectUser = useCallback(async (userId: string) => {
         setSelections({ user: userId, tank: '', sensors: [] });
         setTanks([]);
         setSensors([]);
         if (userId) {
             setLoading(prev => ({ ...prev, tanks: true }));
-            try { setTanks(await tankService.getTanksByUser(userId)); }
+            try { setTanks(await tankService.getTanks(userId)); }
             catch { setError("No se pudieron cargar los tanques."); }
             finally { setLoading(prev => ({ ...prev, tanks: false })); }
         }
-    };
+    }, []);
     
-    const handleSelectTank = async (tankId: string) => {
+    const handleSelectTank = useCallback(async (tankId: string) => {
         setSelections(prev => ({ ...prev, tank: tankId, sensors: [] }));
         setSensors([]);
         if (tankId) {
             setLoading(prev => ({ ...prev, sensors: true }));
-            try { setSensors(await sensorService.getSensorsByTank(tankId)); }
+            try { setSensors(await sensorService.getSensors(tankId)); } // Asume que getSensors puede filtrar por tanque
             catch { setError("No se pudieron cargar los sensores."); }
             finally { setLoading(prev => ({ ...prev, sensors: false })); }
         }
-    };
+    }, []);
     
-    const handleToggleSensor = (sensorId: string) => {
+    const handleToggleSensor = useCallback((sensorId: string) => {
         setSelections(prev => ({
             ...prev,
             sensors: prev.sensors.includes(sensorId) ? prev.sensors.filter(id => id !== sensorId) : [...prev.sensors, sensorId]
         }));
-    };
+    }, []);
 
-    const handleAction = async (action: () => Promise<any>, successMsg: string) => {
+    const handleAction = useCallback(async (action: () => Promise<any>, successMsg: string) => {
         setLoading(prev => ({ ...prev, action: true }));
         try {
             await action();
@@ -99,11 +88,11 @@ export const DataEntry: React.FC = () => {
             Swal.fire({ icon: 'success', title: successMsg, toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
             setSelections(prev => ({...prev, sensors: []}));
         } catch (error: any) {
-            Swal.fire('Error', error.response?.data?.error?.message || 'La operación no se pudo completar.', 'error');
+            Swal.fire('Error', error.response?.data?.message || 'La operación no se pudo completar.', 'error');
         } finally {
             setLoading(prev => ({ ...prev, action: false }));
         }
-    };
+    }, []);
 
     const selectedSensorObjects = useMemo(() => 
         sensors.filter(s => selections.sensors.includes(s.id)),
@@ -137,21 +126,21 @@ export const DataEntry: React.FC = () => {
             <Card title="1. Panel de Control" icon={SlidersHorizontal}>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Usuario</label>
-                        <select className="form-select mt-1" value={selections.user} onChange={(e) => handleSelectUser(e.target.value)} disabled={loading.users}>
+                        <label className="label">Usuario</label>
+                        <select className="form-select" value={selections.user} onChange={(e) => handleSelectUser(e.target.value)} disabled={loading.users}>
                             <option value="">{loading.users ? "Cargando..." : "Seleccione un usuario"}</option>
                             {users.map((user: User) => <option key={user.id} value={user.id}>{user.name}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tanque</label>
-                        <select className="form-select mt-1" value={selections.tank} onChange={(e) => handleSelectTank(e.target.value)} disabled={loading.tanks || !selections.user}>
+                        <label className="label">Tanque</label>
+                        <select className="form-select" value={selections.tank} onChange={(e) => handleSelectTank(e.target.value)} disabled={loading.tanks || !selections.user}>
                             <option value="">{loading.tanks ? "Cargando..." : "Seleccione un tanque"}</option>
                             {tanks.map((tank: Tank) => <option key={tank.id} value={tank.id}>{tank.name}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sensores a Afectar</label>
+                        <label className="label">Sensores a Afectar</label>
                         <div className="mt-1 space-y-2 max-h-48 overflow-y-auto p-2 border rounded-md dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50">
                             {loading.sensors ? <div className="text-center py-4"><Loader className="w-5 h-5 animate-spin mx-auto text-sena-green"/></div> :
                             sensors.length > 0 ? sensors.map((sensor: Sensor) => (
@@ -164,7 +153,7 @@ export const DataEntry: React.FC = () => {
                     </div>
                 </div>
                 <div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-700 text-center">
-                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Modo de Envío</label>
+                     <label className="label text-center mb-2">Modo de Envío</label>
                      <div className="flex bg-gray-100 dark:bg-gray-900/50 p-1 rounded-lg max-w-sm mx-auto">
                         <button onClick={() => setMode('manual')} className={cn("w-1/2 py-2 text-sm font-semibold rounded-md transition-colors", mode === 'manual' ? 'bg-white dark:bg-sena-blue text-sena-blue shadow' : 'text-gray-600 dark:text-gray-300')}>Entrada Manual</button>
                         <button onClick={() => setMode('emitter')} className={cn("w-1/2 py-2 text-sm font-semibold rounded-md transition-colors", mode === 'emitter' ? 'bg-white dark:bg-sena-green text-sena-green shadow' : 'text-gray-600 dark:text-gray-300')}>Simulador</button>
@@ -194,12 +183,12 @@ export const DataEntry: React.FC = () => {
 
 // --- SUBCOMPONENTES ---
 
-const ManualEntryForm = ({ selectedSensors, onSubmit }: { selectedSensors: Sensor[]; onSubmit: (entries: any[]) => void }) => {
+const ManualEntryForm: React.FC<any> = ({ selectedSensors, onSubmit }) => {
     const [values, setValues] = useState<Record<string, string>>({});
     
     useEffect(() => {
         const initialValues: Record<string, string> = {};
-        selectedSensors.forEach(sensor => {
+        selectedSensors.forEach((sensor: Sensor) => {
             if (values[sensor.id]) return;
             if (sensor.type === 'PH') initialValues[sensor.id] = '7.0';
             else if (sensor.type === 'OXYGEN') initialValues[sensor.id] = '8.0';
@@ -210,24 +199,24 @@ const ManualEntryForm = ({ selectedSensors, onSubmit }: { selectedSensors: Senso
 
     const handleValueChange = (sensorId: string, value: string) => setValues(prev => ({...prev, [sensorId]: value }));
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
-        const entries = selectedSensors.map(sensor => ({
+        const entries = selectedSensors.map((sensor: Sensor) => ({
             sensorId: sensor.id,
             value: parseFloat(values[sensor.id])
-        })).filter(entry => !isNaN(entry.value));
+        })).filter((entry: { value: number; }) => !isNaN(entry.value));
 
         if (entries.length > 0) await onSubmit(entries);
         else Swal.fire('Atención', "No hay datos válidos para enviar.", 'warning');
-    };
+    }, [selectedSensors, values, onSubmit]);
     
     return (
         <Card title="2. Envío de Datos Manuales" icon={Send} subtitle="Define y envía lecturas únicas a los sensores seleccionados.">
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
-                    {selectedSensors.length > 0 ? selectedSensors.map(sensor => (
+                    {selectedSensors.length > 0 ? selectedSensors.map((sensor: Sensor) => (
                         <div key={sensor.id} className="grid grid-cols-3 gap-2 items-center">
-                            <label htmlFor={`manual-${sensor.id}`} className="text-sm font-medium text-gray-700 dark:text-gray-300 col-span-1 truncate">{sensor.name}</label>
+                            <label htmlFor={`manual-${sensor.id}`} className="label col-span-1 truncate">{sensor.name}</label>
                             <input id={`manual-${sensor.id}`} type="number" step="0.1" value={values[sensor.id] || ''} onChange={e => handleValueChange(sensor.id, e.target.value)} className="form-input col-span-2" required />
                         </div>
                     )) : (
@@ -246,7 +235,7 @@ const ManualEntryForm = ({ selectedSensors, onSubmit }: { selectedSensors: Senso
     );
 };
 
-const SimulatorControls = ({ selectedSensorIds, onStart }: { selectedSensorIds: string[], onStart: () => void }) => {
+const SimulatorControls: React.FC<any> = ({ selectedSensorIds, onStart }) => {
     return (
         <Card title="2. Simulador de Sensores" icon={Bot} subtitle="Inicia procesos en el servidor para enviar datos simulados.">
              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -261,7 +250,7 @@ const SimulatorControls = ({ selectedSensorIds, onStart }: { selectedSensorIds: 
     );
 };
 
-const ActiveEmittersList = ({ activeEmitters, onStop }: { activeEmitters: any[], onStop: (id: string) => void }) => (
+const ActiveEmittersList: React.FC<any> = ({ activeEmitters, onStop }) => (
     <Card title="3. Procesos Activos" icon={Cpu}>
         <div className="space-y-2 max-h-72 overflow-y-auto p-1">
             {activeEmitters && activeEmitters.length > 0 ? activeEmitters.map((emitter: any) => (
