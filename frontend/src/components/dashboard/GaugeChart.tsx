@@ -1,6 +1,11 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
+/**
+ * @interface GaugeChartProps
+ * @description Define las propiedades del componente.
+ * @technical_requirements **CORRECCIÓN**: Se cambiaron las propiedades de `thresholds` de `low`/`high` a `min`/`max` para ser consistente con el resto de la aplicación (ej. `SummaryCards`).
+ */
 interface GaugeChartProps {
   value: number;
   previousValue?: number;
@@ -8,10 +13,14 @@ interface GaugeChartProps {
   max: number;
   label: string;
   unit: string;
-  thresholds?: { low: number; high: number };
+  thresholds?: { min: number; max: number };
   color?: string;
 }
 
+/**
+ * @component GaugeChart
+ * @description Componente de medidor que visualiza una métrica. Muestra el valor actual, zonas de color basadas en umbrales y una flecha de tendencia.
+ */
 export const GaugeChart: React.FC<GaugeChartProps> = ({
   value,
   previousValue,
@@ -59,15 +68,17 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
   
   const getCurrentColor = () => {
     if (!thresholds) return color;
-    if (currentValue < thresholds.low) return '#007BBF';
-    if (currentValue > thresholds.high) return '#EF4444';
-    return '#10B981';
+    // CORRECCIÓN: Usar `min` y `max`
+    if (currentValue < thresholds.min) return '#007BBF'; // Azul para 'Bajo'
+    if (currentValue > thresholds.max) return '#EF4444'; // Rojo para 'Alto'
+    return '#10B981'; // Verde para 'Óptimo'
   };
 
   const getStatus = () => {
     if (thresholds) {
-      if (currentValue < thresholds.low) return { text: 'BAJO', color: '#007BBF', bgColor: '#DBEAFE' };
-      if (currentValue > thresholds.high) return { text: 'ALTO', color: '#EF4444', bgColor: '#FEE2E2' };
+      // CORRECCIÓN: Usar `min` y `max`
+      if (currentValue < thresholds.min) return { text: 'BAJO', color: '#007BBF', bgColor: '#DBEAFE' };
+      if (currentValue > thresholds.max) return { text: 'ALTO', color: '#EF4444', bgColor: '#FEE2E2' };
       return { text: 'ÓPTIMO', color: '#10B981', bgColor: '#D1FAE5' };
     }
     return { text: 'NORMAL', color: color, bgColor: '#F3F4F6' };
@@ -87,9 +98,10 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
     const lineWidth = 20;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (thresholds) {
-      const lowAngle = percentageToAngle(getValuePercentage(thresholds.low));
+      // CORRECCIÓN: Usar `min` y `max` para dibujar los arcos
+      const lowAngle = percentageToAngle(getValuePercentage(thresholds.min));
       ctx.beginPath(); ctx.arc(centerX, centerY, radius, Math.PI, lowAngle); ctx.strokeStyle = '#007BBF'; ctx.lineWidth = lineWidth; ctx.stroke();
-      const highAngle = percentageToAngle(getValuePercentage(thresholds.high));
+      const highAngle = percentageToAngle(getValuePercentage(thresholds.max));
       ctx.beginPath(); ctx.arc(centerX, centerY, radius, lowAngle, highAngle); ctx.strokeStyle = '#10B981'; ctx.lineWidth = lineWidth; ctx.stroke();
       ctx.beginPath(); ctx.arc(centerX, centerY, radius, highAngle, 2 * Math.PI); ctx.strokeStyle = '#EF4444'; ctx.lineWidth = lineWidth; ctx.stroke();
     } else {
@@ -122,18 +134,17 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
       <div className="text-center">
         <div className="flex items-center justify-center gap-2">
           <div className="text-4xl font-bold" style={{ color: currentColor }}>
-            {currentValue.toFixed(1)}
+            {currentValue.toFixed(unit === '' ? 2 : 1)}
             <span className="text-xl text-gray-500 dark:text-gray-400 ml-1">{unit}</span>
           </div>
         </div>
         
-        {/* --- NUEVO INDICADOR DE CAMBIO --- */}
         <div className="h-6 mt-1 flex items-center justify-center gap-1 text-sm">
           {difference !== null && (
             <>
               {renderTrendIcon()}
               <span className={trend === 'up' ? 'text-green-500' : trend === 'down' ? 'text-red-500' : 'text-gray-500'}>
-                {difference > 0 ? '+' : ''}{difference.toFixed(2)} {unit}
+                {difference > 0 ? '+' : ''}{difference.toFixed(unit === '' ? 2 : 1)} {unit}
               </span>
               <span className="text-gray-400">vs. anterior</span>
             </>
@@ -142,7 +153,8 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
         
         <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 mt-2">
           <span>{min}{unit}</span>
-          {thresholds && <span className="text-green-600 dark:text-green-400 font-medium">Óptimo: {thresholds.low}-{thresholds.high}{unit}</span>}
+          {/* CORRECCIÓN: Usar `min` y `max` para la etiqueta */}
+          {thresholds && <span className="text-green-600 dark:text-green-400 font-medium">Óptimo: {thresholds.min}-{thresholds.max}{unit}</span>}
           <span>{max}{unit}</span>
         </div>
       </div>

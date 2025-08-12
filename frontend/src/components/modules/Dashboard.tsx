@@ -6,11 +6,12 @@ import { Card } from '../common/Card';
 import { DashboardFilters } from '../dashboard/DashboardFilters';
 import { SummaryCards } from '../dashboard/SummaryCards';
 import { AdminStatCards } from '../dashboard/AdminStatCards';
+import { GaugeChart } from '../dashboard/GaugeChart'; // Se mantiene la importación
 import * as userService from '../../services/userService';
 import * as tankService from '../../services/tankService';
 import * as sensorService from '../../services/sensorService';
 import * as settingsService from '../../services/settingsService';
-import { User, Tank, Sensor, SensorData } from '../../types'; // SensorData para el tipado
+import { User, Tank, Sensor, SensorData } from '../../types';
 import { MapPin, Cpu } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { socketService } from '../../services/socketService';
@@ -19,6 +20,25 @@ const DEFAULT_THRESHOLDS = {
     temperature: { min: 22, max: 26 },
     ph: { min: 6.8, max: 7.6 },
     oxygen: { min: 6, max: 10 },
+};
+
+/**
+ * @function getDynamicGaugeScale
+ * @description Calcula una escala (mínimo y máximo) para el medidor de forma dinámica para centrar visualmente el rango óptimo.
+ * @param {object} thresholds - Los umbrales de la zona óptima.
+ * @returns {{min: number, max: number}} Un objeto con los nuevos límites para la escala del medidor.
+ */
+const getDynamicGaugeScale = (thresholds?: { min: number; max: number }) => {
+  if (!thresholds || typeof thresholds.min !== 'number' || typeof thresholds.max !== 'number') {
+    return { min: 0, max: 100 }; // Fallback
+  }
+  const range = thresholds.max - thresholds.min;
+  const padding = range * 1.5;
+
+  return {
+    min: Math.max(0, Math.floor(thresholds.min - padding)),
+    max: Math.ceil(thresholds.max + padding),
+  };
 };
 
 export const Dashboard: React.FC = () => {
@@ -37,7 +57,7 @@ export const Dashboard: React.FC = () => {
   const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
   const [loadingInitialData, setLoadingInitialData] = useState(true);
 
-  // Efecto para la carga inicial de datos (sin cambios)
+  // --- Lógica de carga de datos y WebSockets (versión estable) ---
   useEffect(() => {
     if (!user) return;
     const fetchInitialData = async () => {
@@ -63,12 +83,11 @@ export const Dashboard: React.FC = () => {
     fetchInitialData();
   }, [user, isAdmin]);
 
-  // Efecto para cargar los umbrales del usuario seleccionado (sin cambios)
   useEffect(() => {
     if (!selectedUserId) return;
     const fetchUserSettings = async () => {
       try {
-        const settingsData = await settingsService.getSettings(selectedUserId);
+        const settingsData = await settingsService.getSettings();
         setThresholds(settingsData?.thresholds || DEFAULT_THRESHOLDS);
       } catch (error) {
         console.error("Error al cargar settings:", error);
@@ -78,13 +97,6 @@ export const Dashboard: React.FC = () => {
     fetchUserSettings();
   }, [selectedUserId]);
 
-  /**
-   * @effect
-   * @description **SOLUCIÓN DEFINITIVA**: Este efecto ahora se suscribe a los datos del socket
-   * de una manera estable, evitando el ciclo de reconexión.
-   * @technical_requirements La función `handleNewData` se define con `useCallback` y el `useEffect` que se suscribe
-   * se ejecuta solo cuando la función de callback cambia, estabilizando el comportamiento.
-   */
   const handleNewData = useCallback((data: SensorData) => {
       setAllSensors(prevSensors =>
         prevSensors.map(sensor => {
@@ -118,17 +130,15 @@ export const Dashboard: React.FC = () => {
           return sensor;
         })
       );
-  }, [thresholds]); // Dependemos de `thresholds` para que la función se actualice si el usuario cambia los umbrales
+  }, [thresholds]);
 
   useEffect(() => {
+    socketService.connect();
     socketService.onSensorData(handleNewData);
-
     return () => {
       socketService.offSensorData(handleNewData);
     };
-  }, [handleNewData]); // El efecto ahora solo depende de la función memoizada
-
-  // ... (resto del componente y JSX sin cambios)
+  }, [handleNewData]);
 
   const handleUserChange = (userId: string) => {
     setSelectedUserId(userId);
@@ -158,7 +168,59 @@ export const Dashboard: React.FC = () => {
       return <Card><div className="text-center py-16 text-gray-500 dark:text-gray-400"><Cpu className="w-12 h-12 mx-auto mb-4" /><h3 className="text-lg font-semibold">No hay sensores disponibles</h3><p className="mt-1 text-sm">Este estanque no tiene ningún sensor registrado.</p></div></Card>;
     }
     
-    return <SummaryCards sensors={sensorsForSelectedTank} thresholds={thresholds} />;
+    // Se obtienen los sensores actualizados en tiempo real
+    const temperatureSensor = sensorsForSelectedTank.find(s => s.type === 'TEMPERATURE');
+    const oxygenSensor = sensorsForSelectedTank.find(s => s.type === 'OXYGEN');
+    const phSensor = sensorsForSelectedTank.find(s => s.type === 'PH');
+
+    // Se calculan las escalas dinámicas
+    const tempScale = getDynamicGaugeScale(thresholds.temperature);
+    const oxygenScale = getDynamicGaugeScale(thresholds.oxygen);
+    const phScale = getDynamicGaugeScale(thresholds.ph);
+    
+    return (
+      <div className="space-y-6">
+        {/* Las SummaryCards ya reciben los sensores actualizados y funcionan correctamente */}
+        <SummaryCards sensors={sensorsForSelectedTank} thresholds={thresholds} />
+
+        {/* Los GaugeChart ahora también leen de los sensores actualizados */}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {temperatureSensor && (
+            <GaugeChart
+              label="Temperatura"
+              value={temperatureSensor.lastReading ?? tempScale.min}
+              previousValue={temperatureSensor.previousReading}
+              min={tempScale.min} 
+              max={tempScale.max} 
+              unit="°C"
+              thresholds={thresholds?.temperature}
+            />
+          )}
+          {oxygenSensor && (
+            <GaugeChart
+              label="Oxígeno Disuelto"
+              value={oxygenSensor.lastReading ?? oxygenScale.min}
+              previousValue={oxygenSensor.previousReading}
+              min={oxygenScale.min} 
+              max={oxygenScale.max} 
+              unit="mg/L"
+              thresholds={thresholds?.oxygen}
+            />
+          )}
+          {phSensor && (
+            <GaugeChart
+              label="Nivel de pH"
+              value={phSensor.lastReading ?? phScale.min}
+              previousValue={phSensor.previousReading}
+              min={phScale.min} 
+              max={phScale.max} 
+              unit=""
+              thresholds={thresholds?.ph}
+            />
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
