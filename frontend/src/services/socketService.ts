@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { SensorData } from '../types';
+import { SensorData, Report } from '../types';
 
 /**
  * @class SocketService
@@ -9,18 +9,12 @@ class SocketService {
   private socket: Socket | null = null;
   private readonly apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
 
-  /**
-   * @method connect
-   * @description Establece la conexión con el servidor de sockets.
-   */
   public connect(): void {
     if (this.socket && this.socket.connected) {
       return;
     }
     this.socket = io(this.apiUrl, {
-      // Forzar el transporte a websocket puede ayudar a evitar problemas de conectividad.
       transports: ['websocket'],
-      // Desactivar reintentos automáticos para tener más control en la UI si es necesario.
       reconnection: true,
       reconnectionAttempts: 5,
     });
@@ -38,10 +32,6 @@ class SocketService {
     });
   }
 
-  /**
-   * @method disconnect
-   * @description Cierra la conexión activa del socket.
-   */
   public disconnect(): void {
     if (this.socket) {
       this.socket.disconnect();
@@ -49,24 +39,36 @@ class SocketService {
     }
   }
 
-  /**
-   * @method onSensorData
-   * @description Se suscribe a los eventos 'new_sensor_data' del servidor.
-   */
   public onSensorData(callback: (data: SensorData) => void): void {
     if (this.socket) {
       this.socket.on('new_sensor_data', callback);
     }
   }
 
-  /**
-   * @method offSensorData
-   * @description Se desuscribe de los eventos 'new_sensor_data'.
-   */
   public offSensorData(callback: (data: SensorData) => void): void {
     if (this.socket) {
       this.socket.off('new_sensor_data', callback);
     }
+  }
+
+  /**
+   * @method onReportUpdate
+   * @description Se suscribe a los eventos de actualización de reportes.
+   */
+  public onReportUpdate(callback: (report: Report) => void): void {
+      if (this.socket) {
+          this.socket.on('report_status_update', callback);
+      }
+  }
+
+  /**
+   * @method offReportUpdate
+   * @description Se desuscribe de los eventos de actualización de reportes.
+   */
+  public offReportUpdate(callback: (report: Report) => void): void {
+      if (this.socket) {
+          this.socket.off('report_status_update', callback);
+      }
   }
 }
 

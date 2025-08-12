@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Download, FileText, Filter, CheckCircle, Info, Droplets, Plus, Clock, Loader } from 'lucide-react';
+import { Download, FileText, Filter, Droplets, Plus, Clock, Loader } from 'lucide-react';
 import { Card } from '../common/Card';
 import { useAuth } from '../../hooks/useAuth';
 import { LoadingSpinner } from '../common/LoadingSpinner';
@@ -11,6 +11,7 @@ import * as sensorService from '../../services/sensorService';
 import * as reportService from '../../services/reportService';
 import { Report, ReportType, Tank, Sensor } from '../../types';
 import { cn } from '../../utils/cn';
+import { socketService } from '../../services/socketService';
 
 interface ReportFilters {
   tankId: string | null;
@@ -73,6 +74,28 @@ export const Reports: React.FC = () => {
   }, [fetchInitialData]);
   
   useEffect(() => {
+    const handleReportUpdate = (updatedReport: Report) => {
+        setReports(prevReports => {
+            const index = prevReports.findIndex(r => r.id === updatedReport.id);
+            if (index !== -1) {
+                const newReports = [...prevReports];
+                newReports[index] = updatedReport;
+                return newReports;
+            }
+            return prevReports;
+        });
+    };
+
+    socketService.connect();
+    socketService.onReportUpdate(handleReportUpdate);
+
+    return () => {
+        socketService.offReportUpdate(handleReportUpdate);
+        socketService.disconnect();
+    };
+  }, []);
+  
+  useEffect(() => {
     if (reportForm.tankId && user) {
         sensorService.getSensors(user.id)
             .then(sensorsData => {
@@ -129,7 +152,6 @@ export const Reports: React.FC = () => {
       }
       title += ` - ${format(new Date(), 'dd-MM-yy HH:mm')}`;
 
-      // Llama al servicio del backend para crear el reporte
       const newReport = await reportService.createReport({
         title,
         type: 'CUSTOM',
@@ -139,8 +161,6 @@ export const Reports: React.FC = () => {
         endDate: reportForm.endDate,
       });
 
-      // Añadimos el nuevo reporte a la lista local para una actualización inmediata.
-      // Los datos que mostramos en la tabla provienen de la respuesta del backend.
       setReports(prevReports => [newReport, ...prevReports]);
 
       await Swal.fire({
@@ -150,7 +170,6 @@ export const Reports: React.FC = () => {
         timer: 3000,
         showConfirmButton: false,
       });
-      // Ya no es necesario llamar a fetchReports() porque actualizamos el estado local.
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'Ocurrió un error inesperado.';
       await Swal.fire('Error', errorMessage, 'error');

@@ -64,6 +64,10 @@ export class ReportsService {
     });
   }
 
+  /**
+   * @method generateFileFromData
+   * @description Lee los datos brutos del reporte y los convierte al formato solicitado.
+   */
   async generateFileFromData(report: Report, format: string) {
     const dataFilePath = report.filePath;
     
@@ -94,6 +98,11 @@ export class ReportsService {
     };
   }
 
+  /**
+   * @private
+   * @method generateExcelFile
+   * @description Genera un archivo .xlsx válido a partir de los datos.
+   */
   private async generateExcelFile(report: Report, rawData: any[], outputPath: string): Promise<string> {
     const headers = ['id', 'value', 'type', 'timestamp', 'createdAt', 'sensorId', 'tankId'];
     const formattedData = rawData.map(item => {
@@ -117,6 +126,11 @@ export class ReportsService {
     return filePath;
   }
 
+  /**
+   * @private
+   * @method generatePdfFile
+   * @description Genera un archivo .pdf válido a partir de los datos.
+   */
   private async generatePdfFile(report: Report, rawData: any[], outputPath: string): Promise<string> {
     const doc = new jsPDF();
     
@@ -161,7 +175,7 @@ export class ReportsService {
       const parameters = JSON.parse(report.parameters as string);
       
       // -- CORRECCIÓN CRÍTICA DE FECHAS --
-      // Construimos las fechas manualmente para evitar problemas de zona horaria
+      // Creamos objetos de fecha explícitamente en la zona horaria del servidor
       const start = new Date(parameters.startDate);
       const end = new Date(parameters.endDate);
       const startDate = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0);
