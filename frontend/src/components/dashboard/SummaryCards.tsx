@@ -41,7 +41,7 @@ interface SensorStatusCardProps {
 
 /**
  * @constant SENSOR_ORDER
- * @description Define el orden de visualización para las tarjetas: Temperatura, Oxígeno, pH.
+ * @description Define el orden de visualización para las tarjetas: Temperatura, Oxígeno Disuelto, Nivel de pH.
  */
 const SENSOR_ORDER: Record<string, number> = {
     'TEMPERATURE': 1,
@@ -58,8 +58,8 @@ const SENSOR_ORDER: Record<string, number> = {
 const getSensorInfo = (type: Sensor['type']) => {
     const info = {
         TEMPERATURE: { icon: Thermometer, unit: '°C', name: 'Temperatura', color: 'text-orange-500', bg: 'bg-orange-100 dark:bg-orange-500/20' },
-        PH: { icon: Droplets, unit: '', name: 'pH', color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-500/20' },
-        OXYGEN: { icon: Wind, unit: 'mg/L', name: 'Oxígeno', color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-500/20' },
+        PH: { icon: Droplets, unit: '', name: 'Nivel de pH', color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-500/20' },
+        OXYGEN: { icon: Wind, unit: 'mg/L', name: 'Oxígeno Disuelto', color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-500/20' },
         LEVEL: { icon: BarChartHorizontal, unit: '%', name: 'Nivel', color: 'text-gray-500', bg: 'bg-gray-100 dark:bg-gray-500/20' },
         FLOW: { icon: Zap, unit: 'L/min', name: 'Flujo', color: 'text-yellow-500', bg: 'bg-yellow-100 dark:bg-yellow-500/20' }
     };

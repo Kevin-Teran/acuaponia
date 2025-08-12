@@ -1,4 +1,3 @@
-// frontend/src/components/modules/Dashboard.tsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { LoadingSpinner } from '../common/LoadingSpinner';
@@ -6,15 +5,18 @@ import { Card } from '../common/Card';
 import { DashboardFilters } from '../dashboard/DashboardFilters';
 import { SummaryCards } from '../dashboard/SummaryCards';
 import { AdminStatCards } from '../dashboard/AdminStatCards';
-import { GaugeChart } from '../dashboard/GaugeChart'; // Se mantiene la importación
+import { GaugeChart } from '../dashboard/GaugeChart';
+import { LineChart } from '../dashboard/LineChart';
 import * as userService from '../../services/userService';
 import * as tankService from '../../services/tankService';
 import * as sensorService from '../../services/sensorService';
 import * as settingsService from '../../services/settingsService';
-import { User, Tank, Sensor, SensorData } from '../../types';
-import { MapPin, Cpu } from 'lucide-react';
+import { User, Tank, Sensor, SensorData, ProcessedDataPoint } from '../../types';
+import { MapPin, Cpu, BarChart3 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { socketService } from '../../services/socketService';
+import api from '../../config/api';
+import { processRawData } from '../../hooks/useSensorData';
 
 const DEFAULT_THRESHOLDS = {
     temperature: { min: 22, max: 26 },
@@ -22,19 +24,12 @@ const DEFAULT_THRESHOLDS = {
     oxygen: { min: 6, max: 10 },
 };
 
-/**
- * @function getDynamicGaugeScale
- * @description Calcula una escala (mínimo y máximo) para el medidor de forma dinámica para centrar visualmente el rango óptimo.
- * @param {object} thresholds - Los umbrales de la zona óptima.
- * @returns {{min: number, max: number}} Un objeto con los nuevos límites para la escala del medidor.
- */
 const getDynamicGaugeScale = (thresholds?: { min: number; max: number }) => {
   if (!thresholds || typeof thresholds.min !== 'number' || typeof thresholds.max !== 'number') {
-    return { min: 0, max: 100 }; // Fallback
+    return { min: 0, max: 100 };
   }
   const range = thresholds.max - thresholds.min;
   const padding = range * 1.5;
-
   return {
     min: Math.max(0, Math.floor(thresholds.min - padding)),
     max: Math.ceil(thresholds.max + padding),
@@ -57,7 +52,9 @@ export const Dashboard: React.FC = () => {
   const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
   const [loadingInitialData, setLoadingInitialData] = useState(true);
 
-  // --- Lógica de carga de datos y WebSockets (versión estable) ---
+  const [historicalData, setHistoricalData] = useState<ProcessedDataPoint[]>([]);
+  const [loadingHistorical, setLoadingHistorical] = useState(true);
+
   useEffect(() => {
     if (!user) return;
     const fetchInitialData = async () => {
@@ -84,11 +81,40 @@ export const Dashboard: React.FC = () => {
   }, [user, isAdmin]);
 
   useEffect(() => {
+    const fetchChartData = async () => {
+      if (!selectedTankId || !startDate || !endDate) {
+        setHistoricalData([]);
+        return;
+      }
+      setLoadingHistorical(true);
+      try {
+        const params = new URLSearchParams({ tankId: selectedTankId, startDate, endDate });
+        if(selectedUserId) params.append('userId', selectedUserId);
+        
+        const response = await api.get<{ data: SensorData[] }>(`/data/historical?${params.toString()}`);
+        const processed = processRawData(response.data.data);
+        setHistoricalData(processed);
+      } catch (err) {
+        console.error("Error fetching historical data:", err);
+        setHistoricalData([]);
+      } finally {
+        setLoadingHistorical(false);
+      }
+    };
+    fetchChartData();
+  }, [selectedTankId, startDate, endDate, selectedUserId]);
+
+  useEffect(() => {
     if (!selectedUserId) return;
     const fetchUserSettings = async () => {
       try {
         const settingsData = await settingsService.getSettings();
-        setThresholds(settingsData?.thresholds || DEFAULT_THRESHOLDS);
+        // **CORRECCIÓN**: Se fusionan los umbrales para asegurar que siempre haya valores.
+        setThresholds({
+            temperature: { ...DEFAULT_THRESHOLDS.temperature, ...settingsData?.thresholds?.temperature },
+            ph: { ...DEFAULT_THRESHOLDS.ph, ...settingsData?.thresholds?.ph },
+            oxygen: { ...DEFAULT_THRESHOLDS.oxygen, ...settingsData?.thresholds?.oxygen },
+        });
       } catch (error) {
         console.error("Error al cargar settings:", error);
         setThresholds(DEFAULT_THRESHOLDS);
@@ -101,36 +127,12 @@ export const Dashboard: React.FC = () => {
       setAllSensors(prevSensors =>
         prevSensors.map(sensor => {
           if (sensor.hardwareId === data.hardwareId) {
-            const newReading = data.value;
-            const oldReading = sensor.lastReading;
-
-            let trend: Sensor['trend'] = 'stable';
-            if (oldReading !== null && oldReading !== undefined) {
-              if (newReading > oldReading) trend = 'up';
-              else if (newReading < oldReading) trend = 'down';
-            }
-
-            const sensorTypeKey = sensor.type.toLowerCase() as keyof typeof thresholds;
-            const threshold = thresholds[sensorTypeKey];
-            let readingStatus: Sensor['readingStatus'] = 'Óptimo';
-            if (threshold) {
-              if (newReading < threshold.min) readingStatus = 'Bajo';
-              else if (newReading > threshold.max) readingStatus = 'Alto';
-            }
-            
-            return {
-              ...sensor,
-              previousReading: oldReading,
-              lastReading: newReading,
-              lastUpdate: new Date().toISOString(),
-              trend,
-              readingStatus,
-            };
+            return { ...sensor, previousReading: sensor.lastReading, lastReading: data.value, lastUpdate: new Date().toISOString() };
           }
           return sensor;
         })
       );
-  }, [thresholds]);
+  }, []);
 
   useEffect(() => {
     socketService.connect();
@@ -168,58 +170,45 @@ export const Dashboard: React.FC = () => {
       return <Card><div className="text-center py-16 text-gray-500 dark:text-gray-400"><Cpu className="w-12 h-12 mx-auto mb-4" /><h3 className="text-lg font-semibold">No hay sensores disponibles</h3><p className="mt-1 text-sm">Este estanque no tiene ningún sensor registrado.</p></div></Card>;
     }
     
-    // Se obtienen los sensores actualizados en tiempo real
     const temperatureSensor = sensorsForSelectedTank.find(s => s.type === 'TEMPERATURE');
     const oxygenSensor = sensorsForSelectedTank.find(s => s.type === 'OXYGEN');
     const phSensor = sensorsForSelectedTank.find(s => s.type === 'PH');
 
-    // Se calculan las escalas dinámicas
     const tempScale = getDynamicGaugeScale(thresholds.temperature);
     const oxygenScale = getDynamicGaugeScale(thresholds.oxygen);
     const phScale = getDynamicGaugeScale(thresholds.ph);
     
     return (
-      <div className="space-y-6">
-        {/* Las SummaryCards ya reciben los sensores actualizados y funcionan correctamente */}
-        <SummaryCards sensors={sensorsForSelectedTank} thresholds={thresholds} />
+        <div className="space-y-6">
+            <SummaryCards sensors={sensorsForSelectedTank} thresholds={thresholds} />
 
-        {/* Los GaugeChart ahora también leen de los sensores actualizados */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {temperatureSensor && (
-            <GaugeChart
-              label="Temperatura"
-              value={temperatureSensor.lastReading ?? tempScale.min}
-              previousValue={temperatureSensor.previousReading}
-              min={tempScale.min} 
-              max={tempScale.max} 
-              unit="°C"
-              thresholds={thresholds?.temperature}
-            />
-          )}
-          {oxygenSensor && (
-            <GaugeChart
-              label="Oxígeno Disuelto"
-              value={oxygenSensor.lastReading ?? oxygenScale.min}
-              previousValue={oxygenSensor.previousReading}
-              min={oxygenScale.min} 
-              max={oxygenScale.max} 
-              unit="mg/L"
-              thresholds={thresholds?.oxygen}
-            />
-          )}
-          {phSensor && (
-            <GaugeChart
-              label="Nivel de pH"
-              value={phSensor.lastReading ?? phScale.min}
-              previousValue={phSensor.previousReading}
-              min={phScale.min} 
-              max={phScale.max} 
-              unit=""
-              thresholds={thresholds?.ph}
-            />
-          )}
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {temperatureSensor && ( <GaugeChart label="Temperatura" value={temperatureSensor.lastReading ?? tempScale.min} previousValue={temperatureSensor.previousReading} min={tempScale.min} max={tempScale.max} unit="°C" thresholds={thresholds?.temperature} /> )}
+              {oxygenSensor && ( <GaugeChart label="Oxígeno Disuelto" value={oxygenSensor.lastReading ?? oxygenScale.min} previousValue={oxygenSensor.previousReading} min={oxygenScale.min} max={oxygenScale.max} unit="mg/L" thresholds={thresholds?.oxygen} /> )}
+              {phSensor && ( <GaugeChart label="Nivel de pH" value={phSensor.lastReading ?? phScale.min} previousValue={phSensor.previousReading} min={phScale.min} max={phScale.max} unit="" thresholds={thresholds?.ph} /> )}
+            </div>
+            
+            <div className="mt-6">
+                {loadingHistorical ? (
+                  <Card><LoadingSpinner message="Cargando gráficos históricos..." /></Card>
+                ) : historicalData.length > 0 ? (
+                  <LineChart 
+                      data={historicalData} 
+                      thresholds={thresholds} 
+                      startDate={startDate} 
+                      endDate={endDate} 
+                  />
+                ) : (
+                  <Card>
+                    <div className="text-center py-16 text-gray-500 dark:text-gray-400">
+                      <BarChart3 className="w-12 h-12 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold">No hay datos históricos</h3>
+                      <p className="mt-1 text-sm">No se encontraron datos para el rango de fechas seleccionado.</p>
+                    </div>
+                  </Card>
+                )}
+            </div>
         </div>
-      </div>
     );
   };
 
@@ -231,17 +220,9 @@ export const Dashboard: React.FC = () => {
       </div>
       
       <DashboardFilters
-        startDate={startDate}
-        endDate={endDate}
-        selectedTankId={selectedTankId}
-        selectedUserId={selectedUserId} 
-        onStartDateChange={setStartDate}
-        onEndDateChange={setEndDate}
-        onTankChange={setSelectedTankId}
-        onUserChange={handleUserChange} 
-        tanks={filteredTanksForSelectedUser}
-        users={allUsers} 
-        isAdmin={isAdmin}
+        startDate={startDate} endDate={endDate} selectedTankId={selectedTankId} selectedUserId={selectedUserId} 
+        onStartDateChange={setStartDate} onEndDateChange={setEndDate} onTankChange={setSelectedTankId}
+        onUserChange={handleUserChange} tanks={filteredTanksForSelectedUser} users={allUsers} isAdmin={isAdmin}
       />
 
       {isAdmin && <AdminStatCards sensors={sensorsForSelectedTank} />}
