@@ -25,7 +25,7 @@ export const processRawData = (rawData: SensorData[]): ProcessedDataPoint[] => {
       const point = dataMap.get(groupTimestamp)!;
       const key = item.type.toLowerCase() as keyof Omit<ProcessedDataPoint, 'timestamp'>;
       if (key in point) {
-          point[key] = item.value;
+          (point as any)[key] = item.value;
       }
   });
 
@@ -77,11 +77,12 @@ interface SensorDataFilters {
  * @hook useSensorData
  * @description Hook centralizado para obtener, procesar y actualizar los datos de los sensores.
  * Maneja la carga inicial de datos históricos vía API y las actualizaciones en tiempo real vía WebSockets.
- * @param {SensorDataFilters} filters - Los filtros a aplicar en la consulta de datos.
+ * @param {SensorDataFilters | undefined} filters - Los filtros a aplicar en la consulta de datos.
  * @returns Un objeto con los datos procesados, el resumen estadístico, el estado de carga y errores.
  */
-export const useSensorData = (filters: SensorDataFilters) => {
-  const { tankId, startDate, endDate, userId } = filters;
+export const useSensorData = (filters: SensorDataFilters | undefined) => {
+  // Verificación de existencia del objeto filters para evitar errores.
+  const { tankId, startDate, endDate, userId } = filters || {};
   const [rawData, setRawData] = useState<SensorData[]>([]);
   const [processedData, setProcessedData] = useState<ProcessedDataPoint[]>([]);
   const [summary, setSummary] = useState<DataSummary | null>(null);
@@ -95,10 +96,11 @@ export const useSensorData = (filters: SensorDataFilters) => {
    * Procesa los datos y actualiza los estados correspondientes.
    */
   const fetchData = useCallback(async () => {
+    // Si no hay un tanque seleccionado, no se debe hacer la llamada a la API.
     if (!tankId || !startDate || !endDate) {
       setLoading(false);
       return;
-    };
+    }
 
     setLoading(true);
     setError(null);

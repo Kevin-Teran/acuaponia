@@ -6,6 +6,7 @@ import { UsersModule } from './users/users.module';
 import { TanksModule } from './tanks/tanks.module';
 import { SensorsModule } from './sensors/sensors.module';
 import { SettingsModule } from './settings/settings.module';
+import { ReportsModule } from './reports/reports.module';
 import { EventsModule } from './events/events.module';
 import { DataModule } from './data/data.module';
 import { MqttModule } from './mqtt/mqtt.module';
@@ -23,6 +24,7 @@ import * as path from 'path';
     UsersModule,
     TanksModule,
     SensorsModule,
+    ReportsModule,
     DataModule,
     EventsModule,
     SettingsModule,

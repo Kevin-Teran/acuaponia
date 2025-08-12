@@ -1,262 +1,316 @@
-import React, { useState } from 'react';
-import { Calendar, Download, FileText, Filter, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Download, FileText, Filter, CheckCircle, Info, Droplets, Plus, Clock, Loader } from 'lucide-react';
 import { Card } from '../common/Card';
-import { useSensorData } from '../../hooks/useSensorData';
-import { generatePDFReport, generateExcelReport } from '../../utils/reportGenerator';
+import { useAuth } from '../../hooks/useAuth';
+import { LoadingSpinner } from '../common/LoadingSpinner';
+import Swal from 'sweetalert2';
 import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import Swal from 'sweetalert2';
+import * as tankService from '../../services/tankService';
+import * as sensorService from '../../services/sensorService';
+import * as reportService from '../../services/reportService';
+import { Report, ReportType, Tank, Sensor } from '../../types';
+import { cn } from '../../utils/cn';
+
+interface ReportFilters {
+  tankId: string | null;
+  sensorIds: string[];
+  startDate: string;
+  endDate: string;
+}
 
 export const Reports: React.FC = () => {
-  const { data } = useSensorData();
-  const [dateRange, setDateRange] = useState({
-    startDate: format(subDays(new Date(), 7), 'yyyy-MM-dd'),
-    endDate: format(new Date(), 'yyyy-MM-dd'),
+  const { user } = useAuth();
+  const [tanks, setTanks] = useState<Tank[]>([]);
+  const [sensors, setSensors] = useState<Sensor[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const [reportForm, setReportForm] = useState<ReportFilters>({
+      tankId: null,
+      sensorIds: ['all'],
+      startDate: format(subDays(new Date(), 7), 'yyyy-MM-dd'),
+      endDate: format(new Date(), 'yyyy-MM-dd'),
   });
-  const [selectedParameter, setSelectedParameter] = useState('all');
-  const [generating, setGenerating] = useState(false);
 
-  const handleExportPDF = async () => {
-    if (filteredData.length === 0) {
-      await Swal.fire({
-        icon: 'warning',
-        title: 'Sin datos',
-        text: 'No hay datos para exportar en el rango seleccionado.',
-        confirmButtonColor: '#FF671F'
-      });
-      return;
-    }
-
-    setGenerating(true);
+  const fetchReports = useCallback(async () => {
+    if (!user) return;
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      generatePDFReport(filteredData, { ...dateRange, selectedParameter });
+      const fetchedReports = await reportService.getReports(user.id);
+      setReports(fetchedReports);
+    } catch (error) {
+      Swal.fire('Error', 'No se pudo cargar el historial de reportes.', 'error');
+    }
+  }, [user]);
+
+  const fetchInitialData = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const [tanksData, reportsData] = await Promise.all([
+        tankService.getTanks(user.id),
+        reportService.getReports(user.id),
+      ]);
+      setTanks(tanksData);
+      setReports(reportsData);
       
+      if (tanksData.length > 0) {
+        const firstTankId = tanksData[0].id;
+        setReportForm(prev => ({ ...prev, tankId: firstTankId }));
+        const sensorsData = await sensorService.getSensors(user.id);
+        setSensors(sensorsData.filter(s => s.tankId === firstTankId));
+      }
+    } catch (error) {
+      Swal.fire('Error', 'No se pudo cargar los datos iniciales.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchInitialData();
+  }, [fetchInitialData]);
+  
+  useEffect(() => {
+    if (reportForm.tankId && user) {
+        sensorService.getSensors(user.id)
+            .then(sensorsData => {
+                const filteredSensors = sensorsData.filter(s => s.tankId === reportForm.tankId);
+                setSensors(filteredSensors);
+                setReportForm(prev => ({ ...prev, sensorIds: ['all'] }));
+            });
+    }
+  }, [reportForm.tankId, user]);
+  
+  const handleToggleSensor = useCallback((sensorId: string) => {
+    setReportForm(prev => {
+      let newSensorIds: string[] = [];
+      if (sensorId === 'all') {
+        newSensorIds = prev.sensorIds.includes('all') ? [] : ['all'];
+      } else {
+        newSensorIds = prev.sensorIds.filter(id => id !== 'all');
+        newSensorIds = newSensorIds.includes(sensorId)
+            ? newSensorIds.filter(id => id !== sensorId)
+            : [...newSensorIds, sensorId];
+      }
+      return { ...prev, sensorIds: newSensorIds };
+    });
+  }, []);
+
+  const handleGenerateReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsGenerating(true);
+
+    try {
+      const start = new Date(reportForm.startDate);
+      const end = new Date(reportForm.endDate);
+      const now = new Date();
+
+      if (start > end) {
+        throw new Error('La fecha de inicio no puede ser posterior a la fecha de fin.');
+      }
+      if (end > now) {
+        throw new Error('La fecha de fin no puede ser superior a la fecha actual.');
+      }
+      
+      const tank = tanks.find(t => t.id === reportForm.tankId);
+      if (!tank) {
+          throw new Error('Debe seleccionar un tanque válido.');
+      }
+      
+      const selectedSensors = reportForm.sensorIds.includes('all') || reportForm.sensorIds.length === 0
+          ? sensors
+          : sensors.filter(s => reportForm.sensorIds.includes(s.id));
+
+      let title = `Reporte de ${tank.name}`;
+      if (selectedSensors.length > 0 && selectedSensors.length < sensors.length) {
+          title += ` (${selectedSensors.map(s => s.name).join(', ')})`;
+      }
+      title += ` - ${format(new Date(), 'dd-MM-yy HH:mm')}`;
+
+      // Llama al servicio del backend para crear el reporte
+      const newReport = await reportService.createReport({
+        title,
+        type: 'CUSTOM',
+        tankId: reportForm.tankId,
+        sensorIds: reportForm.sensorIds.includes('all') || reportForm.sensorIds.length === 0 ? sensors.map(s => s.id) : reportForm.sensorIds,
+        startDate: reportForm.startDate,
+        endDate: reportForm.endDate,
+      });
+
+      // Añadimos el nuevo reporte a la lista local para una actualización inmediata.
+      // Los datos que mostramos en la tabla provienen de la respuesta del backend.
+      setReports(prevReports => [newReport, ...prevReports]);
+
       await Swal.fire({
         icon: 'success',
-        title: '¡PDF Generado!',
-        text: 'El reporte PDF se ha descargado exitosamente.',
-        timer: 2000,
+        title: 'Reporte solicitado',
+        text: `El reporte "${title}" se está generando. Puedes ver su estado en la tabla.`,
+        timer: 3000,
         showConfirmButton: false,
-        confirmButtonColor: '#FF671F'
       });
-    } catch (error) {
-      console.error('Error generando PDF:', error);
-      await Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Hubo un problema al generar el PDF. Intente nuevamente.',
-        confirmButtonColor: '#FF671F'
-      });
+      // Ya no es necesario llamar a fetchReports() porque actualizamos el estado local.
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Ocurrió un error inesperado.';
+      await Swal.fire('Error', errorMessage, 'error');
     } finally {
-      setGenerating(false);
+      setIsGenerating(false);
     }
   };
 
-  const handleExportExcel = async () => {
-    if (filteredData.length === 0) {
-      await Swal.fire({
-        icon: 'warning',
-        title: 'Sin datos',
-        text: 'No hay datos para exportar en el rango seleccionado.',
-        confirmButtonColor: '#FF671F'
-      });
-      return;
-    }
-
-    setGenerating(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      generateExcelReport(filteredData, { ...dateRange, selectedParameter });
-      
-      await Swal.fire({
-        icon: 'success',
-        title: '¡Excel Generado!',
-        text: 'El reporte Excel se ha descargado exitosamente.',
-        timer: 2000,
-        showConfirmButton: false,
-        confirmButtonColor: '#FF671F'
-      });
-    } catch (error) {
-      console.error('Error generando Excel:', error);
-      await Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Hubo un problema al generar el Excel. Intente nuevamente.',
-        confirmButtonColor: '#FF671F'
-      });
-    } finally {
-      setGenerating(false);
-    }
+  const getStatusChip = (status: string) => {
+    const styles: Record<string, string> = {
+      PENDING: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+      PROCESSING: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+      COMPLETED: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+      FAILED: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    };
+    return <span className={cn('px-2.5 py-1 rounded-full text-xs font-medium', styles[status])}>{status}</span>;
   };
-
-  const filteredData = data.filter(item => {
-    const itemDate = format(new Date(item.timestamp), 'yyyy-MM-dd');
-    return itemDate >= dateRange.startDate && itemDate <= dateRange.endDate;
-  });
+  
+  if (loading) {
+    return <LoadingSpinner fullScreen message="Cargando reportes..." />;
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Reportes
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-1">
-          Generar y exportar reportes de datos históricos
-        </p>
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestión de Reportes</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Crea nuevos reportes y revisa su estado y descarga.</p>
+        </div>
       </div>
 
-      {/* Filtros */}
-      <Card title="Filtros de Reporte" className="border-l-4 border-sena-orange">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Fecha de inicio
-            </label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="date"
-                value={dateRange.startDate}
-                onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-                className="w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-sena-orange bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Fecha de fin
-            </label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="date"
-                value={dateRange.endDate}
-                onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-                className="w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-sena-orange bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Parámetro
-            </label>
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+      <Card title="Filtros de Reporte" subtitle="Selecciona los parámetros para generar un nuevo reporte." className="border-l-4 border-sena-orange">
+        <form onSubmit={handleGenerateReport} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="label">Tanque</label>
               <select
-                value={selectedParameter}
-                onChange={(e) => setSelectedParameter(e.target.value)}
-                className="w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-sena-orange bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
+                value={reportForm.tankId || ''}
+                onChange={e => setReportForm(prev => ({ ...prev, tankId: e.target.value }))}
+                className="form-select"
+                required
               >
-                <option value="all">Todos los parámetros</option>
-                <option value="temperature">Temperatura</option>
-                <option value="ph">pH</option>
-                <option value="oxygen">Oxígeno Disuelto</option>
+                <option value="" disabled>Seleccione un tanque</option>
+                {tanks.map(tank => (
+                  <option key={tank.id} value={tank.id}>{tank.name}</option>
+                ))}
               </select>
             </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Acciones de exportación */}
-      <Card title="Exportar Datos" subtitle={`${filteredData.length} registros seleccionados`} className="border-l-4 border-sena-green">
-        <div className="flex flex-wrap gap-4">
-          <button
-            onClick={handleExportPDF}
-            disabled={generating || filteredData.length === 0}
-            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:bg-gray-400 text-white rounded-lg transition-all duration-200 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-          >
-            <FileText className="w-5 h-5" />
-            <span>{generating ? 'Generando PDF...' : 'Exportar PDF'}</span>
-          </button>
-          
-          <button
-            onClick={handleExportExcel}
-            disabled={generating || filteredData.length === 0}
-            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-sena-green to-green-700 hover:from-green-700 hover:to-green-800 disabled:bg-gray-400 text-white rounded-lg transition-all duration-200 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-          >
-            <Download className="w-5 h-5" />
-            <span>{generating ? 'Generando Excel...' : 'Exportar Excel'}</span>
-          </button>
-        </div>
-        
-        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-          <div className="flex items-start space-x-3">
-            <CheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
             <div>
-              <h4 className="font-medium text-blue-900 dark:text-blue-100">Contenido del reporte</h4>
-              <ul className="text-sm text-blue-700 dark:text-blue-300 mt-1 space-y-1">
-                <li>• Estadísticas resumen (promedio, mínimo, máximo, desviación estándar)</li>
-                <li>• Datos detallados del período seleccionado</li>
-                <li>• Formato profesional con colores institucionales SENA</li>
-                <li>• Información de generación y metadatos</li>
-              </ul>
+                <label className="label">Sensores a incluir</label>
+                <div className="mt-1 space-y-2 max-h-48 overflow-y-auto p-2 border rounded-md dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50">
+                    {sensors.length > 0 ? (
+                        <>
+                            <div className="flex items-center">
+                                <input
+                                    id="all-sensors"
+                                    type="checkbox"
+                                    checked={reportForm.sensorIds.includes('all') || reportForm.sensorIds.length === 0}
+                                    onChange={() => handleToggleSensor('all')}
+                                    className="h-4 w-4 rounded border-gray-300 text-sena-green focus:ring-sena-green"
+                                />
+                                <label htmlFor="all-sensors" className="ml-3 text-sm font-semibold text-gray-700 dark:text-gray-300">Todos los sensores</label>
+                            </div>
+                            {sensors.map(sensor => (
+                                <div key={sensor.id} className="flex items-center">
+                                    <input
+                                        id={`sensor-${sensor.id}`}
+                                        type="checkbox"
+                                        checked={reportForm.sensorIds.includes(sensor.id)}
+                                        onChange={() => handleToggleSensor(sensor.id)}
+                                        className="h-4 w-4 rounded border-gray-300 text-sena-green focus:ring-sena-green"
+                                    />
+                                    <label htmlFor={`sensor-${sensor.id}`} className="ml-3 text-sm text-gray-700 dark:text-gray-300 capitalize">{sensor.name} ({sensor.type})</label>
+                                </div>
+                            ))}
+                        </>
+                    ) : <p className="text-sm text-gray-500 p-4 text-center">Seleccione un tanque para ver sensores.</p>}
+                </div>
             </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Tabla de datos */}
-      <Card title={`Datos Históricos`} subtitle={`Mostrando ${Math.min(filteredData.length, 20)} de ${filteredData.length} registros`} className="border-l-4 border-sena-blue">
-        <div className="overflow-x-auto">
-          <table className="w-full table-auto">
-            <thead>
-              <tr className="border-b-2 border-gray-200 dark:border-gray-700">
-                <th className="text-left py-4 px-4 font-semibold text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700">
-                  Fecha y Hora
-                </th>
-                <th className="text-left py-4 px-4 font-semibold text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700">
-                  Temperatura (°C)
-                </th>
-                <th className="text-left py-4 px-4 font-semibold text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700">
-                  pH
-                </th>
-                <th className="text-left py-4 px-4 font-semibold text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700">
-                  Oxígeno (mg/L)
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredData.slice(-20).reverse().map((item, index) => (
-                <tr
-                  key={index}
-                  className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                >
-                  <td className="py-4 px-4 text-gray-900 dark:text-white font-medium">
-                    {format(new Date(item.timestamp), 'dd/MM/yyyy HH:mm', { locale: es })}
-                  </td>
-                  <td className="py-4 px-4 text-gray-900 dark:text-white">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">
-                      {item.temperature.toFixed(1)}°C
-                    </span>
-                  </td>
-                  <td className="py-4 px-4 text-gray-900 dark:text-white">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">
-                      {item.ph.toFixed(2)}
-                    </span>
-                  </td>
-                  <td className="py-4 px-4 text-gray-900 dark:text-white">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400">
-                      {item.oxygen.toFixed(1)} mg/L
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          
-          {filteredData.length === 0 && (
-            <div className="text-center py-12">
-              <div className="text-gray-400 dark:text-gray-500 mb-4">
-                <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium">No hay datos disponibles</p>
-                <p className="text-sm">Ajuste los filtros para ver información</p>
+            <div>
+              <label className="label">Fechas</label>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                    type="date"
+                    value={reportForm.startDate}
+                    onChange={e => setReportForm(prev => ({ ...prev, startDate: e.target.value }))}
+                    className="form-input"
+                    required
+                    max={reportForm.endDate || format(new Date(), 'yyyy-MM-dd')}
+                />
+                <input
+                    type="date"
+                    value={reportForm.endDate}
+                    onChange={e => setReportForm(prev => ({ ...prev, endDate: e.target.value }))}
+                    className="form-input"
+                    required
+                    min={reportForm.startDate}
+                    max={format(new Date(), 'yyyy-MM-dd')}
+                />
               </div>
             </div>
-          )}
-        </div>
+          </div>
+          <div className="flex justify-end pt-4 mt-4 border-t dark:border-gray-700">
+            <button type="submit" disabled={isGenerating || !reportForm.tankId} className="btn-primary min-w-[200px] relative">
+              {isGenerating ? <LoadingSpinner bare /> : <><FileText className="w-4 h-4 mr-2" /><span>Generar Reporte</span></>}
+            </button>
+          </div>
+        </form>
+      </Card>
+
+      <Card title="Historial de Reportes Generados" subtitle={`Mostrando ${reports.length} reportes`}>
+        {reports.length === 0 ? (
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+            <FileText className="w-16 h-16 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold">No hay reportes generados aún</h3>
+            <p className="mt-1 text-sm">Usa el formulario de arriba para crear tu primer reporte.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Título</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fechas</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Estado</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Descarga</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                {reports.map((report) => {
+                    const parameters = JSON.parse(report.parameters as string);
+                    return (
+                        <tr key={report.id}>
+                            <td className="px-6 py-4 whitespace-nowrap"><p className="text-sm font-medium text-gray-900 dark:text-white">{report.title}</p></td>
+                            <td className="px-6 py-4 whitespace-nowrap"><p className="text-sm text-gray-500 dark:text-gray-400">{format(new Date(parameters.startDate), 'dd/MM/yyyy')} - {format(new Date(parameters.endDate), 'dd/MM/yyyy')}</p></td>
+                            <td className="px-6 py-4 whitespace-nowrap">{getStatusChip(report.status)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              {report.status === 'COMPLETED' ? (
+                                <div className="flex justify-end space-x-2">
+                                    <button onClick={() => reportService.downloadReport(report.id, 'pdf')} className="btn-secondary">
+                                      <FileText className="w-4 h-4 mr-2" /> PDF
+                                    </button>
+                                    <button onClick={() => reportService.downloadReport(report.id, 'xlsx')} className="btn-primary">
+                                      <Download className="w-4 h-4 mr-2" /> Excel
+                                    </button>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 dark:text-gray-500 flex items-center justify-end">
+                                  <Clock className="w-4 h-4 mr-2"/>
+                                  {report.status === 'FAILED' ? 'Error' : 'En proceso...'}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                    );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
     </div>
   );

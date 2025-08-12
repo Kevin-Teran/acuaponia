@@ -101,3 +101,20 @@ export interface PredictionData {
   actual?: number;
   predicted: number;
 }
+
+// --- Tipos de Reportes ---
+export type ReportType = "DAILY" | "WEEKLY" | "MONTHLY" | "CUSTOM";
+export type ReportStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+
+export interface Report {
+    id: string;
+    title: string;
+    type: ReportType;
+    parameters: object; 
+    filePath?: string;
+    status: ReportStatus;
+    createdAt: string;
+    updatedAt: string;
+    userId: string;
+    user?: { name: string };
+}
