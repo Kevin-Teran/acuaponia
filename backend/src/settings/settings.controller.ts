@@ -1,11 +1,12 @@
-import { Controller, Get, Put, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Put, Body, UseGuards, Req, Query } from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { User } from '@prisma/client';
 
 /**
  * @controller SettingsController
- * @description Gestiona las rutas para obtener y actualizar las configuraciones del usuario autenticado.
- * Todas las rutas están protegidas por el guard JWT, asegurando que solo usuarios logueados puedan acceder.
+ * @description Gestiona las rutas para obtener y actualizar las configuraciones de los usuarios.
+ * @technical_requirements Protegido por JWT. Permite a los administradores consultar configuraciones de otros usuarios.
  */
 @Controller('settings')
 @UseGuards(JwtAuthGuard)
@@ -14,14 +15,20 @@ export class SettingsController {
 
   /**
    * @route   GET /api/settings
-   * @desc    Obtiene las configuraciones del usuario que realiza la petición.
+   * @desc    Obtiene las configuraciones del usuario. Si el solicitante es ADMIN, puede especificar un `userId` para consultar.
    * @param   {Request} req - La petición con los datos del usuario autenticado.
+   * @param   {string} [userId] - (Opcional) El ID del usuario a consultar, solo para Admins.
    * @returns {Promise<any>} Las configuraciones del usuario.
    */
   @Get()
-  getSettings(@Req() req: any) {
-    // req.user.id es añadido por el JwtAuthGuard
-    return this.settingsService.getSettings(req.user.id);
+  getSettings(@Req() req: any, @Query('userId') userId?: string) {
+    const currentUser = req.user as User;
+    
+    // Si el usuario es ADMIN y proporciona un userId, se usa ese ID.
+    // De lo contrario, siempre se usa el ID del propio usuario que hace la petición.
+    const targetUserId = currentUser.role === 'ADMIN' && userId ? userId : currentUser.id;
+    
+    return this.settingsService.getSettings(targetUserId);
   }
 
   /**

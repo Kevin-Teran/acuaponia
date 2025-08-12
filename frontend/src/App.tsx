@@ -1,4 +1,4 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react'; 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { LoginForm } from './components/auth/LoginForm';
@@ -15,6 +15,7 @@ import { Settings } from './components/modules/Settings';
 import { UserManagement } from './components/modules/UserManagement';
 import { Sensors } from './components/modules/Sensors';
 import { LoadingSpinner } from './components/common/LoadingSpinner';
+import { socketService } from './services/socketService';
 
 /**
  * @component App
@@ -43,9 +44,25 @@ function App() {
 /**
  * @component MainAppRoutes
  * @description Define las sub-rutas que se renderizan dentro del layout principal.
+ * AHORA TAMBIÉN GESTIONA EL CICLO DE VIDA DE LA CONEXIÓN DEL SOCKET.
  */
 const MainAppRoutes = () => {
   const { user, logout } = useAuth();
+
+  /**
+   * @effect
+   * @description **SOLUCIÓN**: Este useEffect gestiona el ciclo de vida de la conexión del socket.
+   * Se conecta UNA VEZ cuando el usuario entra a la aplicación y se desconecta solo cuando el usuario sale (logout).
+   * Esto previene el ciclo de reconexión y optimiza el rendimiento.
+   */
+  useEffect(() => {
+    if (user) {
+      socketService.connect();
+    }
+    return () => {
+      socketService.disconnect();
+    };
+  }, [user]); 
 
   if (!user) {
     return <LoadingSpinner fullScreen message="Cargando datos de usuario..." />;
@@ -66,7 +83,6 @@ const MainAppRoutes = () => {
         <Route element={<AdminRoute />}>
           <Route path="/users" element={<UserManagement />} />
           <Route path="/data-entry" element={<DataEntry />} />
-          {/* Aquí puedes añadir cualquier otra ruta que sea solo para administradores */}
         </Route>
         
         {/* Redirección por defecto si ninguna ruta coincide */}

@@ -34,6 +34,7 @@ class SocketService {
 
   public disconnect(): void {
     if (this.socket) {
+      console.log('Cerrando conexión de socket de forma controlada...'); // Log para confirmar la llamada
       this.socket.disconnect();
       this.socket = null;
     }
