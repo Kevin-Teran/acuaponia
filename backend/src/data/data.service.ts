@@ -2,11 +2,13 @@ import { Injectable, NotFoundException, OnModuleDestroy, BadRequestException, Fo
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../events/events.gateway';
 import { SensorData, SensorType, User } from '@prisma/client';
-import { Prisma } from '@prisma/client';
+
+type SimulationState = 'STABLE' | 'RISING' | 'FALLING' | 'ERROR_HIGH' | 'ERROR_LOW';
 
 /**
  * @interface ActiveEmitter
  * @description Define la estructura de un emisor de datos simulados activo.
+ * Ahora incluye un estado y un valor actual para una simulación más dinámica.
  */
 interface ActiveEmitter {
   intervalId: NodeJS.Timeout;
@@ -15,52 +17,18 @@ interface ActiveEmitter {
   type: SensorType;
   tankName: string;
   userName: string;
+  thresholds: { min: number; max: number };
+  currentValue: number;
+  state: SimulationState; 
 }
 
-/**
- * @function aggregateData
- * @description Agrupa un gran conjunto de datos en intervalos de tiempo promediados para optimizar la visualización.
- * @param data Los datos de sensor sin procesar.
- * @param intervalSeconds El intervalo en segundos para agrupar los datos (ej. 300 para 5 minutos).
- * @returns Un nuevo array de datos agregados y optimizados.
- */
-function aggregateData(data: SensorData[], intervalSeconds: number): SensorData[] {
-    if (intervalSeconds === 0 || data.length < 200) {
-        return data;
-    }
-
-    const aggregated = new Map<string, { sum: number; count: number; type: SensorType; sensorId: string; tankId: string }>();
-    if (data.length === 0) {
-        return [];
-    }
-    const firstTimestamp = data[0].timestamp.getTime();
-
-    data.forEach(point => {
-        const interval = Math.floor((point.timestamp.getTime() - firstTimestamp) / (intervalSeconds * 1000));
-        const key = `${interval}-${point.sensorId}-${point.type}`;
-
-        if (!aggregated.has(key)) {
-            aggregated.set(key, { sum: 0, count: 0, type: point.type, sensorId: point.sensorId, tankId: point.tankId });
-        }
-        const entry = aggregated.get(key)!;
-        entry.sum += point.value;
-        entry.count++;
-    });
-
-    return Array.from(aggregated.entries()).map(([key, value]) => {
-        const interval = parseInt(key.split('-')[0], 10);
-        const timestamp = new Date(firstTimestamp + (interval * intervalSeconds * 1000));
-        return {
-            id: `agg-${key}`,
-            value: value.sum / value.count, 
-            type: value.type,
-            timestamp,
-            createdAt: timestamp,
-            sensorId: value.sensorId,
-            tankId: value.tankId,
-        };
-    });
-}
+const DEFAULT_THRESHOLDS = {
+    TEMPERATURE: { min: 22, max: 28 },
+    PH: { min: 6.8, max: 7.6 },
+    OXYGEN: { min: 6, max: 10 },
+    LEVEL: { min: 40, max: 80 },
+    FLOW: { min: 5, max: 15 },
+};
 
 
 @Injectable()
@@ -75,13 +43,9 @@ export class DataService implements OnModuleDestroy {
 
   onModuleDestroy() {
     this.activeEmitters.forEach(emitter => clearInterval(emitter.intervalId));
+    this.logger.log('Todos los emisores de simulación han sido detenidos.');
   }
 
-  /**
-   * @method getHistoricalData
-   * @description Modificado para obtener datos y aplicar agregación inteligente (downsampling)
-   * antes de enviarlos, solucionando timeouts y mejorando la legibilidad de los gráficos.
-   */
   async getHistoricalData(user: User, tankId: string, startDate: string, endDate: string): Promise<{ data: SensorData[] }> {
     if (!tankId || !startDate || !endDate) {
       throw new BadRequestException('Faltan los parámetros tankId, startDate o endDate.');
@@ -90,34 +54,16 @@ export class DataService implements OnModuleDestroy {
         const tank = await this.prisma.tank.findFirst({ where: { id: tankId, userId: user.id } });
         if (!tank) throw new ForbiddenException('No tienes permiso para acceder a los datos de este tanque.');
     }
-
+    
     const start = new Date(`${startDate}T00:00:00`);
     const end = new Date(`${endDate}T23:59:59`);
 
-    const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-
-    let intervalSeconds: number;
-    if (durationHours <= 3) {
-        intervalSeconds = 0;
-    } else if (durationHours <= 48) { 
-        intervalSeconds = 5 * 60; 
-    } else if (durationHours <= 24 * 7) { 
-        intervalSeconds = 20 * 60; 
-    } else { 
-        intervalSeconds = 60 * 60; 
-    }
-
-    this.logger.log(`Buscando datos para el tanque ${tankId} en el rango: ${start.toISOString()} hasta ${end.toISOString()}`);
-    
     const rawData = await this.prisma.sensorData.findMany({
         where: { tankId: tankId, timestamp: { gte: start, lte: end } },
         orderBy: { timestamp: 'asc' },
     });
 
-    const data = aggregateData(rawData, intervalSeconds);
-    
-    this.logger.log(`Se encontraron ${rawData.length} registros crudos. Se enviarán ${data.length} puntos agregados.`);
-    return { data };
+    return { data: rawData };
   }
 
   async submitManualEntry(entries: { sensorId: string; value: number }[]): Promise<any[]> {
@@ -125,43 +71,146 @@ export class DataService implements OnModuleDestroy {
     for (const entry of entries) {
       const sensor = await this.prisma.sensor.findUnique({ where: { id: entry.sensorId } });
       if (!sensor) throw new NotFoundException(`El sensor con ID ${entry.sensorId} no fue encontrado.`);
-      const data = await this.prisma.sensorData.create({ data: { value: entry.value, type: sensor.type, timestamp: new Date(), sensorId: entry.sensorId, tankId: sensor.tankId, }, include: { sensor: true }, });
-      this.eventsGateway.broadcastNewData(data);
+      
+      const data = await this.createAndBroadcastEntry({
+          sensorId: entry.sensorId,
+          tankId: sensor.tankId,
+          type: sensor.type,
+          value: entry.value
+      });
       createdData.push(data);
     }
     return createdData;
   }
-
-  async createEntryFromMqtt(data: { sensorId: string; tankId: string; type: SensorType; value: number; }): Promise<SensorData> {
-    const createdData = await this.prisma.sensorData.create({ data: { value: data.value, type: data.type, timestamp: new Date(), sensorId: data.sensorId, tankId: data.tankId, }, include: { sensor: true }, });
-    this.eventsGateway.broadcastNewData(createdData);
-    this.logger.log(`Dato de MQTT guardado para sensor ${data.sensorId} con valor ${data.value}`);
-    return createdData as SensorData;
-  }
   
+  async createEntryFromMqtt(data: { sensorId: string; tankId: string; type: SensorType; value: number; }): Promise<SensorData> {
+    this.logger.log(`Dato de MQTT recibido para sensor ${data.sensorId} con valor ${data.value}`);
+    return this.createAndBroadcastEntry(data);
+  }
+
   async startEmitters(sensorIds: string[]): Promise<void> {
     for (const sensorId of sensorIds) {
       if (this.activeEmitters.has(sensorId)) continue;
-      const sensor = await this.prisma.sensor.findUnique({ where: { id: sensorId }, include: { tank: { include: { user: true } } }, });
-      if (!sensor) throw new NotFoundException(`Sensor con ID ${sensorId} no encontrado.`);
-      const intervalId = setInterval(() => { const value = this.generateRealisticValue(sensor.type); this.submitManualEntry([{ sensorId, value }]); }, 5000);
-      this.activeEmitters.set(sensorId, { intervalId, sensorId: sensor.id, sensorName: sensor.name, type: sensor.type, tankName: sensor.tank.name, userName: sensor.tank.user.name, });
+
+      const sensor = await this.prisma.sensor.findUnique({
+        where: { id: sensorId },
+        include: { tank: { include: { user: true } } },
+      });
+
+      if (!sensor) {
+        this.logger.warn(`Simulador: No se encontró el sensor con ID ${sensorId}.`);
+        continue;
+      }
+      
+      const userSettings = (sensor.tank.user.settings as any)?.thresholds || {};
+      const sensorTypeKey = sensor.type.toLowerCase();
+      const defaultThreshold = DEFAULT_THRESHOLDS[sensor.type];
+      
+      const thresholds = {
+          min: userSettings[sensorTypeKey]?.min ?? defaultThreshold.min,
+          max: userSettings[sensorTypeKey]?.max ?? defaultThreshold.max,
+      };
+
+      let emitterState: ActiveEmitter = {
+        intervalId: null as any, 
+        sensorId: sensor.id,
+        sensorName: sensor.name,
+        type: sensor.type,
+        tankName: sensor.tank.name,
+        userName: sensor.tank.user.name,
+        thresholds,
+        currentValue: (thresholds.min + thresholds.max) / 2,
+        state: 'STABLE',
+      };
+
+      const intervalId = setInterval(() => {
+        const { currentValue, state } = this.generateRealisticValue(emitterState);
+        emitterState.currentValue = currentValue;
+        emitterState.state = state;
+        this.submitManualEntry([{ sensorId, value: currentValue }]);
+      }, 5000);
+
+      emitterState.intervalId = intervalId;
+      this.activeEmitters.set(sensorId, emitterState);
+      this.logger.log(`✅ Simulador INTELIGENTE iniciado para "${sensor.name}" con rango [${thresholds.min}-${thresholds.max}]`);
     }
   }
 
   stopEmitter(sensorId: string): void {
     const emitter = this.activeEmitters.get(sensorId);
-    if (emitter) { clearInterval(emitter.intervalId); this.activeEmitters.delete(sensorId); }
+    if (emitter) {
+      clearInterval(emitter.intervalId);
+      this.activeEmitters.delete(sensorId);
+      this.logger.log(`⏹️ Simulador detenido para el sensor "${emitter.sensorName}"`);
+    }
   }
 
-  getEmitterStatus() { return Array.from(this.activeEmitters.values()).map(({ intervalId, ...rest }) => rest); }
+  getEmitterStatus() {
+    return Array.from(this.activeEmitters.values()).map(({ intervalId, ...rest }) => rest);
+  }
 
-  private generateRealisticValue(type: SensorType): number {
-    switch (type) {
-      case 'TEMPERATURE': return 24 + (Math.random() - 0.5) * 5;
-      case 'PH': return 7.0 + (Math.random() - 0.5) * 1;
-      case 'OXYGEN': return 7.5 + (Math.random() - 0.5) * 2;
-      default: return Math.random() * 100;
+  private async createAndBroadcastEntry(data: { sensorId: string; tankId: string; type: SensorType; value: number; }): Promise<SensorData> {
+    const createdData = await this.prisma.sensorData.create({
+      data: { ...data, timestamp: new Date() },
+      include: { sensor: true },
+    });
+    
+    await this.prisma.sensor.update({
+        where: { id: data.sensorId },
+        data: { lastReading: data.value, lastUpdate: new Date() }
+    });
+
+    this.eventsGateway.broadcastNewData(createdData);
+    return createdData as SensorData;
+  }
+
+  /**
+   * @method generateRealisticValue
+   * @description Motor de simulación. Decide si ocurre un evento y calcula el siguiente valor del sensor.
+   * @param {ActiveEmitter} emitter - El estado actual del emisor.
+   * @returns {{currentValue: number, state: SimulationState}} El nuevo valor y el nuevo estado.
+   */
+  private generateRealisticValue(emitter: ActiveEmitter): { currentValue: number; state: SimulationState } {
+    let { currentValue, state, thresholds, type } = emitter;
+    const { min, max } = thresholds;
+    const center = (min + max) / 2;
+    const range = max - min;
+    
+    const eventChance = Math.random();
+    if (state === 'STABLE') {
+        if (eventChance < 0.02) { 
+            state = Math.random() < 0.5 ? 'RISING' : 'FALLING';
+            this.logger.log(`Evento simulado: El sensor "${emitter.sensorName}" ha entrado en estado ${state}`);
+        }
+    } else {
+        if (eventChance < 0.15) { 
+            state = 'STABLE';
+            this.logger.log(`Evento simulado: El sensor "${emitter.sensorName}" vuelve a estado STABLE`);
+        }
     }
+
+    let target = center; 
+    let volatility = range * 0.05; 
+
+    if (state === 'RISING') {
+      target = max + range * 0.2; 
+      volatility = range * 0.1; 
+    } else if (state === 'FALLING') {
+      target = min - range * 0.2; 
+      volatility = range * 0.1;
+    }
+
+    const pull = (target - currentValue) * 0.25;
+
+    const randomStep = (Math.random() - 0.5) * volatility;
+
+    let nextValue = currentValue + pull + randomStep;
+    const absoluteLimit = range * 2;
+    nextValue = Math.max(min - absoluteLimit, Math.min(nextValue, max + absoluteLimit));
+    
+    const precision = (type === 'PH') ? 2 : 1;
+    currentValue = parseFloat(nextValue.toFixed(precision));
+
+    return { currentValue, state };
   }
 }
