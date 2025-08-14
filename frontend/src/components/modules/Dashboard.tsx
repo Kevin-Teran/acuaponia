@@ -109,7 +109,6 @@ export const Dashboard: React.FC = () => {
     const fetchUserSettings = async () => {
       try {
         const settingsData = await settingsService.getSettings();
-        // **CORRECCIÓN**: Se fusionan los umbrales para asegurar que siempre haya valores.
         setThresholds({
             temperature: { ...DEFAULT_THRESHOLDS.temperature, ...settingsData?.thresholds?.temperature },
             ph: { ...DEFAULT_THRESHOLDS.ph, ...settingsData?.thresholds?.ph },

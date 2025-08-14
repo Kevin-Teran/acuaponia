@@ -8,8 +8,9 @@ import { ProcessedDataPoint } from '../../types';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card } from '../common/Card';
-import { CheckCircle, AlertTriangle } from 'lucide-react'; 
+import { CheckCircle, AlertTriangle } from 'lucide-react';
 
+// Se registra el plugin de anotaciones, que es clave para dibujar las zonas y líneas.
 ChartJS.register( CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler, annotationPlugin );
 
 interface Thresholds {
@@ -43,7 +44,7 @@ const getOrCreateTooltip = (chart: ChartJS) => {
   if (!tooltipEl) {
     tooltipEl = document.createElement('div');
     tooltipEl.setAttribute('data-tooltip', 'true');
-    tooltipEl.style.background = 'rgba(31, 41, 55, 0.8)'; 
+    tooltipEl.style.background = 'rgba(31, 41, 55, 0.8)';
     tooltipEl.style.borderRadius = '0.5rem';
     tooltipEl.style.color = 'white';
     tooltipEl.style.opacity = '0';
@@ -53,12 +54,10 @@ const getOrCreateTooltip = (chart: ChartJS) => {
     tooltipEl.style.transition = 'opacity 0.2s ease';
     tooltipEl.style.padding = '0.75rem';
     tooltipEl.style.boxShadow = '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)';
-    tooltipEl.style.border = '1px solid rgba(75, 85, 99, 0.5)'; 
+    tooltipEl.style.border = '1px solid rgba(75, 85, 99, 0.5)';
     tooltipEl.style.width = '200px';
-
     chart.canvas.parentNode?.appendChild(tooltipEl);
   }
-
   return tooltipEl as HTMLDivElement;
 };
 
@@ -67,14 +66,14 @@ export const LineChart: React.FC<LineChartProps> = ({ data, thresholds, startDat
 
   const daysDiff = differenceInDays(parseISO(endDate), parseISO(startDate));
   let labelFormat = 'HH:mm';
-  if (daysDiff > 0 && daysDiff <= 7) { labelFormat = 'dd/MM HH:mm'; }
+  if (daysDiff > 0 && daysDiff <= 7) { labelFormat = 'dd/MM HH:mm'; } 
   else if (daysDiff > 7) { labelFormat = 'dd/MM/yy'; }
   const labels = data.map(item => format(new Date(item.timestamp), labelFormat, { locale: es }));
-
+  
   const chartConfigs = [
     { key: 'temperature' as const, label: 'Temperatura (°C)', unit: '°C', color: '#3B82F6', data: data.map(d => d.temperature), threshold: thresholds.temperature },
-    { key: 'oxygen' as const, label: 'Oxígeno Disuelto (mg/L)', unit: 'mg/L', color: '#3B82F6', data: data.map(d => d.oxygen), threshold: thresholds.oxygen },
-    { key: 'ph' as const, label: 'Nivel de pH', unit: '', color: '#3B82F6', data: data.map(d => d.ph), threshold: thresholds.ph },
+    { key: 'oxygen' as const, label: 'Oxígeno Disuelto (mg/L)', unit: 'mg/L', color: '#F97316', data: data.map(d => d.oxygen), threshold: thresholds.oxygen },
+    { key: 'ph' as const, label: 'Nivel de pH', unit: '', color: '#10B981', data: data.map(d => d.ph), threshold: thresholds.ph },
   ];
 
   return (
@@ -84,7 +83,7 @@ export const LineChart: React.FC<LineChartProps> = ({ data, thresholds, startDat
         if (!hasData || !config.threshold) return null;
 
         const yAxisBounds = getDynamicYAxis(config.threshold);
-
+        
         return (
           <Card key={config.key}>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4">
@@ -97,7 +96,7 @@ export const LineChart: React.FC<LineChartProps> = ({ data, thresholds, startDat
               <Line
                 data={{
                   labels,
-                  datasets: [{
+                  datasets: [{ 
                     label: `Valor`, data: config.data, borderColor: config.color, borderWidth: 2.5, tension: 0.4,
                     pointRadius: data.length < 100 ? 4 : 0, pointHoverRadius: 6,
                     pointBackgroundColor: isDark ? '#1f2937' : '#ffffff', pointBorderColor: config.color,
@@ -113,45 +112,30 @@ export const LineChart: React.FC<LineChartProps> = ({ data, thresholds, startDat
                 }}
                 options={{
                   responsive: true, maintainAspectRatio: false,
-                  scales: { x: { grid: { color: isDark ? '#374151' : '#f3f4f6' }, ticks: { color: isDark ? '#9ca3af' : '#6b7280' } }, y: { grid: { color: isDark ? '#374151' : '#f3f4f6' }, ticks: { color: isDark ? '#9ca3af' : '#6b7280' }, ...yAxisBounds }, },
-                  plugins: {
+                  scales: { 
+                    x: { grid: { color: isDark ? '#374151' : '#f3f4f6' }, ticks: { color: isDark ? '#9ca3af' : '#6b7280' } }, 
+                    y: { grid: { color: isDark ? '#374151' : '#f3f4f6' }, ticks: { color: isDark ? '#9ca3af' : '#6b7280' }, ...yAxisBounds }, 
+                  },
+                  plugins: { 
                     legend: { display: false },
-                    // **MEJORA CLAVE**: Se desactiva el tooltip por defecto y se usa una función externa
                     tooltip: {
                       enabled: false,
                       external: (context) => {
                         const tooltipEl = getOrCreateTooltip(context.chart);
-                        if (context.tooltip.opacity === 0) {
-                          tooltipEl.style.opacity = '0';
-                          return;
-                        }
-
+                        if (context.tooltip.opacity === 0) { tooltipEl.style.opacity = '0'; return; }
                         const tooltipModel = context.tooltip;
                         if (tooltipModel.body) {
                           const dataPointIndex = tooltipModel.dataPoints[0].dataIndex;
                           const rawValue = config.data[dataPointIndex];
-
                           if (rawValue === null) return;
-                          
                           const timestamp = data[dataPointIndex].timestamp;
                           let status = 'Óptimo';
-                          let statusColor = '#10B981'; 
+                          let statusColor = '#10B981';
                           if (rawValue < config.threshold.min) { status = 'Bajo'; statusColor = '#EF4444'; }
                           if (rawValue > config.threshold.max) { status = 'Alto'; statusColor = '#EF4444'; }
-                          
-                          const iconHTML = status === 'Óptimo' ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`
-                                                             : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>`;
-
-                          tooltipEl.innerHTML = `
-                            <div style="font-size: 0.75rem; color: #9ca3af; margin-bottom: 4px;">${format(new Date(timestamp), 'dd MMM yyyy, HH:mm:ss', { locale: es })}</div>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                ${iconHTML}
-                                <span style="font-weight: 600; color: ${statusColor};">${status}</span>
-                                <span style="font-size: 1.125rem; font-weight: 700; color: white; margin-left: auto;">${rawValue.toFixed(2)} ${config.unit}</span>
-                            </div>
-                          `;
+                          const iconHTML = status === 'Óptimo' ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>` : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>`;
+                          tooltipEl.innerHTML = `<div style="font-size: 0.75rem; color: #9ca3af; margin-bottom: 4px;">${format(new Date(timestamp), 'dd MMM yyyy, HH:mm:ss', { locale: es })}</div><div style="display: flex; align-items: center; gap: 8px;">${iconHTML}<span style="font-weight: 600; color: ${statusColor};">${status}</span><span style="font-size: 1.125rem; font-weight: 700; color: white; margin-left: auto;">${rawValue.toFixed(2)} ${config.unit}</span></div>`;
                         }
-
                         const { offsetLeft: positionX, offsetTop: positionY } = context.chart.canvas;
                         tooltipEl.style.opacity = '1';
                         tooltipEl.style.left = positionX + tooltipModel.caretX + 'px';
@@ -161,7 +145,16 @@ export const LineChart: React.FC<LineChartProps> = ({ data, thresholds, startDat
                     annotation: {
                       drawTime: 'beforeDatasetsDraw',
                       annotations: {
-                        optimalZone: { type: 'box', yMin: config.threshold.min, yMax: config.threshold.max, backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: 'transparent', },
+                        optimalZone: {
+                          type: 'box',
+                          yMin: config.threshold.min,
+                          yMax: config.threshold.max,
+                          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                          // **MEJORA CLAVE**: Se añaden bordes rojos a la zona óptima
+                          borderColor: 'rgba(239, 68, 68, 0.5)', // Rojo semitransparente
+                          borderWidth: 1.5,
+                          borderDash: [6, 6], // Línea punteada
+                        },
                       },
                     },
                   },
