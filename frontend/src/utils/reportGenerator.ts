@@ -1,13 +1,15 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import { ProcessedDataPoint, SensorData } from '../types';
+import { ProcessedDataPoint } from '../types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 /**
- * @interface ReportFilters
- * @description Define la estructura de los filtros utilizados para generar el reporte.
+ * @typedef {object} ReportFilters
+ * @property {string} startDate
+ * @property {string} endDate
+ * @property {string} selectedParameter
  */
 interface ReportFilters {
   startDate: string;
@@ -16,14 +18,8 @@ interface ReportFilters {
 }
 
 /**
- * @function calculateStatistics
- * @description Calcula estadísticas básicas (promedio, min, max, desviación estándar) para cada tipo de sensor.
- * @param {ProcessedDataPoint[]} data - Datos de sensores procesados.
- * @returns {{
- * temperature: { avg: number; min: number; max: number; std: number; };
- * ph: { avg: number; min: number; max: number; std: number; };
- * oxygen: { avg: number; min: number; max: number; std: number; };
- * }} Un objeto con las estadísticas calculadas.
+ * @param {ProcessedDataPoint[]} data
+ * @returns {{temperature: object, ph: object, oxygen: object}}
  */
 const calculateStatistics = (data: ProcessedDataPoint[]) => {
   if (data.length === 0) {
@@ -57,16 +53,33 @@ const calculateStatistics = (data: ProcessedDataPoint[]) => {
 };
 
 /**
- * @function generatePDFReport
- * @description Genera un archivo PDF con un resumen estadístico y una tabla de datos.
- * @param {ProcessedDataPoint[]} data - Los datos a incluir en el reporte.
- * @param {ReportFilters} filters - Los filtros aplicados para la generación del reporte.
+ * @param {string} url
+ * @returns {Promise<string>}
  */
-export const generatePDFReport = (data: ProcessedDataPoint[], filters: ReportFilters) => {
+const toBase64 = (url: string): Promise<string> => fetch(url)
+  .then(response => response.blob())
+  .then(blob => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  }));
+
+/**
+ * @param {ProcessedDataPoint[]} data
+ * @param {ReportFilters} filters
+ */
+export const generatePDFReport = async (data: ProcessedDataPoint[], filters: ReportFilters) => {
   const doc = new jsPDF();
   
-  // Encabezado con colores institucionales del SENA
-  doc.setFillColor(255, 103, 31); // Naranja SENA
+  try {
+    const logoBase64 = await toBase64('/logo-sena.png');
+    doc.addImage(logoBase64, 'PNG', 15, 12, 20, 20);
+  } catch (error) {
+    console.error("No se pudo cargar el logo para el PDF", error);
+  }
+  
+  doc.setFillColor(255, 103, 31);
   doc.rect(0, 0, 210, 25, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(16);
@@ -75,19 +88,16 @@ export const generatePDFReport = (data: ProcessedDataPoint[], filters: ReportFil
   doc.setFontSize(10);
   doc.text('Servicio Nacional de Aprendizaje', 15, 18);
   
-  // Título del reporte
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
   doc.text('REPORTE DE MONITOREO ACUÁTICO', 105, 40, { align: 'center' });
   
-  // Subtítulo con rango de fechas
   doc.setFontSize(12);
   doc.setFont('helvetica', 'normal');
   const dateRange = `${format(new Date(filters.startDate || Date.now()), 'dd/MM/yyyy', { locale: es })} - ${format(new Date(filters.endDate || Date.now()), 'dd/MM/yyyy', { locale: es })}`;
   doc.text(`Período: ${dateRange}`, 105, 50, { align: 'center' });
   
-  // Resumen estadístico
   const stats = calculateStatistics(data);
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
@@ -110,7 +120,6 @@ export const generatePDFReport = (data: ProcessedDataPoint[], filters: ReportFil
     alternateRowStyles: { fillColor: [245, 245, 245] }
   });
   
-  // Tabla de datos detallados
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   (doc as any).text('DATOS DETALLADOS', 15, (doc as any).lastAutoTable.finalY + 20);
@@ -136,15 +145,12 @@ export const generatePDFReport = (data: ProcessedDataPoint[], filters: ReportFil
 };
 
 /**
- * @function generateExcelReport
- * @description Genera un archivo de Excel con un resumen estadístico y una hoja de datos detallados.
- * @param {ProcessedDataPoint[]} data - Los datos a incluir en el reporte.
- * @param {ReportFilters} filters - Los filtros aplicados para la generación del reporte.
+ * @param {ProcessedDataPoint[]} data
+ * @param {ReportFilters} filters
  */
 export const generateExcelReport = (data: ProcessedDataPoint[], filters: ReportFilters) => {
   const wb = XLSX.utils.book_new();
   
-  // Hoja de resumen estadístico
   const stats = calculateStatistics(data);
   const statsData = [
     ['REPORTE DE MONITOREO ACUÁTICO - SENA'],
@@ -160,7 +166,6 @@ export const generateExcelReport = (data: ProcessedDataPoint[], filters: ReportF
   const statsWs = XLSX.utils.aoa_to_sheet(statsData);
   XLSX.utils.book_append_sheet(wb, statsWs, 'Resumen');
   
-  // Hoja de datos detallados
   const dataForExcel = [
     ['Fecha/Hora', 'Temperatura (°C)', 'pH', 'Oxígeno Disuelto (mg/L)'],
     ...data.map(item => [

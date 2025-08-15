@@ -12,12 +12,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { EventsGateway } from '../events/events.gateway';
 
-// Extiende la interfaz jsPDF para incluir el método autoTable que viene del plugin.
+// Extiende la interfaz de jsPDF para que reconozca el plugin autoTable
 declare module 'jspdf' {
   interface jsPDF {
     autoTable: (options: any) => jsPDF;
@@ -25,6 +25,7 @@ declare module 'jspdf' {
 }
 
 /**
+ * @interface ReportStats
  * @description Define la estructura de las estadísticas calculadas para el resumen del reporte.
  */
 interface ReportStats {
@@ -34,10 +35,6 @@ interface ReportStats {
   count: number;
 }
 
-/**
- * @class ReportsService
- * @description Contiene la lógica de negocio para crear, procesar y descargar reportes.
- */
 @Injectable()
 export class ReportsService {
   private readonly logger = new Logger(ReportsService.name);
@@ -49,14 +46,18 @@ export class ReportsService {
   ) {
     try {
       const logoPath = path.resolve(__dirname, '..', 'assets', 'logo-sena.png');
-      this.logoBase64 = fs.readFileSync(logoPath, 'base64');
+      if (fs.existsSync(logoPath)) {
+        this.logoBase64 = fs.readFileSync(logoPath, 'base64');
+      } else {
+        this.logger.error(`El logo no se encontró en la ruta: ${logoPath}. Asegúrate de que el archivo exista en 'backend/src/assets/logo-sena.png' y que se copie al compilar.`);
+        this.logoBase64 = '';
+      }
     } catch (error) {
-      this.logger.error('No se pudo cargar el logo para los reportes. Verifica que el archivo exista en "src/assets/logo-sena.png"');
+      this.logger.error('No se pudo cargar el logo para los reportes.', error);
       this.logoBase64 = '';
     }
   }
 
-  // ... (los métodos create, findOne, y findAll permanecen igual que en la respuesta anterior) ...
   async create(createReportDto: CreateReportDto, user: User): Promise<Report> {
     const newReport = await this.prisma.report.create({
       data: {
@@ -108,10 +109,11 @@ export class ReportsService {
   }
 
 
-  async generateFileFromData(report: Report, format: string): Promise<{ filePath: string, title: string }> {
+  async generateFileFromData(report: Report, format: 'pdf' | 'xlsx'): Promise<{ filePath: string, title: string }> {
     const dataFilePath = report.filePath;
     if (!dataFilePath || !fs.existsSync(dataFilePath)) {
-      throw new InternalServerErrorException('Los datos intermedios del reporte no existen o aún no han sido generados.');
+      this.logger.error(`Archivo de datos no encontrado para el reporte ${report.id} en la ruta: ${dataFilePath}`);
+      throw new InternalServerErrorException('Los datos del reporte no existen o están corruptos.');
     }
     
     const rawData = JSON.parse(fs.readFileSync(dataFilePath, 'utf8'));
@@ -120,6 +122,11 @@ export class ReportsService {
       this.prisma.tank.findUnique({ where: { id: parameters.tankId } }),
       this.prisma.sensor.findMany({ where: { id: { in: parameters.sensorIds } } })
     ]);
+
+    if (!tank) {
+        throw new NotFoundException(`El tanque con ID ${parameters.tankId} asociado al reporte ya no existe.`);
+    }
+
     const reportContext = { tank, sensors };
 
     const directoryPath = path.resolve(__dirname, '../../reports/generated');
@@ -150,7 +157,7 @@ export class ReportsService {
       stats.sum += item.value;
       stats.count++;
       if (item.value < stats.min) stats.min = item.value;
-      if (item.value > stats.max) stats.max = item.max;
+      if (item.value > stats.max) stats.max = item.value;
     });
 
     const finalStats = new Map<string, ReportStats>();
@@ -170,24 +177,24 @@ export class ReportsService {
     const wb = XLSX.utils.book_new();
     const parameters = JSON.parse(report.parameters as string);
     
-    const summaryData = [
-      ["", "Reporte de Monitoreo Acuático - SENA"],
-      [],
-      ["Título", report.title],
-      ["Tanque", context.tank?.name || 'N/A'],
-      ["Período", `${format(new Date(parameters.startDate + 'T00:00:00'), 'dd/MM/yyyy')} - ${format(new Date(parameters.endDate + 'T00:00:00'), 'dd/MM/yyyy')}`],
-      ["Generado el", format(new Date(), "dd/MM/yyyy HH:mm")],
-      [],
-      ["Resumen Estadístico por Sensor"],
-      ["Tipo de Sensor", "Registros", "Promedio", "Mínimo", "Máximo"]
+    const summaryHeader = [
+      "Reporte de Monitoreo Acuático - SENA",
+      `Título: ${report.title}`,
+      `Tanque: ${context.tank?.name || 'N/A'}`,
+      `Período: ${format(new Date(parameters.startDate + 'T00:00:00'), 'dd/MM/yyyy')} - ${format(new Date(parameters.endDate + 'T00:00:00'), 'dd/MM/yyyy')}`,
+      `Generado el: ${format(new Date(), "dd/MM/yyyy HH:mm")}`
     ];
+    
     const stats = this.calculateStatistics(rawData);
+    const statsData = [
+      ["Tipo de Sensor", "Nº Registros", "Promedio", "Mínimo", "Máximo"]
+    ];
     stats.forEach((s, type) => {
-        summaryData.push([type, s.count, s.avg.toFixed(2), s.min.toFixed(2), s.max.toFixed(2)]);
+      statsData.push([type, s.count, s.avg.toFixed(2), s.min.toFixed(2), s.max.toFixed(2)]);
     });
-    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-    wsSummary['!merges'] = [{ s: { r: 0, c: 1 }, e: { r: 0, c: 4 } }];
-    wsSummary['!cols'] = [{ wch: 20 }, { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+
+    const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeader, [], ...statsData]);
+    wsSummary['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
     XLSX.utils.book_append_sheet(wb, wsSummary, "Resumen");
 
     const formattedData = rawData.map(item => ({
@@ -197,6 +204,9 @@ export class ReportsService {
         'Sensor': context.sensors.find(s => s.id === item.sensorId)?.name || item.sensorId,
     }));
     const wsData = XLSX.utils.json_to_sheet(formattedData);
+    
+    // Añadir AutoFiltro
+    wsData['!autofilter'] = { ref: XLSX.utils.encode_range(XLSX.utils.decode_range(wsData['!ref'])) };
     wsData['!cols'] = [{ wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 25 }];
     XLSX.utils.book_append_sheet(wb, wsData, "Datos Crudos");
     
@@ -211,7 +221,7 @@ export class ReportsService {
     const pageHeight = doc.internal.pageSize.height;
     
     if (this.logoBase64) {
-      doc.addImage(this.logoBase64, 'PNG', 15, 12, 20, 20);
+      doc.addImage(`data:image/png;base64,${this.logoBase64}`, 'PNG', 15, 12, 20, 20);
     }
     doc.setFontSize(18); doc.setFont('helvetica', 'bold');
     doc.text('Reporte de Monitoreo Acuático', 105, 20, { align: 'center' });
@@ -228,7 +238,7 @@ export class ReportsService {
     const stats = this.calculateStatistics(rawData);
     const statsBody = Array.from(stats.entries()).map(([type, s]) => [type, s.count, s.avg.toFixed(2), s.min.toFixed(2), s.max.toFixed(2)]);
     
-    doc.autoTable({ startY: 60, head: [['Tipo de Sensor', 'Nº Registros', 'Promedio', 'Mínimo', 'Máximo']], body: statsBody, theme: 'grid', headStyles: { fillColor: [57, 169, 0] }, });
+    autoTable(doc, { startY: 60, head: [['Tipo de Sensor', 'Nº Registros', 'Promedio', 'Mínimo', 'Máximo']], body: statsBody, theme: 'grid', headStyles: { fillColor: [57, 169, 0] }, });
 
     const tableBody = rawData.slice(0, 500).map(item => [
         format(new Date(item.timestamp), 'dd/MM/yy HH:mm', { locale: es }),
@@ -237,7 +247,7 @@ export class ReportsService {
         context.sensors.find(s => s.id === item.sensorId)?.name || 'N/A'
     ]);
 
-    doc.autoTable({
+    autoTable(doc, {
         startY: (doc as any).lastAutoTable.finalY + 15,
         head: [['Fecha/Hora', 'Tipo', 'Valor', 'Sensor']],
         body: tableBody,
@@ -273,7 +283,6 @@ export class ReportsService {
       
       const parameters = JSON.parse(updatedReport.parameters as string);
       
-      // SOLUCIÓN FECHAS: Interpreta la fecha como local añadiendo la hora.
       const startDate = new Date(`${parameters.startDate}T00:00:00`);
       const endDate = new Date(`${parameters.endDate}T23:59:59.999`);
       

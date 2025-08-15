@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Download, FileText, Filter, Droplets, Clock, Loader, AlertCircle, Cpu, CheckSquare, Square } from 'lucide-react';
+import { Download, FileText, Clock, Loader, AlertCircle, Cpu, CheckSquare, Square } from 'lucide-react';
 import { Card } from '../common/Card';
 import { useAuth } from '../../hooks/useAuth';
 import { LoadingSpinner } from '../common/LoadingSpinner';
@@ -14,7 +14,7 @@ import { cn } from '../../utils/cn';
 import { socketService } from '../../services/socketService';
 
 /**
- * @description Define la estructura del formulario de filtros para la creación de reportes.
+ * @typedef {import('../../types').ReportFilters} ReportFilters
  */
 interface ReportFilters {
   tankId: string | null;
@@ -23,9 +23,6 @@ interface ReportFilters {
   endDate: string;
 }
 
-/**
- * @description Mapeo de los estados de reporte a su traducción en español para la UI.
- */
 const statusTranslations: Record<ReportStatus, string> = {
   PENDING: 'Pendiente',
   PROCESSING: 'Procesando',
@@ -34,8 +31,8 @@ const statusTranslations: Record<ReportStatus, string> = {
 };
 
 /**
- * @component SensorCard
- * @description Tarjeta visual para la selección de sensores, reutilizable y adaptable.
+ * @param {{ sensor: Sensor; isSelected: boolean; onToggle: () => void; }} props
+ * @returns {React.ReactElement}
  */
 const SensorCard: React.FC<{ sensor: Sensor; isSelected: boolean; onToggle: () => void; }> = ({ sensor, isSelected, onToggle }) => {
     const isAllCard = sensor.id === 'all';
@@ -60,10 +57,6 @@ const SensorCard: React.FC<{ sensor: Sensor; isSelected: boolean; onToggle: () =
     );
 };
 
-/**
- * @component Reports
- * @description Módulo para la generación, visualización y descarga de reportes históricos.
- */
 export const Reports: React.FC = () => {
   const { user } = useAuth();
   const [tanks, setTanks] = useState<Tank[]>([]);
@@ -107,12 +100,16 @@ export const Reports: React.FC = () => {
   useEffect(() => {
     const handleReportUpdate = (updatedReport: Report) => {
         setReports(prevReports => 
-            prevReports.map(r => r.id === updatedReport.id ? { ...r, ...updatedReport } : r)
+            prevReports.map(r => r.id === updatedReport.id ? updatedReport : r)
         );
     };
+
     socketService.connect();
     socketService.onReportUpdate(handleReportUpdate);
-    return () => { socketService.offReportUpdate(handleReportUpdate); };
+
+    return () => {
+      socketService.offReportUpdate(handleReportUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -139,7 +136,6 @@ export const Reports: React.FC = () => {
             ? newSelection.filter(id => id !== sensorId) 
             : [...newSelection, sensorId];
 
-        // Si todos los sensores individuales están seleccionados, colapsar a 'all'.
         if (sensors.length > 0 && newSelection.length === sensors.length) {
             return { ...prev, sensorIds: ['all'] };
         }
