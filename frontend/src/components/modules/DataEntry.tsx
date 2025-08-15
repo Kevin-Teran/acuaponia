@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
-    Users, MapPin, Cpu, CheckSquare, Square, Bot, Send, Play, StopCircle, AlertCircle, Timer, ChevronDown
+    Users, MapPin, Cpu, CheckSquare, Square, Bot, Send, Play, StopCircle, AlertCircle, Timer, ChevronDown, Repeat
 } from 'lucide-react';
 import { Card } from '../common/Card';
 import { LoadingSpinner } from '../common/LoadingSpinner';
@@ -12,6 +12,7 @@ import * as sensorService from '../../services/sensorService';
 import * as dataService from '../../services/dataService';
 import { mqttService } from '../../services/mqttService';
 import { User, Tank, Sensor, SensorType } from '../../types';
+import { useAuth } from '../../hooks/useAuth';
 
 const SENSOR_ORDER: Record<SensorType, number> = { 'TEMPERATURE': 1, 'OXYGEN': 2, 'PH': 3, 'LEVEL': 4, 'FLOW': 5 };
 
@@ -50,6 +51,11 @@ const useTimer = (startTime?: Date | string): { time: string; totalSeconds: numb
 /**
  * @component SensorCard
  * @description Tarjeta visual interactiva para la selección de un sensor.
+ * @param {object} props - Propiedades del componente.
+ * @param {Sensor} props.sensor - El objeto del sensor a mostrar.
+ * @param {boolean} props.isSelected - Indica si la tarjeta está seleccionada.
+ * @param {() => void} props.onToggle - Función a ejecutar al hacer clic.
+ * @returns {React.ReactElement}
  */
 const SensorCard: React.FC<{ sensor: Sensor; isSelected: boolean; onToggle: () => void; }> = ({ sensor, isSelected, onToggle }) => (
     <div
@@ -65,8 +71,26 @@ const SensorCard: React.FC<{ sensor: Sensor; isSelected: boolean; onToggle: () =
 );
 
 /**
+ * @component SensorSkeleton
+ * @description Componente de placeholder para simular la carga de las tarjetas de sensor.
+ * @returns {React.ReactElement}
+ */
+const SensorSkeleton: React.FC = () => (
+    <div className="p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 animate-pulse">
+        <div className="w-12 h-12 mb-3 rounded-full bg-gray-200 dark:bg-gray-700 mx-auto"></div>
+        <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded-md mx-auto mb-2"></div>
+        <div className="h-3 w-16 bg-gray-200 dark:bg-gray-700 rounded-md mx-auto"></div>
+    </div>
+);
+
+/**
  * @component ManualEntryForm
  * @description Formulario para enviar valores individuales para cada sensor seleccionado vía MQTT.
+ * @param {object} props - Propiedades del componente.
+ * @param {Sensor[]} props.selectedSensors - Array de sensores seleccionados.
+ * @param {(entries: { sensorId: string; value: number }[]) => Promise<void>} props.onSubmit - Función a ejecutar al enviar el formulario.
+ * @param {boolean} props.isSubmitting - Indica si se está procesando un envío.
+ * @returns {React.ReactElement}
  */
 const ManualEntryForm: React.FC<{ selectedSensors: Sensor[]; onSubmit: (entries: { sensorId: string; value: number }[]) => Promise<void>; isSubmitting: boolean; }> = ({ selectedSensors, onSubmit, isSubmitting }) => {
     const [values, setValues] = useState<Record<string, string>>({});
@@ -89,12 +113,15 @@ const ManualEntryForm: React.FC<{ selectedSensors: Sensor[]; onSubmit: (entries:
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
         const entries = selectedSensors.map(sensor => ({ sensorId: sensor.id, value: parseFloat(values[sensor.id]) })).filter(entry => !isNaN(entry.value));
-        if (entries.length > 0) await onSubmit(entries);
-        else Swal.fire('Atención', "No hay datos válidos para enviar.", 'warning');
+        if (entries.length > 0) {
+            await onSubmit(entries);
+        } else {
+            Swal.fire('Atención', "No hay datos válidos para enviar.", 'warning');
+        }
     }, [selectedSensors, values, onSubmit]);
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 p-4">
             <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
                 {selectedSensors.map(sensor => (
                     <div key={sensor.id} className="grid grid-cols-3 gap-3 items-center">
@@ -103,9 +130,11 @@ const ManualEntryForm: React.FC<{ selectedSensors: Sensor[]; onSubmit: (entries:
                     </div>
                 ))}
             </div>
-            <button type="submit" disabled={selectedSensors.length === 0 || isSubmitting} className="w-full btn-primary">
-                {isSubmitting ? <LoadingSpinner bare size="sm" /> : <><Send className="w-5 h-5" /><span>Enviar Valores</span></>}
-            </button>
+            <div className="flex items-center justify-end pt-4 border-t dark:border-gray-700">
+                <button type="submit" disabled={selectedSensors.length === 0 || isSubmitting} className="btn-primary min-w-[160px]">
+                    {isSubmitting ? <LoadingSpinner bare size="sm" /> : <><Send className="w-5 h-5 mr-2" /><span>Enviar Valores</span></>}
+                </button>
+            </div>
         </form>
     );
 };
@@ -113,8 +142,13 @@ const ManualEntryForm: React.FC<{ selectedSensors: Sensor[]; onSubmit: (entries:
 /**
  * @component ActiveEmitterRow
  * @description Fila individual para un simulador activo, mostrando temporizador y control de parada.
+ * @param {object} props - Propiedades del componente.
+ * @param {any} props.emitter - Datos del emisor activo.
+ * @param {() => void} props.onStop - Función para detener el emisor.
+ * @param {boolean} props.isStopping - Indica si se está procesando la detención.
+ * @returns {React.ReactElement}
  */
-const ActiveEmitterRow: React.FC<{ emitter: any; onStop: () => void; }> = ({ emitter, onStop }) => {
+const ActiveEmitterRow: React.FC<{ emitter: any; onStop: () => void; isStopping: boolean }> = ({ emitter, onStop, isStopping }) => {
     const { time: elapsedTime, totalSeconds } = useTimer(emitter.startTime);
     const totalPackets = Math.floor(totalSeconds / 5);
 
@@ -125,14 +159,19 @@ const ActiveEmitterRow: React.FC<{ emitter: any; onStop: () => void; }> = ({ emi
                 <Cpu className="w-5 h-5 text-gray-400 flex-shrink-0"/>
                 <div className="flex-grow min-w-0">
                     <p className="font-semibold text-sm text-gray-900 dark:text-white truncate">{emitter.sensorName}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{translateSensorType(emitter.type)}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{emitter.tankName} ({emitter.userName})</p>
                 </div>
             </div>
-            <div className="flex items-center space-x-2 flex-shrink-0">
-                <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 font-mono" title={`${totalPackets} envíos de datos`}>
+            <div className="flex items-center space-x-4 flex-shrink-0">
+                <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 font-mono" title="Paquetes enviados">
+                    <Repeat className="w-4 h-4 mr-1.5"/>{totalPackets}
+                </div>
+                <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 font-mono" title="Tiempo de ejecución">
                     <Timer className="w-4 h-4 mr-1.5"/>{elapsedTime}
                 </div>
-                <button onClick={onStop} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full" title="Terminar Proceso"><StopCircle className="w-5 h-5"/></button>
+                <button onClick={onStop} disabled={isStopping} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full disabled:opacity-50 disabled:cursor-wait" title="Terminar Proceso">
+                    {isStopping ? <LoadingSpinner bare size="sm" /> : <StopCircle className="w-5 h-5"/>}
+                </button>
             </div>
         </div>
     );
@@ -141,14 +180,20 @@ const ActiveEmitterRow: React.FC<{ emitter: any; onStop: () => void; }> = ({ emi
 /**
  * @component DataEntry
  * @description Módulo principal con flujo unificado para la recolección y simulación de datos.
+ * @returns {React.ReactElement}
  */
 export const DataEntry: React.FC = () => {
+    const { user: currentUser } = useAuth();
     const [users, setUsers] = useState<User[]>([]);
     const [tanks, setTanks] = useState<Tank[]>([]);
     const [sensors, setSensors] = useState<Sensor[]>([]);
     const [activeEmitters, setActiveEmitters] = useState<any[]>([]);
     const [selections, setSelections] = useState<{ user: string; tank: string; sensors: string[] }>({ user: '', tank: '', sensors: [] });
-    const [loading, setLoading] = useState({ users: true, tanks: false, sensors: false, action: false });
+    
+    const [loading, setLoading] = useState({ initial: true, users: true, tanks: false, submittingManual: false, startingEmitter: false });
+    const [stoppingEmitters, setStoppingEmitters] = useState<Set<string>>(new Set());
+    const [stoppingAll, setStoppingAll] = useState<Set<string>>(new Set());
+    
     const [error, setError] = useState<string | null>(null);
     const [mode, setMode] = useState<'manual' | 'emitter'>('manual');
     const [expandedTanks, setExpandedTanks] = useState<Set<string>>(new Set());
@@ -156,46 +201,22 @@ export const DataEntry: React.FC = () => {
     const handleClearSelection = useCallback(() => setSelections(prev => ({ ...prev, sensors: [] })), []);
 
     const fetchInitialData = useCallback(async () => {
-        setLoading(prev => ({ ...prev, action: true }));
         try {
             const emittersData = await dataService.getEmitterStatus();
             setActiveEmitters(emittersData || []);
             if (users.length === 0) {
+                setLoading(prev => ({...prev, users: true}));
                 const usersData = await userService.getAllUsers();
                 setUsers(usersData);
             }
         } catch (err) { setError("No se pudieron cargar los datos iniciales."); }
-        finally { setLoading(prev => ({ ...prev, users: false, action: false })); }
+        finally { setLoading(prev => ({ ...prev, initial: false, users: false })); }
     }, [users.length]);
 
     useEffect(() => {
         mqttService.connect().catch(err => console.error("Fallo la conexión a MQTT:", err));
         fetchInitialData();
     }, [fetchInitialData]);
-
-    const handleApiAction = useCallback(async (action: () => Promise<any>, successMsg?: string) => {
-        setLoading(prev => ({ ...prev, action: true }));
-        try {
-            await action();
-            await fetchInitialData();
-            if(successMsg) Swal.fire({ icon: 'success', title: successMsg, toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
-            handleClearSelection();
-        } catch (error: any) { Swal.fire('Error', error.response?.data?.message || 'La operación falló.', 'error'); }
-        finally { setLoading(prev => ({ ...prev, action: false })); }
-    }, [fetchInitialData, handleClearSelection]);
-    
-    const handleMqttSubmit = useCallback(async (entries: { sensorId: string, value: number }[]) => {
-        await handleApiAction(async () => {
-            for (const entry of entries) {
-                const sensor = sensors.find(s => s.id === entry.sensorId);
-                if (sensor?.hardwareId) {
-                    const topic = `sena/acuaponia/sensors/${sensor.hardwareId}/data`;
-                    const payload = JSON.stringify({ value: entry.value, timestamp: new Date().toISOString() });
-                    await mqttService.publish(topic, payload);
-                }
-            }
-        }, '¡Datos publicados en MQTT!');
-    }, [sensors, handleApiAction]);
 
     const handleSelectUser = useCallback(async (userId: string) => {
         setSelections({ user: userId, tank: '', sensors: [] });
@@ -206,12 +227,87 @@ export const DataEntry: React.FC = () => {
             setTanks(tanksData);
             setSensors(sensorsData);
             if (tanksData.length > 0) {
-                setSelections(prev => ({ ...prev, tank: tanksData[0].id }));
-                setExpandedTanks(new Set([tanksData[0].name]));
+                const firstTankId = tanksData[0].id;
+                setSelections(prev => ({ ...prev, tank: firstTankId }));
+                setExpandedTanks(new Set([tanksData.find(t=>t.id === firstTankId)!.name]));
+            } else {
+                setExpandedTanks(new Set());
             }
         } catch (err) { setError("Error al cargar datos del usuario."); }
         finally { setLoading(prev => ({ ...prev, tanks: false })); }
     }, []);
+
+    useEffect(() => {
+        if (currentUser && users.length > 0 && !selections.user) {
+            handleSelectUser(currentUser.id);
+        }
+    }, [currentUser, users, selections.user, handleSelectUser]);
+    
+    const handleMqttSubmit = useCallback(async (entries: { sensorId: string, value: number }[]) => {
+        setLoading(prev => ({ ...prev, submittingManual: true }));
+        try {
+            for (const entry of entries) {
+                const sensor = sensors.find(s => s.id === entry.sensorId);
+                if (sensor?.hardwareId) {
+                    const topic = `sena/acuaponia/sensors/${sensor.hardwareId}/data`;
+                    const payload = JSON.stringify({ value: entry.value, timestamp: new Date().toISOString() });
+                    await mqttService.publish(topic, payload);
+                }
+            }
+        } catch (error: any) {
+            Swal.fire('Error', error.response?.data?.message || 'La publicación en MQTT falló.', 'error');
+        } finally {
+            setLoading(prev => ({ ...prev, submittingManual: false }));
+        }
+    }, [sensors]);
+
+    const handleStartEmitters = useCallback(async () => {
+        setLoading(prev => ({ ...prev, startingEmitter: true }));
+        try {
+            await dataService.startEmitter(selections.sensors);
+            await fetchInitialData();
+            Swal.fire({ icon: 'success', title: 'Simulación iniciada', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+            handleClearSelection();
+        } catch (error: any) {
+            Swal.fire('Error', error.response?.data?.message || 'No se pudo iniciar la simulación.', 'error');
+        } finally {
+            setLoading(prev => ({ ...prev, startingEmitter: false }));
+        }
+    }, [selections.sensors, fetchInitialData, handleClearSelection]);
+
+    const handleStopEmitter = useCallback(async (sensorId: string) => {
+        setStoppingEmitters(prev => new Set(prev).add(sensorId));
+        try {
+            await dataService.stopEmitter(sensorId);
+            await fetchInitialData();
+        } catch (error: any) {
+            const sensorName = activeEmitters.find(e => e.sensorId === sensorId)?.sensorName || `ID ${sensorId}`;
+            Swal.fire('Error', `No se pudo detener la simulación para ${sensorName}.`, 'error');
+        } finally {
+            setStoppingEmitters(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(sensorId);
+                return newSet;
+            });
+        }
+    }, [activeEmitters, fetchInitialData]);
+
+    const handleStopAllForTank = useCallback(async (tankName: string, sensorIds: string[]) => {
+        setStoppingAll(prev => new Set(prev).add(tankName));
+        try {
+            await Promise.all(sensorIds.map(id => dataService.stopEmitter(id)));
+            await fetchInitialData();
+            Swal.fire({ icon: 'success', title: `Simulaciones para ${tankName} detenidas`, toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+        } catch (error) {
+            Swal.fire('Error', `No se pudieron detener todas las simulaciones para ${tankName}.`, 'error');
+        } finally {
+             setStoppingAll(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(tankName);
+                return newSet;
+            });
+        }
+    }, [fetchInitialData]);
     
     const handleSelectTank = useCallback((tankId: string) => setSelections(prev => ({ ...prev, tank: tankId, sensors: [] })), []);
     const handleToggleSensor = useCallback((sensorId: string) => setSelections(prev => ({ ...prev, sensors: prev.sensors.includes(sensorId) ? prev.sensors.filter(id => id !== sensorId) : [...prev.sensors, sensorId] })), []);
@@ -232,38 +328,38 @@ export const DataEntry: React.FC = () => {
     
     const toggleTankExpansion = (tankName: string) => setExpandedTanks(prev => { const newSet = new Set(prev); if (newSet.has(tankName)) newSet.delete(tankName); else newSet.add(tankName); return newSet; });
 
-    if (loading.users) return <LoadingSpinner fullScreen message="Cargando módulo..." />;
+    if (loading.initial) return <LoadingSpinner fullScreen message="Cargando módulo de recolección..." />;
 
     return (
-        <div className="space-y-6">
-            {loading.action && <div className="fixed top-4 right-4 z-50 animate-in fade-in"><LoadingSpinner size="sm" message="Procesando..."/></div>}
+        <div className="space-y-8">
             <div>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Recolección y Simulación de Datos</h1>
                 <p className="text-gray-600 dark:text-gray-400 mt-1">Herramienta para generar datos de prueba de forma manual o automática.</p>
             </div>
             {error && <div className="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400 flex items-center"><AlertCircle className="inline w-5 h-5 mr-3"/>{error}</div>}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                <Card title="Configuración de Simulación">
+            <Card title="Configuración de Simulación">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                     <div className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="label flex items-center"><Users className="w-4 h-4 mr-2"/>Usuario</label>
-                                <select className="form-select" value={selections.user} onChange={(e) => handleSelectUser(e.target.value)} disabled={loading.tanks}>
-                                    <option value="">Seleccione...</option>
-                                    {users.map((user: User) => <option key={user.id} value={user.id}>{user.name}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="label flex items-center"><MapPin className="w-4 h-4 mr-2"/>Tanque</label>
-                                <select className="form-select" value={selections.tank} onChange={(e) => handleSelectTank(e.target.value)} disabled={!selections.user || loading.tanks}>
-                                    <option value="">{loading.tanks ? "Cargando..." : "Seleccione..."}</option>
-                                    {tanks.map((tank: Tank) => <option key={tank.id} value={tank.id}>{tank.name}</option>)}
-                                </select>
-                            </div>
+                        <div>
+                            <label className="label flex items-center"><Users className="w-4 h-4 mr-2"/>Usuario</label>
+                            <select className="form-select" value={selections.user} onChange={(e) => handleSelectUser(e.target.value)} disabled={loading.tanks || loading.users}>
+                                <option value="">{loading.users ? "Cargando..." : "Seleccione..."}</option>
+                                {users.map((user: User) => <option key={user.id} value={user.id}>{user.name}</option>)}
+                            </select>
                         </div>
+                        <div>
+                            <label className="label flex items-center"><MapPin className="w-4 h-4 mr-2"/>Tanque</label>
+                            <select className="form-select" value={selections.tank} onChange={(e) => handleSelectTank(e.target.value)} disabled={!selections.user || loading.tanks}>
+                                <option value="">{loading.tanks ? "Cargando..." : "Seleccione..."}</option>
+                                {tanks.map((tank: Tank) => <option key={tank.id} value={tank.id}>{tank.name}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div>
                         {selections.tank && (
-                            <div className="border-t border-gray-200 dark:border-gray-700 pt-6 animate-in fade-in duration-300">
+                            <div className="animate-in fade-in duration-300">
                                 <div className="flex justify-between items-center mb-4">
                                     <h3 className="font-semibold text-gray-900 dark:text-white">Sensores Disponibles ({sensorsForSelectedTank.length})</h3>
                                     <div className="flex space-x-2">
@@ -271,7 +367,11 @@ export const DataEntry: React.FC = () => {
                                         <button onClick={handleClearSelection} title="Limpiar Selección" disabled={selections.sensors.length === 0} className="btn-secondary px-2 py-1"><Square className="w-4 h-4"/></button>
                                     </div>
                                 </div>
-                                {loading.tanks ? <LoadingSpinner /> : sensorsForSelectedTank.length > 0 ? (
+                                {loading.tanks ? (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                        <SensorSkeleton /><SensorSkeleton /><SensorSkeleton />
+                                    </div>
+                                ) : sensorsForSelectedTank.length > 0 ? (
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                                         {sensorsForSelectedTank.map(sensor => <SensorCard key={sensor.id} sensor={sensor} isSelected={selections.sensors.includes(sensor.id)} onToggle={() => handleToggleSensor(sensor.id)} />)}
                                     </div>
@@ -281,49 +381,66 @@ export const DataEntry: React.FC = () => {
                             </div>
                         )}
                     </div>
-                </Card>
-                
-                {selections.sensors.length > 0 && (
-                    <Card title={`Acción a Realizar (${selections.sensors.length} seleccionados)`} className="animate-in fade-in duration-500 lg:sticky lg:top-6">
-                        <div className="flex bg-gray-100 dark:bg-gray-900/50 p-1 rounded-lg">
-                            <button onClick={() => setMode('manual')} className={cn("w-1/2 py-2 text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2", mode === 'manual' ? 'bg-white dark:bg-sena-blue text-sena-blue shadow' : 'text-gray-600 dark:text-gray-300')}><Send className="w-4 h-4"/>Envío Manual</button>
-                            <button onClick={() => setMode('emitter')} className={cn("w-1/2 py-2 text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2", mode === 'emitter' ? 'bg-white dark:bg-sena-green text-sena-green shadow' : 'text-gray-600 dark:text-gray-300')}><Bot className="w-4 h-4"/>Simulador</button>
+                </div>
+            </Card>
+            
+            {selections.sensors.length > 0 && (
+                <div className="animate-in fade-in duration-500">
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Acción a Realizar ({selections.sensors.length} seleccionados)</h2>
+                    <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+                        <div className="flex rounded-md overflow-hidden bg-gray-100 dark:bg-gray-900/50">
+                            <button onClick={() => setMode('manual')} className={cn("w-1/2 py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2", mode === 'manual' ? 'bg-white dark:bg-sena-blue text-sena-blue shadow' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700')}><Send className="w-5 h-5"/>Envío Manual</button>
+                            <button onClick={() => setMode('emitter')} className={cn("w-1/2 py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2", mode === 'emitter' ? 'bg-white dark:bg-sena-green text-sena-green shadow' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700')}><Bot className="w-5 h-5"/>Simulador</button>
                         </div>
-                        <div className="mt-4">
-                            {mode === 'manual' ? (
-                                <ManualEntryForm selectedSensors={sensors.filter(s => selections.sensors.includes(s.id))} onSubmit={handleMqttSubmit} isSubmitting={loading.action} />
-                            ) : (
-                                <div className="p-4 text-center bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                    <button onClick={() => handleApiAction(() => dataService.startEmitter(selections.sensors), 'Simulación iniciada.')} disabled={loading.action} className="w-full btn-primary flex items-center justify-center gap-2">
-                                        {loading.action ? <LoadingSpinner bare size="sm" /> : <><Play className="w-5 h-5" /><span>Iniciar Simulación</span></>}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </Card>
-                )}
-            </div>
+                        {mode === 'manual' ? (
+                            <div className="mt-2">
+                                <ManualEntryForm selectedSensors={sensors.filter(s => selections.sensors.includes(s.id))} onSubmit={handleMqttSubmit} isSubmitting={loading.submittingManual} />
+                            </div>
+                        ) : (
+                             <div className="mt-2 p-4">
+                                <button onClick={handleStartEmitters} disabled={loading.startingEmitter || selections.sensors.length === 0} className="w-full btn-primary py-3 text-base flex items-center justify-center gap-2">
+                                    {loading.startingEmitter ? <LoadingSpinner bare size="sm" /> : <><Play className="w-6 h-6" /><span>Iniciar Simulación</span></>}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {activeEmitters.length > 0 && (
                  <Card title="Panel de Control de Simuladores" icon={Bot}>
                      <div className="space-y-4">
                          {Object.entries(simulatorsByTank).map(([tankName, { user, sensors: tankSensors }]) => (
                              <div key={tankName} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                                 <button onClick={() => toggleTankExpansion(tankName)} className="w-full flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700/80 transition-colors">
-                                     <div className="flex items-center gap-3"><MapPin className="w-5 h-5 text-sena-blue"/><h3 className="font-semibold text-gray-800 dark:text-white">{tankName}<span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">({user})</span></h3></div>
+                                 <div className="w-full flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50">
+                                     <button onClick={() => toggleTankExpansion(tankName)} className="flex-grow flex items-center gap-3 text-left">
+                                         <MapPin className="w-5 h-5 text-sena-blue"/>
+                                         <h3 className="font-semibold text-gray-800 dark:text-white">{tankName}<span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">({user})</span></h3>
+                                     </button>
                                      <div className="flex items-center gap-4">
                                          <div className="flex items-center gap-3 text-xs text-green-600"><div className="w-2 h-2 rounded-full bg-sena-green animate-pulse"></div>{tankSensors.length} Activo(s)</div>
-                                         <ChevronDown className={cn("w-5 h-5 text-gray-500 transition-transform", expandedTanks.has(tankName) && "rotate-180")} />
+                                         <button
+                                            onClick={() => handleStopAllForTank(tankName, tankSensors.map(e => e.sensorId))}
+                                            disabled={stoppingAll.has(tankName)}
+                                            className="btn-secondary bg-red-100 hover:bg-red-200 dark:bg-red-900/50 dark:hover:bg-red-900/80 text-red-600 dark:text-red-300 px-2 py-1 text-xs flex items-center gap-1.5"
+                                         >
+                                            {stoppingAll.has(tankName) ? <LoadingSpinner bare size="sm" /> : <><StopCircle className="w-4 h-4"/><span>Terminar Todo</span></>}
+                                         </button>
+                                         <button onClick={() => toggleTankExpansion(tankName)}>
+                                            <ChevronDown className={cn("w-5 h-5 text-gray-500 transition-transform", expandedTanks.has(tankName) && "rotate-180")} />
+                                         </button>
                                      </div>
-                                 </button>
+                                 </div>
                                  {expandedTanks.has(tankName) && (
                                      <div className="bg-white dark:bg-gray-800 p-2">
-                                         <div className="flex justify-end gap-2 mb-2 px-1">
-                                            <button onClick={() => handleApiAction(() => Promise.all(tankSensors.map(e => dataService.stopEmitter(e.sensorId))), `Simulaciones terminadas para ${tankName}.`)} disabled={tankSensors.length === 0 || loading.action} className="btn-secondary bg-red-100 hover:bg-red-200 dark:bg-red-900/50 dark:hover:bg-red-900/80 text-red-600 dark:text-red-300 px-2 py-1 text-xs flex items-center gap-1.5"><StopCircle className="w-4 h-4"/>Terminar Todo</button>
-                                         </div>
                                          <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
                                             {tankSensors.map(emitter => 
-                                                <ActiveEmitterRow key={emitter.sensorId} emitter={emitter} onStop={() => handleApiAction(() => dataService.stopEmitter(emitter.sensorId), `Simulación terminada para ${emitter.sensorName}`)} />
+                                                <ActiveEmitterRow 
+                                                    key={emitter.sensorId} 
+                                                    emitter={emitter} 
+                                                    onStop={() => handleStopEmitter(emitter.sensorId)}
+                                                    isStopping={stoppingEmitters.has(emitter.sensorId)}
+                                                />
                                             )}
                                          </div>
                                      </div>
