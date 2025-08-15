@@ -1,6 +1,12 @@
-import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { User, ReportStatus, ReportType, Report } from '@prisma/client';
+import { User, Report, ReportStatus, SensorData } from '@prisma/client';
 import { CreateReportDto } from './dto/create-report.dto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -9,46 +15,83 @@ import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { EventsGateway } from '../events/events.gateway';
 
+// Extiende la interfaz jsPDF para incluir el método autoTable que viene del plugin.
+declare module 'jspdf' {
+  interface jsPDF {
+    autoTable: (options: any) => jsPDF;
+  }
+}
+
+/**
+ * @description Define la estructura de las estadísticas calculadas para el resumen del reporte.
+ */
+interface ReportStats {
+  avg: number;
+  min: number;
+  max: number;
+  count: number;
+}
+
+/**
+ * @class ReportsService
+ * @description Contiene la lógica de negocio para crear, procesar y descargar reportes.
+ */
 @Injectable()
 export class ReportsService {
   private readonly logger = new Logger(ReportsService.name);
+  private readonly logoBase64: string;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private eventsGateway: EventsGateway,
+  ) {
+    try {
+      const logoPath = path.resolve(__dirname, '..', 'assets', 'logo-sena.png');
+      this.logoBase64 = fs.readFileSync(logoPath, 'base64');
+    } catch (error) {
+      this.logger.error('No se pudo cargar el logo para los reportes. Verifica que el archivo exista en "src/assets/logo-sena.png"');
+      this.logoBase64 = '';
+    }
+  }
 
-  async create(createReportDto: CreateReportDto, user: User) {
-    const parameters = {
-      tankId: createReportDto.tankId,
-      sensorIds: createReportDto.sensorIds,
-      startDate: createReportDto.startDate,
-      endDate: createReportDto.endDate,
-    };
-    
+  // ... (los métodos create, findOne, y findAll permanecen igual que en la respuesta anterior) ...
+  async create(createReportDto: CreateReportDto, user: User): Promise<Report> {
     const newReport = await this.prisma.report.create({
       data: {
         title: createReportDto.title,
         type: createReportDto.type,
         userId: user.id,
-        parameters: JSON.stringify(parameters),
+        parameters: JSON.stringify({
+          tankId: createReportDto.tankId,
+          sensorIds: createReportDto.sensorIds,
+          startDate: createReportDto.startDate,
+          endDate: createReportDto.endDate,
+        }),
         status: ReportStatus.PENDING,
       },
     });
 
-    this.processReportGeneration(newReport.id);
+    this.processReportGeneration(newReport.id).catch(error => {
+      this.logger.error(`Fallo en el procesamiento en segundo plano del reporte ${newReport.id}:`, error);
+    });
 
     return newReport;
   }
   
   async findOne(id: string, user: User): Promise<Report> {
     const report = await this.prisma.report.findUnique({ where: { id } });
-    if (!report) throw new NotFoundException('Reporte no encontrado.');
+    if (!report) {
+      throw new NotFoundException('Reporte no encontrado.');
+    }
     if (user.role !== 'ADMIN' && report.userId !== user.id) {
         throw new ForbiddenException('No tienes permisos para acceder a este reporte.');
     }
     return report;
   }
 
-  async findAll(currentUser: User, targetUserId?: string) {
+  async findAll(currentUser: User, targetUserId?: string): Promise<Report[]> {
     const whereClause: { userId?: string } = {};
     if (currentUser.role !== 'ADMIN') {
       whereClause.userId = currentUser.id;
@@ -64,143 +107,185 @@ export class ReportsService {
     });
   }
 
-  /**
-   * @method generateFileFromData
-   * @description Lee los datos brutos del reporte y los convierte al formato solicitado.
-   */
-  async generateFileFromData(report: Report, format: string) {
+
+  async generateFileFromData(report: Report, format: string): Promise<{ filePath: string, title: string }> {
     const dataFilePath = report.filePath;
-    
     if (!dataFilePath || !fs.existsSync(dataFilePath)) {
-        throw new NotFoundException('Los datos intermedios del reporte no existen.');
+      throw new InternalServerErrorException('Los datos intermedios del reporte no existen o aún no han sido generados.');
     }
     
     const rawData = JSON.parse(fs.readFileSync(dataFilePath, 'utf8'));
+    const parameters = JSON.parse(report.parameters as string);
+    const [tank, sensors] = await Promise.all([
+      this.prisma.tank.findUnique({ where: { id: parameters.tankId } }),
+      this.prisma.sensor.findMany({ where: { id: { in: parameters.sensorIds } } })
+    ]);
+    const reportContext = { tank, sensors };
 
     const directoryPath = path.resolve(__dirname, '../../reports/generated');
     if (!fs.existsSync(directoryPath)) {
-        fs.mkdirSync(directoryPath, { recursive: true });
+      fs.mkdirSync(directoryPath, { recursive: true });
     }
     
     let outputFilePath;
-    
     if (format === 'pdf') {
-        outputFilePath = await this.generatePdfFile(report, rawData, directoryPath);
+        outputFilePath = await this.generatePdfFile(report, rawData, directoryPath, reportContext);
     } else if (format === 'xlsx') {
-        outputFilePath = await this.generateExcelFile(report, rawData, directoryPath);
+        outputFilePath = await this.generateExcelFile(report, rawData, directoryPath, reportContext);
     } else {
         throw new NotFoundException('Formato de descarga no válido.');
     }
 
-    return {
-        filePath: outputFilePath,
-        title: report.title,
-    };
+    return { filePath: outputFilePath, title: report.title };
   }
-
-  /**
-   * @private
-   * @method generateExcelFile
-   * @description Genera un archivo .xlsx válido a partir de los datos.
-   */
-  private async generateExcelFile(report: Report, rawData: any[], outputPath: string): Promise<string> {
-    const headers = ['id', 'value', 'type', 'timestamp', 'createdAt', 'sensorId', 'tankId'];
-    const formattedData = rawData.map(item => {
-        return {
-            id: item.id,
-            value: item.value,
-            type: item.type,
-            timestamp: format(new Date(item.timestamp), 'yyyy-MM-dd HH:mm:ss'),
-            createdAt: format(new Date(item.createdAt), 'yyyy-MM-dd HH:mm:ss'),
-            sensorId: item.sensorId,
-            tankId: item.tankId,
-        };
+  
+  private calculateStatistics(rawData: SensorData[]): Map<string, ReportStats> {
+    const statsMap = new Map<string, { sum: number; min: number; max: number; count: number }>();
+    
+    rawData.forEach(item => {
+      if (!statsMap.has(item.type)) {
+        statsMap.set(item.type, { sum: 0, min: Infinity, max: -Infinity, count: 0 });
+      }
+      const stats = statsMap.get(item.type)!;
+      stats.sum += item.value;
+      stats.count++;
+      if (item.value < stats.min) stats.min = item.value;
+      if (item.value > stats.max) stats.max = item.max;
     });
-    const ws = XLSX.utils.json_to_sheet(formattedData, { header: headers });
+
+    const finalStats = new Map<string, ReportStats>();
+    statsMap.forEach((value, key) => {
+      finalStats.set(key, {
+        count: value.count,
+        avg: value.count > 0 ? value.sum / value.count : 0,
+        min: value.count > 0 ? value.min : 0,
+        max: value.count > 0 ? value.max : 0,
+      });
+    });
+
+    return finalStats;
+  }
+  
+  private async generateExcelFile(report: Report, rawData: SensorData[], outputPath: string, context: any): Promise<string> {
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Datos del Reporte");
+    const parameters = JSON.parse(report.parameters as string);
     
-    const filePath = path.join(outputPath, `report-${report.id}.xlsx`);
-    XLSX.writeFile(wb, filePath);
-    
-    return filePath;
-  }
-
-  /**
-   * @private
-   * @method generatePdfFile
-   * @description Genera un archivo .pdf válido a partir de los datos.
-   */
-  private async generatePdfFile(report: Report, rawData: any[], outputPath: string): Promise<string> {
-    const doc = new jsPDF();
-    
-    const columns = [
-        { header: 'Fecha y Hora', dataKey: 'timestamp' },
-        { header: 'Valor', dataKey: 'value' },
-        { header: 'Tipo', dataKey: 'type' },
-        { header: 'Sensor ID', dataKey: 'sensorId' },
+    const summaryData = [
+      ["", "Reporte de Monitoreo Acuático - SENA"],
+      [],
+      ["Título", report.title],
+      ["Tanque", context.tank?.name || 'N/A'],
+      ["Período", `${format(new Date(parameters.startDate + 'T00:00:00'), 'dd/MM/yyyy')} - ${format(new Date(parameters.endDate + 'T00:00:00'), 'dd/MM/yyyy')}`],
+      ["Generado el", format(new Date(), "dd/MM/yyyy HH:mm")],
+      [],
+      ["Resumen Estadístico por Sensor"],
+      ["Tipo de Sensor", "Registros", "Promedio", "Mínimo", "Máximo"]
     ];
-    
-    const formattedData = rawData.map(item => ({
-        timestamp: format(new Date(item.timestamp), 'dd/MM/yyyy HH:mm', { locale: es }),
-        value: item.value,
-        type: item.type,
-        sensorId: item.sensorId,
-    }));
-    
-    (doc as any).autoTable({
-        head: [columns.map(col => col.header)],
-        body: formattedData.map(item => Object.values(item)),
-        startY: 20,
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [57, 169, 0] },
+    const stats = this.calculateStatistics(rawData);
+    stats.forEach((s, type) => {
+        summaryData.push([type, s.count, s.avg.toFixed(2), s.min.toFixed(2), s.max.toFixed(2)]);
     });
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+    wsSummary['!merges'] = [{ s: { r: 0, c: 1 }, e: { r: 0, c: 4 } }];
+    wsSummary['!cols'] = [{ wch: 20 }, { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Resumen");
+
+    const formattedData = rawData.map(item => ({
+        'Fecha y Hora': format(new Date(item.timestamp), 'yyyy-MM-dd HH:mm:ss'),
+        'Valor': item.value,
+        'Tipo': item.type,
+        'Sensor': context.sensors.find(s => s.id === item.sensorId)?.name || item.sensorId,
+    }));
+    const wsData = XLSX.utils.json_to_sheet(formattedData);
+    wsData['!cols'] = [{ wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 25 }];
+    XLSX.utils.book_append_sheet(wb, wsData, "Datos Crudos");
     
-    const filePath = path.join(outputPath, `report-${report.id}.pdf`);
-    fs.writeFileSync(filePath, doc.output());
-    
+    const filePath = path.join(outputPath, `reporte-${report.id}.xlsx`);
+    XLSX.writeFile(wb, filePath);
     return filePath;
   }
 
-  private async processReportGeneration(reportId: string) {
+  private async generatePdfFile(report: Report, rawData: SensorData[], outputPath: string, context: any): Promise<string> {
+    const doc = new jsPDF();
+    const parameters = JSON.parse(report.parameters as string);
+    const pageHeight = doc.internal.pageSize.height;
+    
+    if (this.logoBase64) {
+      doc.addImage(this.logoBase64, 'PNG', 15, 12, 20, 20);
+    }
+    doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+    doc.text('Reporte de Monitoreo Acuático', 105, 20, { align: 'center' });
+    doc.setFontSize(10); doc.setTextColor(100);
+    doc.text('Servicio Nacional de Aprendizaje - SENA', 105, 27, { align: 'center' });
+    
+    doc.setFontSize(12); doc.setTextColor(0); doc.setFont('helvetica', 'bold');
+    doc.text('Título:', 15, 45); doc.setFont('helvetica', 'normal');
+    doc.text(report.title, 40, 45, { maxWidth: 150 });
+    doc.setFont('helvetica', 'bold');
+    doc.text('Período:', 15, 52); doc.setFont('helvetica', 'normal');
+    doc.text(`${format(new Date(parameters.startDate + 'T00:00:00'), 'dd/MM/yyyy')} al ${format(new Date(parameters.endDate + 'T00:00:00'), 'dd/MM/yyyy')}`, 40, 52);
+    
+    const stats = this.calculateStatistics(rawData);
+    const statsBody = Array.from(stats.entries()).map(([type, s]) => [type, s.count, s.avg.toFixed(2), s.min.toFixed(2), s.max.toFixed(2)]);
+    
+    doc.autoTable({ startY: 60, head: [['Tipo de Sensor', 'Nº Registros', 'Promedio', 'Mínimo', 'Máximo']], body: statsBody, theme: 'grid', headStyles: { fillColor: [57, 169, 0] }, });
+
+    const tableBody = rawData.slice(0, 500).map(item => [
+        format(new Date(item.timestamp), 'dd/MM/yy HH:mm', { locale: es }),
+        item.type,
+        item.value.toFixed(2),
+        context.sensors.find(s => s.id === item.sensorId)?.name || 'N/A'
+    ]);
+
+    doc.autoTable({
+        startY: (doc as any).lastAutoTable.finalY + 15,
+        head: [['Fecha/Hora', 'Tipo', 'Valor', 'Sensor']],
+        body: tableBody,
+        theme: 'striped',
+        headStyles: { fillColor: [255, 103, 31] },
+    });
+
+    const pageCount = (doc.internal as any).getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        const text = `Página ${i} de ${pageCount} | Generado el ${format(new Date(), "dd/MM/yyyy HH:mm")}`;
+        doc.text(text, doc.internal.pageSize.width / 2, pageHeight - 10, { align: 'center' });
+    }
+    
+    const filePath = path.join(outputPath, `reporte-${report.id}.pdf`);
+    const pdfBuffer = doc.output('arraybuffer');
+    fs.writeFileSync(filePath, Buffer.from(pdfBuffer));
+    return filePath;
+  }
+
+  private async processReportGeneration(reportId: string): Promise<void> {
+    let updatedReport: Report;
     try {
-      this.logger.log(`Iniciando generación de datos para el reporte ${reportId}...`);
+      this.logger.log(`Iniciando generación de reporte ${reportId}...`);
       
-      await this.prisma.report.update({
+      updatedReport = await this.prisma.report.update({
           where: { id: reportId },
           data: { status: 'PROCESSING' }
       });
+      this.eventsGateway.broadcastReportUpdate(updatedReport);
       
-      const report = await this.prisma.report.findUnique({ where: { id: reportId } });
-      const parameters = JSON.parse(report.parameters as string);
+      const parameters = JSON.parse(updatedReport.parameters as string);
       
-      // -- CORRECCIÓN CRÍTICA DE FECHAS --
-      // Creamos objetos de fecha explícitamente en la zona horaria del servidor
-      const start = new Date(parameters.startDate);
-      const end = new Date(parameters.endDate);
-      const startDate = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0);
-      const endDate = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
-      
-      this.logger.log(`Buscando datos para el rango corregido: ${startDate.toISOString()} a ${endDate.toISOString()}`);
+      // SOLUCIÓN FECHAS: Interpreta la fecha como local añadiendo la hora.
+      const startDate = new Date(`${parameters.startDate}T00:00:00`);
+      const endDate = new Date(`${parameters.endDate}T23:59:59.999`);
       
       const historicalData = await this.prisma.sensorData.findMany({
           where: {
               tankId: parameters.tankId,
-              sensorId: {
-                  in: parameters.sensorIds
-              },
-              timestamp: {
-                  gte: startDate,
-                  lte: endDate
-              }
+              sensorId: { in: parameters.sensorIds },
+              timestamp: { gte: startDate, lte: endDate }
           },
           orderBy: { timestamp: 'asc' },
       });
 
-      if (historicalData.length === 0) {
-        this.logger.warn(`No se encontraron datos para el reporte ${reportId}.`);
-      }
-      
       const directoryPath = path.resolve(__dirname, '../../reports/data');
       if (!fs.existsSync(directoryPath)) {
           fs.mkdirSync(directoryPath, { recursive: true });
@@ -208,22 +293,20 @@ export class ReportsService {
       const dataFilePath = path.join(directoryPath, `raw-${reportId}.json`);
       fs.writeFileSync(dataFilePath, JSON.stringify(historicalData));
 
-      this.logger.log(`Datos del reporte ${reportId} generados. Guardando en DB...`);
-
-      await this.prisma.report.update({
+      updatedReport = await this.prisma.report.update({
         where: { id: reportId },
-        data: {
-          status: 'COMPLETED',
-          filePath: dataFilePath,
-        },
+        data: { status: 'COMPLETED', filePath: dataFilePath },
       });
-      this.logger.log(`Reporte ${reportId} completado y guardado.`);
+      this.eventsGateway.broadcastReportUpdate(updatedReport);
+      this.logger.log(`✅ Reporte ${reportId} completado.`);
+
     } catch (error) {
-      this.logger.error(`Error al generar el reporte ${reportId}:`, error);
-      await this.prisma.report.update({
+      this.logger.error(`Error generando el reporte ${reportId}:`, error);
+      updatedReport = await this.prisma.report.update({
         where: { id: reportId },
         data: { status: 'FAILED' },
       });
+      this.eventsGateway.broadcastReportUpdate(updatedReport);
     }
   }
 }
