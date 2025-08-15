@@ -5,21 +5,16 @@ import { useAuth } from '../../hooks/useAuth';
 import { User } from '../../types';
 import { Card } from '../common/Card';
 import { Modal } from '../common/Modal';
-import { LoadingSpinner } from '../common/LoadingSpinner'; 
+import { LoadingSpinner } from '../common/LoadingSpinner';
 import Swal from 'sweetalert2';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import * as userService from '../../services/userService';
 
-/**
- * @component UserManagement
- * @description Interfaz completa para la administración de usuarios del sistema.
- * El acceso a este componente ya está protegido por AdminRoute.
- */
 export const UserManagement: React.FC = () => {
   const { user: currentUser } = useAuth();
   const { users, addUser, updateUser, deleteUser, loading, error } = useUsers();
-  
+
   const [modalState, setModalState] = useState<{ mode: 'edit' | 'create' | 'view' | null; user: User | null }>({ mode: null, user: null });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isModalLoading, setIsModalLoading] = useState(false);
@@ -44,7 +39,7 @@ export const UserManagement: React.FC = () => {
             setIsModalLoading(false);
         }
     }
-    
+
     setModalState({ mode, user: user || null });
 
     if (user && (mode === 'edit' || mode === 'view')) {
@@ -62,26 +57,26 @@ export const UserManagement: React.FC = () => {
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
       const dataToSubmit: Partial<User> = {
         name: formData.name.trim(), email: formData.email.trim(),
         role: formData.role, status: formData.status
       };
-      
+
       if (formData.password.trim()) {
         (dataToSubmit as any).password = formData.password;
       }
-    
+
       if (modalState.mode === 'edit' && modalState.user) {
         await updateUser(modalState.user.id, dataToSubmit);
       } else {
         await addUser(dataToSubmit);
       }
 
-      await Swal.fire({ 
+      await Swal.fire({
           icon: 'success', title: `Usuario ${modalState.mode === 'edit' ? 'actualizado' : 'creado'} con éxito`,
-          toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 
+          toast: true, position: 'top-end', showConfirmButton: false, timer: 2000
       });
       handleCloseModal();
     } catch (err: any) {
@@ -128,8 +123,8 @@ export const UserManagement: React.FC = () => {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestión de Usuarios</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Administra los usuarios del sistema de monitoreo.</p>
         </div>
-        <button 
-            onClick={() => handleOpenModal('create')} 
+        <button
+            onClick={() => handleOpenModal('create')}
             className="btn-primary"
         >
           <Plus className="w-5 h-5" />
@@ -142,12 +137,12 @@ export const UserManagement: React.FC = () => {
         <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white"><div className="flex items-center justify-between"><div><p className="text-green-100">Usuarios Activos</p><p className="text-3xl font-bold">{loading ? '...' : stats.active}</p></div><Shield className="w-12 h-12 text-green-200" /></div></Card>
         <Card className="bg-gradient-to-r from-orange-500 to-orange-600 text-white"><div className="flex items-center justify-between"><div><p className="text-orange-100">Administradores</p><p className="text-3xl font-bold">{loading ? '...' : stats.admins}</p></div><ShieldCheck className="w-12 h-12 text-orange-200" /></div></Card>
       </div>
-      
+
       <Card>
           {loading && <div className="p-8"><LoadingSpinner message="Cargando usuarios..." /></div>}
-          
+
           {error && <div className="text-red-600 dark:text-red-400 text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-md flex items-center justify-center"><AlertCircle className="w-5 h-5 mr-2"/>{error}</div>}
-          
+
           {!loading && !error && (
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -177,19 +172,19 @@ export const UserManagement: React.FC = () => {
             </div>
           )}
       </Card>
-      
+
       {modalState.mode && (
-        <Modal 
-          isOpen={!!modalState.mode} 
-          onClose={handleCloseModal} 
+        <Modal
+          isOpen={!!modalState.mode}
+          onClose={handleCloseModal}
           title={modalState.mode === 'create' ? 'Crear Nuevo Usuario' : modalState.mode === 'edit' ? 'Editar Usuario' : 'Detalles del Usuario'}
           footer={modalState.mode !== 'view' ? (<><button type="button" onClick={handleCloseModal} className="btn-secondary" disabled={isSubmitting}>Cancelar</button><button type="submit" form="user-form" disabled={isSubmitting} className="btn-primary min-w-[150px]">{isSubmitting ? <LoadingSpinner size="sm" /> : <><Save className="w-4 h-4" /><span>{modalState.mode === 'edit' ? 'Guardar Cambios' : 'Crear Usuario'}</span></> }</button></>) : null}
         >
-            {isModalLoading ? <div className="p-8"><LoadingSpinner message="Cargando detalles..." /></div> : 
+            {isModalLoading ? <div className="p-8"><LoadingSpinner message="Cargando detalles..." /></div> :
             modalState.mode === 'view' && detailedUser && (
                 <div className="space-y-4 text-sm text-gray-800 dark:text-gray-200"><div className="flex justify-between"><strong>Nombre:</strong> <span className="text-gray-700 dark:text-gray-300">{detailedUser.name}</span></div><div className="flex justify-between"><strong>Email:</strong> <span className="text-gray-700 dark:text-gray-300">{detailedUser.email}</span></div><div className="flex justify-between"><strong>Rol:</strong> <span>{detailedUser.role}</span></div><div className="flex justify-between"><strong>Estado:</strong> <span>{detailedUser.status}</span></div><div className="flex justify-between"><strong>Miembro desde:</strong> <span className="text-gray-700 dark:text-gray-300">{format(new Date(detailedUser.createdAt), "dd 'de' MMMM 'de' yyyy", { locale: es })}</span></div><div><strong className="block mb-1">Tanques Asignados ({detailedUser.tanks?.length || 0}):</strong>{detailedUser.tanks && detailedUser.tanks.length > 0 ? (<ul className="list-disc list-inside ml-2 mt-1 space-y-1">{detailedUser.tanks.map(tank => <li key={tank.id} className="text-gray-700 dark:text-gray-300">{tank.name} <span className="text-gray-500">({tank.location})</span></li>)}</ul>) : (<span className="ml-2 text-gray-500 italic">Este usuario no tiene tanques asignados.</span>)}</div></div>
             )}
-            
+
             {(modalState.mode === 'create' || modalState.mode === 'edit') && (
                 <form id="user-form" onSubmit={handleSubmit} className="space-y-4">
                     <label className="label">Nombre Completo</label>
