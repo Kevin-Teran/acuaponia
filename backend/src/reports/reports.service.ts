@@ -180,36 +180,51 @@ export class ReportsService {
   private async generateExcelFile(report: Report, rawData: SensorData[], outputPath: string, context: any): Promise<string> {
     const wb = XLSX.utils.book_new();
     const parameters = JSON.parse(report.parameters as string);
-    
-    const summaryHeader = [
-      "Reporte de Monitoreo Acuático - SENA",
-      `Título: ${report.title}`,
-      `Tanque: ${context.tank?.name || 'N/A'}`,
-      `Período: ${format(new Date(parameters.startDate + 'T00:00:00'), 'dd/MM/yyyy')} - ${format(new Date(parameters.endDate + 'T00:00:00'), 'dd/MM/yyyy')}`,
-      `Generado el: ${format(new Date(), "dd/MM/yyyy HH:mm")}`
-    ];
+
+    // --- Hoja de Resumen ---
+    const wsSummary = XLSX.utils.aoa_to_sheet([
+        ['Reporte de Monitoreo Acuático - SENA', null, null, null, null],
+        [null, null, null, null, null],
+        ['Título:', report.title, null, null, null],
+        ['Tanque:', context.tank?.name || 'N/A', null, null, null],
+        ['Período:', `${format(new Date(parameters.startDate + 'T00:00:00'), 'dd/MM/yyyy')} - ${format(new Date(parameters.endDate + 'T00:00:00'), 'dd/MM/yyyy')}`, null, null, null],
+        ['Generado el:', format(new Date(), "dd/MM/yyyy HH:mm"), null, null, null],
+        [null, null, null, null, null],
+    ], { cellStyles: true });
+
+    XLSX.utils.sheet_add_aoa(wsSummary, [['Resumen Estadístico']], { origin: 'A8' });
     
     const stats = this.calculateStatistics(rawData);
-    const statsData: (string | number)[][] = [
-      ["Tipo de Sensor", "Nº Registros", "Promedio", "Mínimo", "Máximo"]
-    ];
-    stats.forEach((s, type) => {
-      statsData.push([type, s.count, s.avg.toFixed(2), s.min.toFixed(2), s.max.toFixed(2)]);
-    });
+    const statsHeader = ["Tipo de Sensor", "Nº Registros", "Promedio", "Mínimo", "Máximo"];
+    const statsBody = Array.from(stats.entries()).map(([type, s]) => [type, s.count, s.avg.toFixed(2), s.min.toFixed(2), s.max.toFixed(2)]);
+    
+    XLSX.utils.sheet_add_aoa(wsSummary, [statsHeader, ...statsBody], { origin: 'A9' });
 
-    const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeader, [], ...statsData]);
-    wsSummary['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+    wsSummary['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }, // Título principal
+        { s: { r: 2, c: 1 }, e: { r: 2, c: 4 } }, // Título
+        { s: { r: 3, c: 1 }, e: { r: 3, c: 4 } }, // Tanque
+        { s: { r: 4, c: 1 }, e: { r: 4, c: 4 } }, // Período
+        { s: { r: 5, c: 1 }, e: { r: 5, c: 4 } }, // Generado
+        { s: { r: 7, c: 0 }, e: { r: 7, c: 4 } }, // Título de estadísticas
+    ];
+    
+    wsSummary['!cols'] = [{ wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
     XLSX.utils.book_append_sheet(wb, wsSummary, "Resumen");
 
+    // --- Hoja de Datos Crudos ---
     const formattedData = rawData.map(item => ({
         'Fecha y Hora': format(new Date(item.timestamp), 'yyyy-MM-dd HH:mm:ss'),
         'Valor': item.value,
         'Tipo': item.type,
         'Sensor': context.sensors.find(s => s.id === item.sensorId)?.name || item.sensorId,
     }));
-    const wsData = XLSX.utils.json_to_sheet(formattedData);
     
-    wsData['!autofilter'] = { ref: XLSX.utils.encode_range(XLSX.utils.decode_range(wsData['!ref'])) };
+    const wsData = XLSX.utils.json_to_sheet(formattedData, {
+        header: ['Fecha y Hora', 'Valor', 'Tipo', 'Sensor']
+    });
+
+    wsData['!autofilter'] = { ref: 'A1:D1' };
     wsData['!cols'] = [{ wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 25 }];
     XLSX.utils.book_append_sheet(wb, wsData, "Datos Crudos");
     
