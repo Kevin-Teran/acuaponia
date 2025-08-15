@@ -3,12 +3,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../events/events.gateway';
 import { SensorData, SensorType, User } from '@prisma/client';
 
-type SimulationState = 'STABLE' | 'RISING' | 'FALLING' | 'ERROR_HIGH' | 'ERROR_LOW';
+type SimulationState = 'STABLE' | 'RISING' | 'FALLING';
 
 /**
  * @interface ActiveEmitter
- * @description Define la estructura de un emisor de datos simulados activo.
- * Ahora incluye un estado y un valor actual para una simulación más dinámica.
+ * @description Estructura de un emisor de datos simulados. Incluye estado, valor actual y hora de inicio.
  */
 interface ActiveEmitter {
   intervalId: NodeJS.Timeout;
@@ -19,7 +18,8 @@ interface ActiveEmitter {
   userName: string;
   thresholds: { min: number; max: number };
   currentValue: number;
-  state: SimulationState; 
+  state: SimulationState;
+  startTime: Date;
 }
 
 const DEFAULT_THRESHOLDS = {
@@ -29,7 +29,6 @@ const DEFAULT_THRESHOLDS = {
     LEVEL: { min: 40, max: 80 },
     FLOW: { min: 5, max: 15 },
 };
-
 
 @Injectable()
 export class DataService implements OnModuleDestroy {
@@ -46,6 +45,15 @@ export class DataService implements OnModuleDestroy {
     this.logger.log('Todos los emisores de simulación han sido detenidos.');
   }
 
+  /**
+   * @method getHistoricalData
+   * @description Obtiene datos históricos para un tanque y rango de fechas específicos.
+   * @param {User} user - El usuario que realiza la solicitud.
+   * @param {string} tankId - El ID del tanque a consultar.
+   * @param {string} startDate - La fecha de inicio del rango.
+   * @param {string} endDate - La fecha de fin del rango.
+   * @returns {Promise<{ data: SensorData[] }>} Los datos históricos.
+   */
   async getHistoricalData(user: User, tankId: string, startDate: string, endDate: string): Promise<{ data: SensorData[] }> {
     if (!tankId || !startDate || !endDate) {
       throw new BadRequestException('Faltan los parámetros tankId, startDate o endDate.');
@@ -66,6 +74,12 @@ export class DataService implements OnModuleDestroy {
     return { data: rawData };
   }
 
+  /**
+   * @method submitManualEntry
+   * @description Registra una o más lecturas de sensores enviadas manualmente.
+   * @param {Array<{ sensorId: string; value: number }>} entries - Un array de lecturas.
+   * @returns {Promise<any[]>} Los registros de datos creados.
+   */
   async submitManualEntry(entries: { sensorId: string; value: number }[]): Promise<any[]> {
     const createdData = [];
     for (const entry of entries) {
@@ -83,11 +97,22 @@ export class DataService implements OnModuleDestroy {
     return createdData;
   }
   
+  /**
+   * @method createEntryFromMqtt
+   * @description Crea un registro de datos a partir de un mensaje MQTT recibido.
+   * @param {object} data - Datos del sensor provenientes de MQTT.
+   * @returns {Promise<SensorData>} El registro de datos creado.
+   */
   async createEntryFromMqtt(data: { sensorId: string; tankId: string; type: SensorType; value: number; }): Promise<SensorData> {
     this.logger.log(`Dato de MQTT recibido para sensor ${data.sensorId} con valor ${data.value}`);
     return this.createAndBroadcastEntry(data);
   }
 
+  /**
+   * @method startEmitters
+   * @description Inicia la simulación de datos para una lista de sensores.
+   * @param {string[]} sensorIds - IDs de los sensores a simular.
+   */
   async startEmitters(sensorIds: string[]): Promise<void> {
     for (const sensorId of sensorIds) {
       if (this.activeEmitters.has(sensorId)) continue;
@@ -112,7 +137,7 @@ export class DataService implements OnModuleDestroy {
       };
 
       let emitterState: ActiveEmitter = {
-        intervalId: null as any, 
+        intervalId: null as any,
         sensorId: sensor.id,
         sensorName: sensor.name,
         type: sensor.type,
@@ -121,6 +146,7 @@ export class DataService implements OnModuleDestroy {
         thresholds,
         currentValue: (thresholds.min + thresholds.max) / 2,
         state: 'STABLE',
+        startTime: new Date(),
       };
 
       const intervalId = setInterval(() => {
@@ -136,6 +162,11 @@ export class DataService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * @method stopEmitter
+   * @description Detiene la simulación de un sensor específico.
+   * @param {string} sensorId - ID del sensor a detener.
+   */
   stopEmitter(sensorId: string): void {
     const emitter = this.activeEmitters.get(sensorId);
     if (emitter) {
@@ -145,10 +176,20 @@ export class DataService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * @method getEmitterStatus
+   * @description Devuelve una lista de todos los simuladores activos.
+   * @returns {any[]} Los datos de los emisores activos.
+   */
   getEmitterStatus() {
     return Array.from(this.activeEmitters.values()).map(({ intervalId, ...rest }) => rest);
   }
 
+  /**
+   * @private
+   * @method createAndBroadcastEntry
+   * @description Centraliza la lógica de crear un registro en la BD y emitirlo por WebSocket.
+   */
   private async createAndBroadcastEntry(data: { sensorId: string; tankId: string; type: SensorType; value: number; }): Promise<SensorData> {
     const createdData = await this.prisma.sensorData.create({
       data: { ...data, timestamp: new Date() },
@@ -163,10 +204,11 @@ export class DataService implements OnModuleDestroy {
     this.eventsGateway.broadcastNewData(createdData);
     return createdData as SensorData;
   }
-
+  
   /**
+   * @private
    * @method generateRealisticValue
-   * @description Motor de simulación. Decide si ocurre un evento y calcula el siguiente valor del sensor.
+   * @description Motor de simulación que genera valores de sensor con fluctuaciones realistas.
    * @param {ActiveEmitter} emitter - El estado actual del emisor.
    * @returns {{currentValue: number, state: SimulationState}} El nuevo valor y el nuevo estado.
    */
@@ -177,34 +219,29 @@ export class DataService implements OnModuleDestroy {
     const range = max - min;
     
     const eventChance = Math.random();
-    if (state === 'STABLE') {
-        if (eventChance < 0.02) { 
-            state = Math.random() < 0.5 ? 'RISING' : 'FALLING';
-            this.logger.log(`Evento simulado: El sensor "${emitter.sensorName}" ha entrado en estado ${state}`);
-        }
-    } else {
-        if (eventChance < 0.15) { 
-            state = 'STABLE';
-            this.logger.log(`Evento simulado: El sensor "${emitter.sensorName}" vuelve a estado STABLE`);
-        }
+    if (state === 'STABLE' && eventChance < 0.02) {
+        state = Math.random() < 0.5 ? 'RISING' : 'FALLING';
+        this.logger.log(`Evento simulado: El sensor "${emitter.sensorName}" ha entrado en estado ${state}`);
+    } else if (state !== 'STABLE' && eventChance < 0.15) {
+        state = 'STABLE';
+        this.logger.log(`Evento simulado: El sensor "${emitter.sensorName}" vuelve a estado STABLE`);
     }
 
-    let target = center; 
-    let volatility = range * 0.05; 
+    let target = center;
+    let volatility = range * 0.05;
 
     if (state === 'RISING') {
-      target = max + range * 0.2; 
-      volatility = range * 0.1; 
+      target = max + range * 0.2;
+      volatility = range * 0.1;
     } else if (state === 'FALLING') {
-      target = min - range * 0.2; 
+      target = min - range * 0.2;
       volatility = range * 0.1;
     }
 
     const pull = (target - currentValue) * 0.25;
-
     const randomStep = (Math.random() - 0.5) * volatility;
-
     let nextValue = currentValue + pull + randomStep;
+    
     const absoluteLimit = range * 2;
     nextValue = Math.max(min - absoluteLimit, Math.min(nextValue, max + absoluteLimit));
     
