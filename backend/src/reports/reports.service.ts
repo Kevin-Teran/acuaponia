@@ -17,7 +17,6 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { EventsGateway } from '../events/events.gateway';
 
-// Extiende la interfaz de jsPDF para que reconozca el plugin autoTable
 declare module 'jspdf' {
   interface jsPDF {
     autoTable: (options: any) => jsPDF;
@@ -110,8 +109,13 @@ export class ReportsService {
 
 
   async generateFileFromData(report: Report, format: 'pdf' | 'xlsx'): Promise<{ filePath: string, title: string }> {
-    const dataFilePath = report.filePath;
-    if (!dataFilePath || !fs.existsSync(dataFilePath)) {
+    const relativeDataFilePath = report.filePath;
+    if (!relativeDataFilePath) {
+      throw new InternalServerErrorException('La ruta del archivo de datos del reporte no está definida.');
+    }
+    const dataFilePath = path.resolve(__dirname, '../../../', relativeDataFilePath);
+
+    if (!fs.existsSync(dataFilePath)) {
       this.logger.error(`Archivo de datos no encontrado para el reporte ${report.id} en la ruta: ${dataFilePath}`);
       throw new InternalServerErrorException('Los datos del reporte no existen o están corruptos.');
     }
@@ -129,7 +133,7 @@ export class ReportsService {
 
     const reportContext = { tank, sensors };
 
-    const directoryPath = path.resolve(__dirname, '../../reports/generated');
+    const directoryPath = path.resolve(__dirname, '../../../reports/generated');
     if (!fs.existsSync(directoryPath)) {
       fs.mkdirSync(directoryPath, { recursive: true });
     }
@@ -186,7 +190,7 @@ export class ReportsService {
     ];
     
     const stats = this.calculateStatistics(rawData);
-    const statsData = [
+    const statsData: (string | number)[][] = [
       ["Tipo de Sensor", "Nº Registros", "Promedio", "Mínimo", "Máximo"]
     ];
     stats.forEach((s, type) => {
@@ -205,7 +209,6 @@ export class ReportsService {
     }));
     const wsData = XLSX.utils.json_to_sheet(formattedData);
     
-    // Añadir AutoFiltro
     wsData['!autofilter'] = { ref: XLSX.utils.encode_range(XLSX.utils.decode_range(wsData['!ref'])) };
     wsData['!cols'] = [{ wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 25 }];
     XLSX.utils.book_append_sheet(wb, wsData, "Datos Crudos");
@@ -295,16 +298,19 @@ export class ReportsService {
           orderBy: { timestamp: 'asc' },
       });
 
-      const directoryPath = path.resolve(__dirname, '../../reports/data');
+      const directoryPath = path.resolve(__dirname, '../../../reports/data');
       if (!fs.existsSync(directoryPath)) {
           fs.mkdirSync(directoryPath, { recursive: true });
       }
-      const dataFilePath = path.join(directoryPath, `raw-${reportId}.json`);
+      const fileName = `raw-${reportId}.json`;
+      const dataFilePath = path.join(directoryPath, fileName);
       fs.writeFileSync(dataFilePath, JSON.stringify(historicalData));
+
+      const relativePath = path.join('reports/data', fileName);
 
       updatedReport = await this.prisma.report.update({
         where: { id: reportId },
-        data: { status: 'COMPLETED', filePath: dataFilePath },
+        data: { status: 'COMPLETED', filePath: relativePath },
       });
       this.eventsGateway.broadcastReportUpdate(updatedReport);
       this.logger.log(`✅ Reporte ${reportId} completado.`);

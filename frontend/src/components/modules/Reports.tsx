@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Download, FileText, Clock, Loader, AlertCircle, Cpu, CheckSquare, Square } from 'lucide-react';
+import { Download, FileText, Clock, Loader, AlertCircle, Cpu, CheckSquare } from 'lucide-react';
 import { Card } from '../common/Card';
 import { useAuth } from '../../hooks/useAuth';
 import { LoadingSpinner } from '../common/LoadingSpinner';
@@ -14,7 +14,11 @@ import { cn } from '../../utils/cn';
 import { socketService } from '../../services/socketService';
 
 /**
- * @typedef {import('../../types').ReportFilters} ReportFilters
+ * @typedef {object} ReportFilters
+ * @property {string | null} tankId
+ * @property {string[]} sensorIds
+ * @property {string} startDate
+ * @property {string} endDate
  */
 interface ReportFilters {
   tankId: string | null;
@@ -31,7 +35,10 @@ const statusTranslations: Record<ReportStatus, string> = {
 };
 
 /**
- * @param {{ sensor: Sensor; isSelected: boolean; onToggle: () => void; }} props
+ * @param {object} props
+ * @param {Sensor} props.sensor
+ * @param {boolean} props.isSelected
+ * @param {() => void} props.onToggle
  * @returns {React.ReactElement}
  */
 const SensorCard: React.FC<{ sensor: Sensor; isSelected: boolean; onToggle: () => void; }> = ({ sensor, isSelected, onToggle }) => {
@@ -57,6 +64,11 @@ const SensorCard: React.FC<{ sensor: Sensor; isSelected: boolean; onToggle: () =
     );
 };
 
+/**
+ * @component Reports
+ * @description Módulo para la generación y gestión de reportes.
+ * @returns {React.ReactElement}
+ */
 export const Reports: React.FC = () => {
   const { user } = useAuth();
   const [tanks, setTanks] = useState<Tank[]>([]);
