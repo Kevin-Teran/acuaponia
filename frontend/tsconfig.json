@@ -22,8 +22,6 @@
      * @description Asegura que las importaciones con 'import' se usen consistentemente.
      */
     "forceConsistentCasingInFileNames": true,
-
-
     /* =================== CONFIGURACIÓN DEL ENTORNO Y MÓDULOS =================== */
     /**
      * @description Especifica la versión de ECMAScript a la que se compilará el código. 'ESNext' es la más reciente.
@@ -32,7 +30,11 @@
     /**
      * @description Especifica las bibliotecas de tipos que se incluirán. 'dom.iterable' añade soporte para iteradores en el DOM.
      */
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     /**
      * @description Especifica el sistema de módulos. Next.js requiere 'esnext' para características modernas.
      */
@@ -53,8 +55,6 @@
      * @description No reporta errores en código inalcanzable.
      */
     "allowUnreachableCode": false,
-
-
     /* =================== CONFIGURACIÓN DE NEXT.JS Y REACT =================== */
     /**
      * @description Especifica cómo se maneja JSX. 'preserve' mantiene el JSX para que Next.js lo transforme.
@@ -76,8 +76,6 @@
      * @description Incrementa la velocidad de compilación.
      */
     "incremental": true,
-
-
     /* =================== ALIAS DE RUTA (PARA IMPORTACIONES LIMPIAS) =================== */
     /**
      * @description Define el directorio base para resolver rutas no relativas.
@@ -87,10 +85,10 @@
      * @description Crea alias para las rutas de importación. '@/*' apuntará a 'src/*'.
      */
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     },
-
-
     /* =================== PLUGINS Y OTRAS CONFIGURACIONES =================== */
     /**
      * @description Añade plugins para mejorar la experiencia con el editor de código.
@@ -99,14 +97,22 @@
       {
         "name": "next"
       }
-    ]
+    ],
+    "skipLibCheck": true
   },
   /**
    * @description Especifica los archivos y directorios que serán incluidos en la compilación.
    */
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
   /**
    * @description Especifica los archivos y directorios que serán excluidos de la compilación.
    */
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }

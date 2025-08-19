@@ -1,48 +1,86 @@
 /**
  * @file LoadingSpinner.tsx
- * @description Componente reutilizable para mostrar un indicador de carga.
- * Puede mostrarse a pantalla completa o incrustado en otro componente.
+ * @description Componente de carga altamente reutilizable y personalizable con una animación visual del logo del SENA.
  */
- import { clsx } from 'clsx'; // clsx es una utilidad para construir classNames condicionalmente
-
- /**
-  * @interface LoadingSpinnerProps
-  * @description Propiedades que acepta el componente LoadingSpinner.
-  */
+ import React from 'react';
+ import Image from 'next/image';
+ import { clsx } from 'clsx';
+ 
  interface LoadingSpinnerProps {
-   fullScreen?: boolean; // Si es true, ocupa toda la pantalla con un fondo semitransparente.
-   message?: string;     // Mensaje opcional que se muestra debajo del spinner.
-   className?: string;   // Clases CSS adicionales para personalizar el contenedor.
+   size?: 'sm' | 'md' | 'lg';
+   message?: string;
+   fullScreen?: boolean;
+   className?: string;
  }
  
- /**
-  * @component LoadingSpinner
-  * @description Un componente visual que indica al usuario que una operación se está procesando.
-  * @param {LoadingSpinnerProps} props - Las propiedades del componente.
-  * @returns {React.ReactElement} El elemento del spinner de carga.
-  */
- export const LoadingSpinner = ({ fullScreen = false, message, className }: LoadingSpinnerProps) => {
-   const spinner = (
-     <div className={clsx(
-       'flex flex-col items-center justify-center space-y-3',
-       className
-     )}>
-       <div
-         className="h-10 w-10 animate-spin rounded-full border-4 border-solid border-blue-500 border-t-transparent"
-         role="status"
-         aria-label="loading"
-       ></div>
-       {message && <p className="text-gray-600 dark:text-gray-400">{message}</p>}
+ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
+   size = 'md',
+   message,
+   fullScreen = false,
+   className = ''
+ }) => {
+   const sizeClasses = {
+     sm: { container: 'w-20 h-20', text: 'text-sm' },
+     md: { container: 'w-24 h-24', text: 'text-base' },
+     lg: { container: 'w-28 h-28', text: 'text-lg' }
+   };
+ 
+   const senaGreen = '#39A900';
+ 
+   const spinnerContent = (
+     <div className={clsx('flex flex-col items-center justify-center p-8', className)}>
+       <div className={clsx('relative mb-6', sizeClasses[size].container)}>
+         <Image 
+           src="/logo-sena.png"
+           alt="Logo SENA de fondo" 
+           fill
+           sizes="120px"
+           className="object-contain filter grayscale opacity-25"
+           priority
+         />
+         <div className="absolute inset-0 animate-fill-up">
+           <Image 
+             src="/logo-sena.png"
+             alt="Logo SENA en carga" 
+             fill
+             sizes="120px"
+             className="object-contain"
+             priority
+           />
+         </div>
+       </div>
+       
+       {message && (
+         <p className={clsx('text-gray-700 dark:text-gray-200 font-medium text-center max-w-xs', sizeClasses[size].text)}>
+           {message}
+         </p>
+       )}
+       
+       <div className="flex mt-4 space-x-1.5">
+         {[0, 1, 2].map((i) => (
+           <div
+             key={i}
+             className="w-2 h-2 rounded-full animate-pulse-dot"
+             style={{ backgroundColor: senaGreen, animationDelay: `${i * 0.2}s` }}
+           />
+         ))}
+       </div>
      </div>
    );
  
    if (fullScreen) {
      return (
-       <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-black/70">
-         {spinner}
+       <div className="fixed inset-0 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50">
+           {spinnerContent}
+         </div>
        </div>
      );
    }
  
-   return spinner;
+   return (
+     <div className="animate-in fade-in duration-300">
+       {spinnerContent}
+     </div>
+   );
  };

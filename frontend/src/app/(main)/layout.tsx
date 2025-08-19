@@ -1,55 +1,68 @@
-/**
- * @file layout.tsx
- * @description Layout principal para las rutas protegidas de la aplicación.
- * Actúa como un guardián (ProtectedRoute), verificando la autenticación
- * antes de renderizar cualquier página hija. Muestra la barra lateral
- * y la estructura principal de la aplicación.
- */
- 'use client';
+'use client';
 
- import { useEffect } from 'react';
- import { useRouter } from 'next/navigation';
- import { useAuth } from '@/context/AuthContext';
- import { LoadingSpinner } from '@/components/common/LoadingSpinner';
- // import { Sidebar } from '@/components/layout/Sidebar'; // Descomentar cuando el Sidebar esté listo
- 
- /**
-  * @component MainAppLayout
-  * @description Envuelve las páginas protegidas, gestiona la redirección de
-  * usuarios no autenticados y renderiza la UI principal de la aplicación.
-  * @param {{ children: React.ReactNode }} props Los componentes hijos (páginas).
-  * @returns {React.ReactElement | null} El layout de la aplicación o nada durante la redirección.
-  */
- export default function MainAppLayout({ children }: { children: React.ReactNode }) {
-   const { isAuthenticated, loading, user, logout } = useAuth();
-   const router = useRouter();
- 
-   useEffect(() => {
-     if (!loading && !isAuthenticated) {
-       router.replace('/login');
-     }
-   }, [isAuthenticated, loading, router]);
- 
-   if (loading) {
-     return <LoadingSpinner fullScreen message="Cargando sesión..." />;
-   }
- 
-   if (!isAuthenticated) {
-     return null; 
-   }
- 
-   return (
-     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
-       {/* <Sidebar user={user} onLogout={logout} /> */}
-       <aside className="w-64 bg-white dark:bg-gray-800 p-4 shadow-md">
-         <h1 className="text-xl font-bold text-gray-900 dark:text-white">App Layout</h1>
-         <p className="text-sm text-gray-500 dark:text-gray-400">Bienvenido, {user?.name}</p>
-         <button onClick={logout} className="mt-4 text-red-500">Cerrar Sesión</button>
-       </aside>
- 
-       <main className="flex-1 overflow-y-auto p-6">
-         {children}
-       </main>
-     </div>
-   );
- }
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { Sidebar } from '@/components/layout/Sidebar';
+import { useSidebar } from '@/hooks/useSidebar'; // Importa el nuevo hook
+
+export default function MainAppLayout({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, loading, user, logout } = useAuth();
+  const router = useRouter();
+
+  // Usa el hook para controlar el estado del Sidebar
+  const {
+    collapsed,
+    theme,
+    currentModule,
+    handleToggleCollapse,
+    handleToggleTheme,
+    handleModuleChange
+  } = useSidebar('dashboard');
+
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [isAuthenticated, loading, router]);
+
+  if (loading || !isAuthenticated) {
+    return <LoadingSpinner fullScreen message="Cargando sesión..." />;
+  }
+  
+  // Aquí decides qué componente mostrar basado en 'currentModule'
+  // Por ahora, solo mostramos los children que vienen de la página actual.
+  // Más adelante, podrías tener una lógica para cambiar entre vistas si no usas rutas.
+  const renderModule = () => {
+    // Ejemplo de cómo podrías cambiar de vista en un futuro
+    // switch (currentModule) {
+    //   case 'dashboard':
+    //     return children; // Asume que /dashboard es la página
+    //   case 'reports':
+    //     return <ReportsPage />; // Componente de la página de reportes
+    //   default:
+    //     return children;
+    // }
+    return children;
+  }
+
+  return (
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+      <Sidebar
+        user={user}
+        onLogout={logout}
+        collapsed={collapsed}
+        onToggleCollapse={handleToggleCollapse}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
+        currentModule={currentModule}
+        onModuleChange={handleModuleChange}
+      />
+
+      <main className="flex-1 overflow-y-auto p-6">
+        {renderModule()}
+      </main>
+    </div>
+  );
+}

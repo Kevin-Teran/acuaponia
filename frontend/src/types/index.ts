@@ -12,6 +12,7 @@ export interface User {
   }
   
   export interface LoginCredentials {
-    identifier: string; 
+    email: string; 
     password: string;
+    rememberMe?: boolean;
   }
