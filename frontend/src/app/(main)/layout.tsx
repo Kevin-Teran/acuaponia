@@ -35,7 +35,6 @@ export default function MainAppLayout({ children }: { children: React.ReactNode 
   // Por ahora, solo mostramos los children que vienen de la página actual.
   // Más adelante, podrías tener una lógica para cambiar entre vistas si no usas rutas.
   const renderModule = () => {
-    // Ejemplo de cómo podrías cambiar de vista en un futuro
     // switch (currentModule) {
     //   case 'dashboard':
     //     return children; // Asume que /dashboard es la página

@@ -41,9 +41,11 @@
      }, [currentUser]);
  
      useEffect(() => {
-         mqttService.connect().catch(console.error);
-         fetchAllData();
-     }, [fetchAllData]);
+        if (!mqttService.client?.connected) {
+            mqttService.connect().catch(console.error);
+        }
+        fetchAllData();
+    }, [fetchAllData]);
  
      const handleSelectUser = useCallback(async (userId: string) => {
          setSelections({ user: userId, tank: '', sensors: [] });
