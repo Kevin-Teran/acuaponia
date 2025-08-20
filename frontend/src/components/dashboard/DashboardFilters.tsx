@@ -1,126 +1,73 @@
 /**
  * @file DashboardFilters.tsx
- * @description Componente de UI para seleccionar los filtros de visualización del dashboard.
- * Permite filtrar por usuario (si es admin), por tanque y por rango de fechas.
- * @technical_requirements Es un "componente controlado", manejado por el estado del componente padre (Dashboard).
+ * @description Componente para filtrar los datos del dashboard por fecha y estanque.
+ * @author Kevin Mariano
  */
+ 'use client';
+
  import React from 'react';
- import { User as UserIcon, Droplets, Calendar } from 'lucide-react';
- import { User, Tank } from '@/types';
- import { format } from 'date-fns';
- import { Card } from '@/components/common/Card';
- import { clsx } from 'clsx';
+ import { Filter, Calendar, BarChart2 } from 'lucide-react';
+ import { Tank } from '@/types'; // Asegúrate que Tank esté definido en tus tipos
  
- /**
-  * @interface DashboardFiltersProps
-  * @description Define las propiedades que recibe el componente de filtros del dashboard.
-  */
+ // Se definen las props que el componente espera recibir.
  interface DashboardFiltersProps {
-   startDate: string;
-   endDate: string;
-   selectedTankId: string | null;
-   selectedUserId?: string | null;
-   onStartDateChange: (date: string) => void;
-   onEndDateChange: (date: string) => void;
-   onTankChange: (tankId: string) => void;
-   onUserChange?: (userId: string) => void;
    tanks: Tank[];
-   users?: User[];
-   isAdmin: boolean;
+   selectedTank: string;
+   onTankChange: (tankId: string) => void;
+   // Podrías añadir más props para fechas aquí, ej:
+   // selectedDateRange: { from: Date; to: Date };
+   // onDateRangeChange: (newRange) => void;
  }
  
  /**
   * @component DashboardFilters
-  * @param {DashboardFiltersProps} props - Las propiedades del componente.
-  * @returns {React.ReactElement} El componente de filtros renderizado.
+  * @description Renderiza los controles de filtrado. Ahora es más robusto
+  * al proveer valores por defecto para sus props, evitando errores si no se le pasan datos.
   */
  export const DashboardFilters: React.FC<DashboardFiltersProps> = ({
-   startDate,
-   endDate,
-   selectedTankId,
-   selectedUserId,
-   onStartDateChange,
-   onEndDateChange,
-   onTankChange,
-   onUserChange,
-   tanks,
-   users,
-   isAdmin,
+   // ===== VALORES POR DEFECTO PARA ROBUSTEZ =====
+   tanks = [],
+   selectedTank = '',
+   onTankChange = () => {},
+   // ===========================================
  }) => {
-   const today = format(new Date(), 'yyyy-MM-dd');
- 
    return (
-     <Card>
-       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-end">
-         
-         {isAdmin && users && (
-           <div className="lg:col-span-1">
-             <label className="flex items-center mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-               <UserIcon className="w-4 h-4 mr-2" />
-               Usuario
-             </label>
-             <select
-               value={selectedUserId || ''}
-               onChange={e => onUserChange && onUserChange(e.target.value)}
-               className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
-             >
-               {users.map(user => (
-                 <option key={user.id} value={user.id}>
-                   {user.name}
-                 </option>
-               ))}
-             </select>
-           </div>
-         )}
- 
-         <div className={clsx(isAdmin ? "lg:col-span-1" : "md:col-span-2 lg:col-span-2")}>
-           <label className="flex items-center mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-             <Droplets className="w-4 h-4 mr-2" />
-             Estanque
-           </label>
-           <select
-             value={selectedTankId || ''}
-             onChange={e => onTankChange(e.target.value)}
-             className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
-             disabled={tanks.length === 0}
-           >
-             {tanks.length === 0 ? (
-                 <option value="">No hay estanques disponibles</option>
-             ) : (
-                 tanks.map(tank => (
-                     <option key={tank.id} value={tank.id}>
-                         {tank.name}
-                     </option>
-                 ))
-             )}
-           </select>
-         </div>
- 
-         <div className="md:col-span-2 lg:col-span-2">
-             <label className="flex items-center mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                 <Calendar className="w-4 h-4 mr-2" />
-                 Rango de Fechas
-             </label>
-             <div className="flex items-center gap-2">
-                 <input
-                     type="date"
-                     value={startDate}
-                     onChange={(e) => onStartDateChange(e.target.value)}
-                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
-                     max={endDate || today}
-                 />
-                 <span className="text-gray-500 dark:text-gray-400">-</span>
-                 <input
-                     type="date"
-                     value={endDate}
-                     onChange={(e) => onEndDateChange(e.target.value)}
-                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
-                     min={startDate}
-                     max={today}
-                 />
-             </div>
-         </div>
+     <div className="flex flex-col sm:flex-row items-center gap-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+       <div className="flex items-center text-gray-600 dark:text-gray-300">
+         <Filter size={20} className="mr-2" />
+         <span className="font-semibold">Filtros</span>
        </div>
-     </Card>
+       
+       {/* Selector de Fecha (Ejemplo) */}
+       <div className="relative flex items-center">
+         <Calendar size={18} className="absolute left-3 text-gray-400" />
+         <button className="w-full sm:w-auto pl-10 pr-4 py-2 text-left border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+           Últimos 7 días
+         </button>
+       </div>
+       
+       {/* Selector de Estanque */}
+       <div className="relative flex items-center">
+         <BarChart2 size={18} className="absolute left-3 text-gray-400" />
+         <select
+           value={selectedTank}
+           onChange={e => onTankChange(e.target.value)}
+           className="w-full sm:w-auto pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
+           disabled={tanks.length === 0}
+         >
+           {tanks.length === 0 ? (
+             <option value="">Cargando estanques...</option>
+           ) : (
+             <>
+               <option value="all">Todos los Estanques</option>
+               {tanks.map(tank => (
+                 <option key={tank.id} value={tank.id}>{tank.name}</option>
+               ))}
+             </>
+           )}
+         </select>
+       </div>
+     </div>
    );
  };
+ 
