@@ -1,38 +1,39 @@
-/**
- * @file useSensorData.ts
- * @description Hook personalizado y funciones de utilidad para obtener, procesar y actualizar
- * datos de sensores en tiempo real y de forma histórica.
- */
- import { SensorData, ProcessedDataPoint } from '@/types';
+"use client";
 
- /**
-  * @utility
-  * @function processRawData
-  * @description Transforma un array de lecturas individuales en un array de puntos de datos consolidados por marca de tiempo.
-  * Esto es crucial para que los gráficos puedan mostrar múltiples líneas (temp, pH, O2) en el mismo eje de tiempo.
-  * @param {SensorData[]} rawData - Array de lecturas de sensor sin procesar.
-  * @returns {ProcessedDataPoint[]} Array de puntos de datos procesados y listos para graficar.
-  */
- export const processRawData = (rawData: SensorData[]): ProcessedDataPoint[] => {
-   const dataMap = new Map<string, ProcessedDataPoint>();
-   
-   const sortedData = [...rawData].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
- 
-   sortedData.forEach(item => {
-     const groupTimestamp = new Date(Math.floor(new Date(item.timestamp).getTime() / 10000) * 10000).toISOString();
-     
-     if (!dataMap.has(groupTimestamp)) {
-       dataMap.set(groupTimestamp, { timestamp: groupTimestamp, temperature: null, ph: null, oxygen: null });
-     }
-     
-     const point = dataMap.get(groupTimestamp)!;
-     const key = item.type.toLowerCase() as keyof Omit<ProcessedDataPoint, 'timestamp'>;
- 
-     if (key in point) {
-       (point as any)[key] = item.value;
-     }
-   });
- 
-   return Array.from(dataMap.values());
- };
- 
+import { useState, useEffect } from 'react';
+import { SensorData, DataSummary, ProcessedDataPoint } from '@/types';
+import { generarDatosSensoresSimulados, calcularResumenDatos } from '@/utils/mockData';
+
+/**
+ * @hook useSensorData
+ * @description Hook personalizado que simula la obtención de datos de sensores en tiempo real.
+ * Proporciona los datos brutos y un resumen calculado de los mismos.
+ * @returns {{ data: SensorData[], summary: DataSummary | null }} Un objeto con los datos brutos y el resumen.
+ */
+export const useSensorData = () => {
+  const [data, setData] = useState<SensorData[]>([]);
+  const [summary, setSummary] = useState<DataSummary | null>(null);
+
+  useEffect(() => {
+    // Genera datos iniciales al montar el componente.
+    const initialData = generarDatosSensoresSimulados(100);
+    setData(initialData);
+    setSummary(calcularResumenDatos(initialData));
+
+    // Simula la adición de nuevos datos cada 30 segundos.
+    const interval = setInterval(() => {
+      setData(currentData => {
+        // Genera un nuevo punto de dato simulado.
+        const newDataPoint = generarDatosSensoresSimulados(1);
+        const updatedData = [...currentData, ...newDataPoint].slice(-100); // Mantiene solo los últimos 100 puntos.
+        setSummary(calcularResumenDatos(updatedData));
+        return updatedData;
+      });
+    }, 30000); // 30 segundos
+
+    // Limpia el intervalo al desmontar el componente.
+    return () => clearInterval(interval);
+  }, []);
+
+  return { data, summary };
+};
