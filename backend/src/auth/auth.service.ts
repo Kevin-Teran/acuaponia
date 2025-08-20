@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
@@ -9,8 +9,8 @@ import { logger } from '../utils/logger';
 
 /**
  * @class AuthService
- * @description Servicio que centraliza toda la lógica de autenticación, incluyendo validación
- * de credenciales, estado de usuario y generación de tokens JWT.
+ * @description Centraliza la lógica de autenticación, incluyendo validación de credenciales,
+ * estado de usuario, y generación y refresco de tokens JWT.
  */
 @Injectable()
 export class AuthService {
@@ -23,104 +23,123 @@ export class AuthService {
 
   /**
    * @method validateUser
-   * @description Comprueba si un usuario existe y si la contraseña coincide.
-   * Utiliza bcrypt para comparar de forma segura la contraseña proporcionada con el hash almacenado.
+   * @description Valida si un usuario existe y si la contraseña proporcionada coincide con la almacenada.
    * @param {string} email - El correo electrónico del usuario.
-   * @param {string} pass - La contraseña en texto plano a validar.
-   * @returns {Promise<User | null>} El objeto de usuario completo si es válido, o null si no lo es.
+   * @param {string} pass - La contraseña en texto plano para validar.
+   * @returns {Promise<Omit<User, 'password'>>} El objeto de usuario (sin contraseña) si la validación es exitosa.
+   * @throws {UnauthorizedException} Si el usuario no existe o la contraseña no coincide.
    */
-  async validateUser(email: string, pass: string): Promise<User | null> {
+  async validateUser(email: string, pass: string): Promise<Omit<User, 'password'>> {
     const user = await this.usersService.findByEmail(email);
     if (user && (await bcrypt.compare(pass, user.password))) {
-      return user;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password, ...result } = user;
+      return result;
     }
-    return null;
+    throw new UnauthorizedException('Credenciales incorrectas. Por favor, verifique su correo y contraseña.');
   }
 
   /**
    * @method login
-   * @description Orquesta el proceso de inicio de sesión completo.
-   * 1. Valida que el correo y la contraseña sean correctos.
-   * 2. Verifica que la cuenta del usuario esté activa.
-   * 3. Genera un token de acceso y un token de refresco con expiraciones configurables.
-   * 4. Actualiza la fecha del último inicio de sesión del usuario.
-   * 5. Devuelve los datos del usuario (sin contraseña) y los tokens.
-   * @param {string} email - El correo del usuario.
-   * @param {string} pass - La contraseña del usuario.
+   * @description Orquesta el proceso de inicio de sesión. Valida credenciales, verifica el estado
+   * del usuario, genera tokens y actualiza la fecha del último inicio de sesión.
+   * @param {string} email - Correo del usuario.
+   * @param {string} pass - Contraseña del usuario.
    * @param {boolean} [rememberMe=false] - Si es true, extiende la duración del token de refresco.
    * @returns {Promise<object>} Un objeto con los datos del usuario y los tokens.
-   * @throws {UnauthorizedException} Si las credenciales son incorrectas.
    * @throws {ForbiddenException} Si la cuenta del usuario no está activa.
    */
   async login(email: string, pass: string, rememberMe = false) {
-    const user = await this.validateUser(email, pass);
-
-    if (!user) {
-      logger.warn(`Intento de login fallido para: ${email}`);
-      throw new UnauthorizedException('Correo o contraseña incorrectos. Por favor, revise sus credenciales.');
-    }
+    const user = await this.validateUser(email.toLowerCase(), pass);
 
     if (user.status !== 'ACTIVE') {
-      logger.warn(`Intento de login de cuenta inactiva: ${email} (Estado: ${user.status})`);
+      logger.warn(`Intento de login de cuenta no activa: ${email} (Estado: ${user.status})`);
       const statusMap = {
-        INACTIVE: 'Inactiva',
-        SUSPENDED: 'Suspendida',
+        INACTIVE: 'inactiva',
+        SUSPENDED: 'suspendida',
       };
-      const userStatus = statusMap[user.status] || user.status;
+      const userStatus = statusMap[user.status] || user.status.toLowerCase();
       throw new ForbiddenException(`Su cuenta se encuentra ${userStatus}. Por favor, contacte a un administrador.`);
     }
 
-    const payload = { email: user.email, sub: user.id, role: user.role };
-    const accessTokenExpiresIn = this.configService.get<string>('JWT_EXPIRES_IN') || '1h';
-    const refreshTokenExpiresIn = rememberMe
-      ? this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d'
-      : accessTokenExpiresIn;
+    const tokens = await this.generateTokens(user, rememberMe);
 
-    const accessToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('JWT_SECRET'),
-      expiresIn: accessTokenExpiresIn,
-    });
+    try {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { lastLogin: new Date() },
+      });
+    } catch (error) {
+        logger.error(`Error al actualizar lastLogin para ${user.email}:`, error);
+    }
 
-    const refreshToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-      expiresIn: refreshTokenExpiresIn,
-    });
-
-    this.prisma.user.update({
-      where: { id: user.id },
-      data: { lastLogin: new Date() },
-    }).catch(err => logger.error(`Error al actualizar lastLogin para ${user.email}:`, err));
 
     logger.info(`Login exitoso para: ${user.email}`);
-
-    // Excluimos la contraseña del objeto de usuario que se devuelve al cliente.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password, ...userResult } = user;
-
+    
     return {
-      user: userResult,
-      tokens: {
-        accessToken,
-        refreshToken,
-      },
+      user,
+      tokens,
     };
   }
 
   /**
    * @method refreshToken
-   * @description Genera un nuevo token de acceso a partir de un token de refresco válido.
-   * @param {User} user - El objeto de usuario extraído del token de refresco validado.
+   * @description Genera un nuevo token de acceso a partir de un ID de usuario válido.
+   * Este método es invocado después de que el `JwtRefreshGuard` valida el token de refresco.
+   * @param {string} userId - El ID del usuario extraído del token de refresco validado.
    * @returns {Promise<{accessToken: string}>} Un objeto con el nuevo token de acceso.
+   * @throws {NotFoundException} Si el usuario asociado al token ya no existe.
+   * @throws {ForbiddenException} Si la cuenta del usuario ha sido desactivada o suspendida.
    */
-  async refreshToken(user: User) {
+  async refreshToken(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException('El usuario asociado a este token ya no existe.');
+    }
+
+    if (user.status !== 'ACTIVE') {
+      throw new ForbiddenException('Su cuenta ya no se encuentra activa.');
+    }
+
     const payload = { email: user.email, sub: user.id, role: user.role };
     const newAccessToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_SECRET'),
-      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') || '1h',
+      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') || '15m',
     });
 
     return {
       accessToken: newAccessToken,
     };
+  }
+
+  /**
+   * @method generateTokens
+   * @description Genera los tokens de acceso y refresco para un usuario.
+   * @private
+   * @param {Omit<User, 'password'>} user - El objeto de usuario.
+   * @param {boolean} rememberMe - Define la duración del token de refresco.
+   * @returns {Promise<{accessToken: string, refreshToken: string}>} Los tokens generados.
+   */
+  private async generateTokens(user: Omit<User, 'password'>, rememberMe: boolean) {
+    const payload = { email: user.email, sub: user.id, role: user.role };
+
+    const accessTokenExpiresIn = this.configService.get<string>('JWT_EXPIRES_IN') || '15m';
+    const refreshTokenExpiresIn = rememberMe
+      ? this.configService.get<string>('JWT_REFRESH_EXPIRES_IN_EXTENDED') || '30d'
+      : this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d';
+
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(payload, {
+        secret: this.configService.get<string>('JWT_SECRET'),
+        expiresIn: accessTokenExpiresIn,
+      }),
+      this.jwtService.signAsync(payload, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+        expiresIn: refreshTokenExpiresIn,
+      }),
+    ]);
+
+    return { accessToken, refreshToken };
   }
 }
