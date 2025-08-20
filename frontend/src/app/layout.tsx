@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import '../globals.css';
 import { AuthProvider } from '@/context/AuthContext';
+import { Sidebar } from '@/components/layout/sidebar';
 
 export const metadata: Metadata = {
   title: 'SENA Acuaponia',
