@@ -46,10 +46,10 @@
   */
  const getDynamicGaugeScale = (thresholds?: { min: number; max: number }) => {
    if (!thresholds || typeof thresholds.min !== 'number' || typeof thresholds.max !== 'number') {
-     return { min: 0, max: 100 }; // Fallback genérico
+     return { min: 0, max: 100 }; 
    }
    const range = thresholds.max - thresholds.min;
-   const padding = range * 1.5; // Amplía el rango visual para que los valores no queden en los bordes
+   const padding = range * 1.5; 
    return {
      min: Math.max(0, Math.floor(thresholds.min - padding)),
      max: Math.ceil(thresholds.max + padding),
@@ -65,7 +65,6 @@
    const { user } = useAuth();
    const isAdmin = user?.role === 'ADMIN';
  
-   // --- Estados de Filtros y Datos ---
    const [filters, setFilters] = useState({
      startDate: format(subDays(new Date(), 1), 'yyyy-MM-dd'),
      endDate: format(new Date(), 'yyyy-MM-dd'),
@@ -77,7 +76,6 @@
    const [historicalData, setHistoricalData] = useState<ProcessedDataPoint[]>([]);
    const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
  
-   // --- Estados de Carga y Errores ---
    const [loading, setLoading] = useState({ initial: true, historical: false });
    const [error, setError] = useState<string | null>(null);
  
@@ -131,7 +129,7 @@
          setHistoricalData(processed);
        } catch (err) {
          console.error("Error al cargar datos históricos:", err);
-         setHistoricalData([]); // Limpia datos en caso de error
+         setHistoricalData([]); 
        } finally {
          setLoading(prev => ({ ...prev, historical: false }));
        }
@@ -155,7 +153,7 @@
          });
        } catch (error) {
          console.error("Error al cargar configuraciones:", error);
-         setThresholds(DEFAULT_THRESHOLDS); // Resetea a los valores por defecto si falla
+         setThresholds(DEFAULT_THRESHOLDS); 
        }
      };
      fetchUserSettings();
@@ -204,7 +202,6 @@
      }));
    };
  
-   // --- Memos para optimizar cálculos ---
    const filteredTanksForSelectedUser = useMemo(() => {
      if (!filters.selectedUserId) return [];
      return initialData.tanks.filter(tank => tank.userId === filters.selectedUserId);
@@ -215,7 +212,6 @@
      return initialData.sensors.filter(sensor => sensor.tankId === filters.selectedTankId);
    }, [initialData.sensors, filters.selectedTankId]);
  
-   // --- Renderizado Condicional ---
    if (loading.initial) {
      return <LoadingSpinner fullScreen message="Cargando configuración del dashboard..." />;
    }

@@ -1,39 +1,79 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { SensorData, DataSummary, ProcessedDataPoint } from '@/types';
-import { generarDatosSensoresSimulados, calcularResumenDatos } from '@/utils/mockData';
+import { useState, useEffect, useCallback } from 'react';
+import { SensorData, ProcessedDataPoint } from '@/types';
+import { getSensorData } from '@/services/dataService';
+import { socketService } from '@/services/socketService';
+
+/**
+ * @function processRawData
+ * @description Procesa los datos crudos de los sensores para adaptarlos al formato requerido por los gráficos.
+ * @param rawData - Un array de datos de sensores en formato crudo.
+ * @returns Un array de puntos de datos procesados para los gráficos.
+ */
+export const processRawData = (rawData: SensorData[]): ProcessedDataPoint[] => {
+    return rawData.map(d => ({
+        timestamp: new Date(d.timestamp).getTime(),
+        temperature: d.type === 'TEMPERATURE' ? d.value : null,
+        ph: d.type === 'PH' ? d.value : null,
+        oxygen: d.type === 'OXYGEN' ? d.value : null,
+    }));
+};
 
 /**
  * @hook useSensorData
- * @description Hook personalizado que simula la obtención de datos de sensores en tiempo real.
- * Proporciona los datos brutos y un resumen calculado de los mismos.
- * @returns {{ data: SensorData[], summary: DataSummary | null }} Un objeto con los datos brutos y el resumen.
+ * @description Hook personalizado para obtener y gestionar los datos de los sensores de un estanque específico.
+ * Combina la carga de datos históricos con actualizaciones en tiempo real a través de WebSockets.
+ * @param {string | null} tankId - El ID del estanque del cual se quieren obtener los datos.
+ * @returns Un objeto con los datos de los sensores, el estado de carga y posibles errores.
  */
-export const useSensorData = () => {
+export const useSensorData = (tankId: string | null) => {
   const [data, setData] = useState<SensorData[]>([]);
-  const [summary, setSummary] = useState<DataSummary | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchInitialData = useCallback(async () => {
+    if (!tankId) {
+        setData([]);
+        setLoading(false);
+        return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const initialData = await getSensorData(tankId);
+      setData(initialData);
+    } catch (err) {
+      console.error(`Error al cargar los datos para el estanque ${tankId}:`, err);
+      setError('No se pudieron cargar los datos iniciales.');
+    } finally {
+      setLoading(false);
+    }
+  }, [tankId]);
 
   useEffect(() => {
-    // Genera datos iniciales al montar el componente.
-    const initialData = generarDatosSensoresSimulados(100);
-    setData(initialData);
-    setSummary(calcularResumenDatos(initialData));
+    fetchInitialData();
+  }, [fetchInitialData]);
 
-    // Simula la adición de nuevos datos cada 30 segundos.
-    const interval = setInterval(() => {
+  const handleNewData = useCallback((newDataPoint: SensorData) => {
+    if (newDataPoint.tankId === tankId) {
       setData(currentData => {
-        // Genera un nuevo punto de dato simulado.
-        const newDataPoint = generarDatosSensoresSimulados(1);
-        const updatedData = [...currentData, ...newDataPoint].slice(-100); // Mantiene solo los últimos 100 puntos.
-        setSummary(calcularResumenDatos(updatedData));
-        return updatedData;
+        const updatedData = [...currentData, newDataPoint];
+        return updatedData.slice(-500); 
       });
-    }, 30000); // 30 segundos
+    }
+  }, [tankId]);
 
-    // Limpia el intervalo al desmontar el componente.
-    return () => clearInterval(interval);
-  }, []);
+  useEffect(() => {
+    socketService.connect();
+    socketService.onSensorData(handleNewData);
 
-  return { data, summary };
+    return () => {
+      socketService.offSensorData(handleNewData);
+      socketService.disconnect();
+    };
+  }, [handleNewData]);
+
+  return { data, loading, error };
 };
