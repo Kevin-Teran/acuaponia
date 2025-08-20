@@ -1,74 +1,89 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+
+const modules = [
+  { id: 'dashboard', href: '/dashboard' },
+  { id: 'reports', href: '/reports' },
+  { id: 'predictions', href: '/predictions' },
+  { id: 'analytics', href: '/analytics' },
+  { id: 'data-entry', href: '/data-entry', adminOnly: true },
+  { id: 'devices', href: '/devices', adminOnly: true },
+  { id: 'ai-assistant', href: '/ai-assistant' },
+  { id: 'users', href: '/users', adminOnly: true },
+  { id: 'settings', href: '/settings' },
+];
+
 /**
- * @file useUsers.ts
- * @description Hook personalizado para gestionar el estado y las operaciones CRUD de los usuarios.
- * @technical_requirements Centraliza la lógica de fetching, estado de carga, errores y
- * las funciones para interactuar con el `userService`. Utiliza `useCallback` para memorizar
- * las funciones y evitar renderizados innecesarios en los componentes que lo consumen.
+ * Hook personalizado para manejar el estado de la barra lateral (Sidebar).
+ * Gestiona el colapso, el tema y el módulo activo basado en la URL actual.
+ *
+ * @param {string} defaultModule - El ID del módulo por defecto.
+ * @returns {object} Un objeto con el estado y los manejadores para el sidebar.
  */
- import { useState, useEffect, useCallback } from 'react';
- import { User } from '@/types';
- import * as userService from '@/services/userService';
- 
- export const useUsers = () => {
-   const [users, setUsers] = useState<User[]>([]);
-   const [loading, setLoading] = useState<boolean>(true);
-   const [error, setError] = useState<string | null>(null);
- 
-   /**
-    * @function fetchUsers
-    * @description Carga la lista de usuarios desde el backend y actualiza el estado.
-    */
-   const fetchUsers = useCallback(async () => {
-     try {
-       setLoading(true);
-       setError(null);
-       const fetchedUsers = await userService.getAllUsers();
-       setUsers(fetchedUsers);
-     } catch (err: any) {
-       const errorMessage = err.response?.data?.message || 'No se pudieron cargar los usuarios.';
-       setError(errorMessage);
-       console.error(err);
-     } finally {
-       setLoading(false);
-     }
-   }, []);
- 
-   useEffect(() => {
-     fetchUsers();
-   }, [fetchUsers]);
- 
-   /**
-    * @function addUser
-    * @description Añade un nuevo usuario y actualiza la lista local.
-    * @param {Partial<User>} userData - Datos del nuevo usuario.
-    */
-   const addUser = useCallback(async (userData: Partial<User>) => {
-     const newUser = await userService.createUser(userData);
-     setUsers(prevUsers => [newUser, ...prevUsers]);
-   }, []);
- 
-   /**
-    * @function updateUser
-    * @description Actualiza un usuario existente y refresca la lista local.
-    * @param {string} userId - ID del usuario a actualizar.
-    * @param {Partial<User>} userData - Datos para actualizar.
-    */
-   const updateUser = useCallback(async (userId: string, userData: Partial<User>) => {
-     const updatedUser = await userService.updateUser(userId, userData);
-     setUsers(prevUsers =>
-       prevUsers.map(u => (u.id === userId ? { ...u, ...updatedUser } : u))
-     );
-   }, []);
- 
-   /**
-    * @function deleteUser
-    * @description Elimina un usuario y lo quita de la lista local.
-    * @param {string} userId - ID del usuario a eliminar.
-    */
-   const deleteUser = useCallback(async (userId: string) => {
-     await userService.deleteUser(userId);
-     setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
-   }, []);
- 
-   return { users, loading, error, addUser, updateUser, deleteUser, refreshUsers: fetchUsers };
- };
+export const useSidebar = (defaultModule = 'dashboard') => {
+  const [collapsed, setCollapsed] = useState(true);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [currentModule, setCurrentModule] = useState(defaultModule);
+  
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Efecto para inicializar el estado del sidebar desde localStorage y el tema del sistema
+  useEffect(() => {
+    const savedCollapsed = localStorage.getItem('sidebarCollapsed');
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
+
+    if (savedCollapsed) {
+      setCollapsed(JSON.parse(savedCollapsed));
+    }
+    if (savedTheme) {
+      setTheme(savedTheme);
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      setTheme('dark');
+    }
+  }, []);
+
+  // Efecto para sincronizar el tema con la clase del <html> y guardarlo en localStorage
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+  
+  // Nuevo efecto para sincronizar el estado activo del sidebar con la URL actual
+  useEffect(() => {
+    const activeModule = modules.find(module => pathname.startsWith(module.href));
+    if (activeModule) {
+      setCurrentModule(activeModule.id);
+    } else {
+      setCurrentModule(defaultModule); // Vuelve al estado por defecto si no hay coincidencia.
+    }
+  }, [pathname, defaultModule]);
+
+  const handleToggleCollapse = useCallback(() => {
+    setCollapsed(prev => {
+      const newState = !prev;
+      localStorage.setItem('sidebarCollapsed', JSON.stringify(newState));
+      return newState;
+    });
+  }, []);
+
+  const handleToggleTheme = useCallback(() => {
+    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+  }, []);
+
+  const handleModuleChange = useCallback((module: { id: string; href: string }) => {
+    setCurrentModule(module.id);
+    router.push(module.href);
+  }, [router]);
+
+  return {
+    collapsed,
+    theme,
+    currentModule,
+    handleToggleCollapse,
+    handleToggleTheme,
+    handleModuleChange,
+  };
+};
