@@ -12,6 +12,7 @@
  import { ConfigService } from '@nestjs/config';
  import { UsersService } from '../users/users.service';
  import * as bcrypt from 'bcrypt';
+ import { Role } from '@prisma/client';
  
  /**
   * @typedef {Object} LoginResponse
@@ -42,7 +43,7 @@
    id: string;
    email: string;
    name: string;
-   role: string;
+   role: Role;
  }
  
  /**
@@ -55,7 +56,7 @@
  interface JwtPayload {
    sub: string;
    email: string;
-   role: string;
+   role: Role;
    tokenType: 'access' | 'refresh';
  }
  
@@ -103,7 +104,7 @@
     * @example
     * const user = await authService.validateUser('user@sena.edu.co', 'password123');
     * if (user) {
-    *   console.log('Usuario válido:', user.name);
+    * console.log('Usuario válido:', user.name);
     * }
     */
    async validateUser(email: string, password: string): Promise<UserInfo | null> {

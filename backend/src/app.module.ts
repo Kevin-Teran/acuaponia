@@ -8,11 +8,13 @@
  import { AuthModule } from './auth/auth.module';
  import { UsersModule } from './users/users.module';
  import { PrismaModule } from './prisma/prisma.module';
- 
+ import * as path from 'path';
+
  @Module({
    imports: [
      ConfigModule.forRoot({
        isGlobal: true,
+       envFilePath: path.resolve(__dirname, '../../.env'),
      }),
      PrismaModule,
      UsersModule,

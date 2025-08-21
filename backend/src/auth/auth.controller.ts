@@ -35,17 +35,18 @@ import { Role } from '@prisma/client';
  */
 interface AuthenticatedRequest extends Request {
   user: UserPayload;
+  ip?: string;
 }
 
 /**
  * @typedef {Object} UserPayload
- * @property {string} userId - ID único del usuario
+ * @property {string} id - ID único del usuario
  * @property {string} email - Correo electrónico del usuario
  * @property {string} name - Nombre completo del usuario
  * @property {Role} role - Rol del usuario en el sistema
  */
 interface UserPayload {
-  userId: string;
+  id: string;
   email: string;
   name: string;
   role: Role;
@@ -118,9 +119,9 @@ export class AuthController {
    * @example
    * POST /auth/login
    * {
-   *   "email": "admin@sena.edu.co",
-   *   "password": "password123",
-   *   "rememberMe": true
+   * "email": "admin@sena.edu.co",
+   * "password": "password123",
+   * "rememberMe": true
    * }
    */
   @Post('login')
@@ -299,7 +300,7 @@ export class AuthController {
    * @example
    * POST /auth/refresh
    * {
-   *   "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+   * "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
    * }
    */
   @Post('refresh')

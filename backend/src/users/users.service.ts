@@ -46,7 +46,7 @@
   * @property {Role} role - Rol del usuario
   * @property {users_status} status - Estado del usuario
   * @property {Date} createdAt - Fecha de creación
-  * @property {Date} lastLogin - Última fecha de login
+  * @property {Date | null} lastLogin - Última fecha de login
   */
  interface UserProfileResponse {
    id: string;
@@ -55,7 +55,7 @@
    role: Role;
    status: users_status;
    createdAt: Date;
-   lastLogin?: Date;
+   lastLogin: Date | null;
  }
  
  /**
@@ -126,7 +126,7 @@
     * @example
     * const user = await usersService.findOneByEmail('admin@sena.edu.co');
     * if (user) {
-    *   console.log('Usuario encontrado:', user.name);
+    * console.log('Usuario encontrado:', user.name);
     * }
     */
    async findOneByEmail(email: string): Promise<User | null> {
@@ -251,10 +251,10 @@
     * @throws {BadRequestException} Cuando los datos son inválidos
     * @example
     * const newUser = await usersService.createUser({
-    *   email: 'nuevo@sena.edu.co',
-    *   password: 'password123',
-    *   name: 'Nuevo Usuario',
-    *   role: Role.USER
+    * email: 'nuevo@sena.edu.co',
+    * password: 'password123',
+    * name: 'Nuevo Usuario',
+    * role: Role.USER
     * });
     */
    async createUser(userData: CreateUserDto): Promise<UserProfileResponse> {
@@ -309,8 +309,8 @@
     * @throws {BadRequestException} Cuando los datos son inválidos
     * @example
     * const updatedUser = await usersService.updateUser('clp123abc456', {
-    *   name: 'Nombre Actualizado',
-    *   role: Role.ADMIN
+    * name: 'Nombre Actualizado',
+    * role: Role.ADMIN
     * });
     */
    async updateUser(userId: string, updateData: UpdateUserDto): Promise<UserProfileResponse> {
@@ -359,10 +359,10 @@
     * @throws {BadRequestException} Cuando los filtros son inválidos
     * @example
     * const users = await usersService.findUsers({
-    *   search: 'admin',
-    *   role: Role.ADMIN,
-    *   page: 1,
-    *   limit: 10
+    * search: 'admin',
+    * role: Role.ADMIN,
+    * page: 1,
+    * limit: 10
     * });
     */
    async findUsers(filters: UserSearchFilters = {}): Promise<PaginatedUsersResponse> {
