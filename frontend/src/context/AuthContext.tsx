@@ -234,9 +234,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
    * @throws {AuthError} Error de autenticación si las credenciales son incorrectas
    * @example
    * await login({
-   *   email: 'admin@sena.edu.co',
-   *   password: 'password123',
-   *   rememberMe: true
+   * email: 'admin@sena.edu.co',
+   * password: 'password123',
+   * rememberMe: true
    * });
    */
   const login = useCallback(async (credentials: LoginCredentials): Promise<void> => {
@@ -244,7 +244,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setError(null);
 
     try {
-      const response = await axios.post(`${API_URL}/auth/login`, credentials);
+      // Corrección para asegurar que el payload se envíe correctamente
+      const payload = {
+          email: credentials.email,
+          password: credentials.password,
+          rememberMe: !!credentials.rememberMe // Aseguramos que sea un booleano
+      };
+
+      const response = await axios.post(`${API_URL}/auth/login`, payload);
       const { access_token, refresh_token, user: userData, expires_in } = response.data;
 
       if (!access_token || !userData) {
@@ -300,7 +307,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
    * @example
    * const success = await refreshToken();
    * if (success) {
-   *   console.log('Token renovado exitosamente');
+   * console.log('Token renovado exitosamente');
    * }
    */
   const refreshToken = useCallback(async (): Promise<boolean> => {
@@ -521,10 +528,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  * @throws {Error} Si se usa fuera de un AuthProvider
  * @example
  * const { user, login, logout, loading } = useAuth();
- * 
- * if (loading) return <Spinner />;
- * 
- * return user ? <Dashboard /> : <LoginForm />;
+ * * if (loading) return <Spinner />;
+ * * return user ? <Dashboard /> : <LoginForm />;
  */
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);

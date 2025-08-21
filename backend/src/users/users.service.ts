@@ -11,6 +11,7 @@
  import { PrismaService } from '../prisma/prisma.service';
  import { User, Role, users_status } from '@prisma/client';
  import * as bcrypt from 'bcrypt';
+ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
  
  /**
   * @typedef {Object} CreateUserDto
@@ -158,6 +159,11 @@
  
        return user;
      } catch (error) {
+       // Manejo de errores de conexión de Prisma
+       if (error instanceof PrismaClientKnownRequestError) {
+         this.logger.error(`Error de Prisma al buscar usuario por email ${email}: ${error.message}`, error.stack);
+         throw new BadRequestException('Error en la base de datos. Verifique la conexión.');
+       }
        if (error instanceof BadRequestException) {
          throw error;
        }
