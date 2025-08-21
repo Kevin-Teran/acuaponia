@@ -1,25 +1,23 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import { AuthProvider } from '@/context/AuthContext'; // Importamos nuestro AuthProvider
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Sistema de Acuaponía',
-  description: 'Monitoreo y gestión de sistemas de acuaponía - SENA',
+  title: "Acuaponia App",
+  description: "Sistema de monitoreo de acuaponia",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
-    <html lang="es" className="dark"> {/* Puedes quitar 'dark' si quieres que inicie en modo claro */}
+    <html lang="es" className="dark">
       <body className={inter.className}>
-        {/* Envolvemos toda la aplicación con el AuthProvider */}
-        <AuthProvider>{children}</AuthProvider>
+        {children}
       </body>
     </html>
   );
