@@ -1,132 +1,142 @@
 'use client';
 
-/**
- * @file page.tsx
- * @description Dashboard principal que carga dinámicamente los datos para los filtros,
- * seleccionando el usuario actual por defecto.
- * @author Kevin Mariano
- */
-import React, { useState, useEffect } from 'react';
-import { SummaryCards } from '@/components/dashboard/SummaryCards';
-import { AdminStatCards } from '@/components/dashboard/AdminStatCards';
-import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
-import { LineChart } from '@/components/dashboard/LineChart';
-import { GaugeChart } from '@/components/dashboard/GaugeChart';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Role, Tank, User } from '@/types';
-import { getAllTanks } from '@/services/tankService';
-import { getAllUsers } from '@/services/userService';
+import SummaryCards from '@/components/dashboard/SummaryCards';
+import LineChart from '@/components/dashboard/LineChart';
+import GaugeChart from '@/components/dashboard/GaugeChart';
+import DashboardFilters from '@/components/dashboard/DashboardFilters';
+import AdminStatCards from '@/components/dashboard/AdminStatCards';
+import { Tank, Sensor, SensorData, SensorType } from '@/types';
+import { getTanks } from '@/services/tankService';
+import { getSensorsByTank } from '@/services/sensorService';
+import { getHistoricalData } from '@/services/dataService';
+import { subDays } from 'date-fns';
 
 const DashboardPage: React.FC = () => {
-  const { user } = useAuth(); // Obtenemos el usuario de la sesión actual
-  const isAdmin = user?.role === Role.ADMIN;
-
-  // --- Estados para los datos de los filtros ---
-  const [users, setUsers] = useState<User[]>([]);
+  const { user } = useAuth();
   const [tanks, setTanks] = useState<Tank[]>([]);
-  const [isLoadingFilters, setIsLoadingFilters] = useState(true);
-
-  // --- Estados para los valores seleccionados en los filtros ---
-  const [selectedTank, setSelectedTank] = useState('');
-  const [selectedUser, setSelectedUser] = useState('');
-  const [dateRange, setDateRange] = useState({
-    from: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
-    to: new Date().toISOString().split('T')[0],
+  const [sensors, setSensors] = useState<Sensor[]>([]);
+  const [selectedTankId, setSelectedTankId] = useState<string>('');
+  const [selectedSensorId, setSelectedSensorId] = useState<string>('');
+  const [historicalData, setHistoricalData] = useState<SensorData[]>([]);
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
+    from: subDays(new Date(), 7),
+    to: new Date(),
   });
+  const [loading, setLoading] = useState({
+    filters: true,
+    charts: false,
+  });
+  const [error, setError] = useState<string | null>(null);
 
-  /**
-   * @effect
-   * @description Carga los datos para los filtros (usuarios y tanques).
-   */
+  const isAdmin = useMemo(() => user?.role === 'ADMIN', [user]);
+
   useEffect(() => {
-    // Si no tenemos la información del usuario, no hacemos nada todavía.
-    if (!user) return;
-
-    // --- CAMBIO CLAVE: Se establece el usuario de la sesión como seleccionado por defecto ---
-    // Hacemos esto al principio para que el filtro lo refleje inmediatamente.
-    setSelectedUser(user.id);
-
     const fetchFilterData = async () => {
-      setIsLoadingFilters(true);
+      setLoading(prevState => ({ ...prevState, filters: true }));
+      setError(null);
       try {
-        // Obtenemos los tanques. El servicio backend ya filtra por usuario si no es admin.
-        const tanksData = await getAllTanks();
+        const tanksData = await getTanks();
         setTanks(tanksData);
-        
-        // --- LOG DE DIAGNÓSTICO PARA TANQUES ---
-        // Esto nos dirá en la consola del navegador si los tanques llegan vacíos.
-        console.log('Tanques recibidos de la API:', tanksData);
-
-        if (tanksData && tanksData.length > 0) {
-          // Seleccionamos el primer tanque de la lista por defecto.
-          setSelectedTank(tanksData[0].id);
-        } else {
-          console.warn('No se encontraron tanques para el usuario actual.');
+        if (tanksData.length > 0) {
+          const defaultTankId = tanksData[0].id;
+          setSelectedTankId(defaultTankId);
+          const sensorsData = await getSensorsByTank(defaultTankId);
+          setSensors(sensorsData);
+          if (sensorsData.length > 0) {
+            setSelectedSensorId(sensorsData[0].id);
+          }
         }
-
-        // Si es admin, cargamos la lista de todos los usuarios para el selector.
-        if (isAdmin) {
-          const usersData = await getAllUsers();
-          setUsers(usersData);
-        }
-      } catch (error) {
-        // --- LOG DE DIAGNÓSTICO MEJORADO ---
-        console.error("Error crítico al cargar datos para los filtros:", error);
-        // Aquí podrías establecer un estado de error para mostrar un mensaje en la UI.
+      } catch (err) {
+        console.error('Error crítico al cargar datos para los filtros:', err);
+        setError('No se pudieron cargar los datos iniciales. Por favor, recargue la página.');
       } finally {
-        setIsLoadingFilters(false);
+        setLoading(prevState => ({ ...prevState, filters: false }));
       }
     };
 
     fetchFilterData();
-  }, [user, isAdmin]); // Dependemos del objeto 'user' para asegurarnos de que exista.
+  }, []);
 
-
-  /**
-   * @effect
-   * @description Se activa cuando un filtro cambia para recargar los datos del dashboard.
-   */
   useEffect(() => {
-    if (!selectedTank || !selectedUser) {
-      return;
+    if (selectedTankId) {
+      const fetchSensorsForTank = async () => {
+        try {
+          const sensorsData = await getSensorsByTank(selectedTankId);
+          setSensors(sensorsData);
+          setSelectedSensorId(sensorsData.length > 0 ? sensorsData[0].id : '');
+        } catch (err) {
+          console.error(`Error al cargar sensores para el tanque ${selectedTankId}:`, err);
+          setSensors([]);
+          setSelectedSensorId('');
+        }
+      };
+      fetchSensorsForTank();
     }
-    
-    console.log("Filtros actualizados, recargando datos del dashboard con:", {
-      dateRange,
-      selectedTank,
-      selectedUser,
-    });
-    // Aquí iría tu lógica para llamar a la API y actualizar los gráficos/tarjetas.
-    // Ejemplo: updateDashboardData({ dateRange, tankId: selectedTank, userId: selectedUser });
-  }, [dateRange, selectedTank, selectedUser]);
+  }, [selectedTankId]);
+
+  useEffect(() => {
+    if (selectedSensorId && dateRange.from && dateRange.to) {
+      const fetchHistoricalData = async () => {
+        setLoading(prevState => ({ ...prevState, charts: true }));
+        try {
+          const data = await getHistoricalData(
+            selectedSensorId,
+            dateRange.from.toISOString(),
+            dateRange.to.toISOString()
+          );
+          setHistoricalData(data);
+        } catch (err) {
+          console.error(`Error al cargar datos históricos para el sensor ${selectedSensorId}:`, err);
+          setHistoricalData([]);
+        } finally {
+          setLoading(prevState => ({ ...prevState, charts: false }));
+        }
+      };
+      fetchHistoricalData();
+    }
+  }, [selectedSensorId, dateRange]);
+
+  const selectedSensorType = useMemo(() => {
+    return sensors.find(s => s.id === selectedSensorId)?.type;
+  }, [sensors, selectedSensorId]);
 
   return (
-    <div className="flex-1 space-y-8 p-8 pt-6">
-      <div className="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
-        <h2 className="text-3xl font-bold tracking-tight text-gray-800 dark:text-white">
-          Dashboard
-        </h2>
-        
-        <DashboardFilters
-          currentUserRole={user?.role}
-          users={users}
-          tanks={tanks}
-          selectedTank={selectedTank}
-          onTankChange={setSelectedTank}
-          selectedUser={selectedUser}
-          onUserChange={setSelectedUser}
-          dateRange={dateRange}
-          onDateRangeChange={setDateRange}
-          isLoading={isLoadingFilters}
-        />
-      </div>
+    <div className="p-4 md:p-6 lg:p-8 space-y-6 bg-gray-50/50 min-h-screen">
+      <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
+      
+      {error && <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">{error}</div>}
 
-      {/* El resto del contenido del dashboard */}
-      <SummaryCards />
       {isAdmin && <AdminStatCards />}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <div className="col-span-4"><LineChart /></div>
-        <div className="col-span-3"><GaugeChart /></div>
+
+      <DashboardFilters
+        tanks={tanks}
+        sensors={sensors}
+        selectedTankId={selectedTankId}
+        selectedSensorId={selectedSensorId}
+        onTankChange={setSelectedTankId}
+        onSensorChange={setSelectedSensorId}
+        dateRange={dateRange}
+        onDateRangeChange={setDateRange}
+        isLoading={loading.filters}
+      />
+
+      <SummaryCards selectedTankId={selectedTankId} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <LineChart
+            data={historicalData}
+            sensorType={selectedSensorType}
+            isLoading={loading.charts}
+          />
+        </div>
+        <div className="space-y-6">
+          <GaugeChart sensorType={SensorType.TEMPERATURE} tankId={selectedTankId} />
+          <GaugeChart sensorType={SensorType.PH} tankId={selectedTankId} />
+          <GaugeChart sensorType={SensorType.TDS} tankId={selectedTankId} />
+        </div>
       </div>
     </div>
   );

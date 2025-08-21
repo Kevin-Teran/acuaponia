@@ -1,152 +1,112 @@
-/**
- * @file GaugeChart.tsx
- * @description Componente de gráfico de tipo medidor (gauge) para visualizar una métrica clave.
- * @author Kevin Mariano
- * @version 2.0.0
- */
- 'use client';
+'use client';
 
- import React, { useState, useEffect, useMemo } from 'react';
- import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/common/Card';
- import { Skeleton } from '@/components/common/Skeleton';
- import { useSpring, animated } from '@react-spring/web';
- import { Sensor, SensorType, Thresholds } from '@/types';
- import { getLatestSensorDataForType } from '@/services/dataService'; // Asumiendo este servicio
- import { getThresholds } from '@/services/settingsService';
- 
- // --- Props para el componente ---
- interface GaugeChartProps {
-   sensorType?: SensorType; // Permite configurar qué sensor mostrar
- }
- 
- /**
-  * @component GaugeChart
-  * @description Visualiza el valor más reciente de un sensor específico en un gráfico de medidor.
-  * El componente ahora es autocontenido, maneja su propia carga de datos y estados.
-  */
- export const GaugeChart: React.FC<GaugeChartProps> = ({ 
-   sensorType = SensorType.TEMPERATURE // Temperatura como valor por defecto
- }) => {
-   const [sensor, setSensor] = useState<Sensor | null>(null);
-   const [thresholds, setThresholds] = useState<Thresholds | null>(null);
-   const [isLoading, setIsLoading] = useState(true);
-   const [error, setError] = useState<string | null>(null);
- 
-   /**
-    * @effect
-    * @description Carga los datos del sensor y los umbrales necesarios para el gráfico.
-    */
-   useEffect(() => {
-     const fetchData = async () => {
-       setIsLoading(true);
-       setError(null);
-       try {
-         const [sensorData, thresholdData] = await Promise.all([
-           getLatestSensorDataForType(sensorType),
-           getThresholds(),
-         ]);
-         setSensor(sensorData);
-         setThresholds(thresholdData);
-       } catch (err) {
-         console.error(`Error al cargar datos para ${sensorType}:`, err);
-         setError(`No se pudo cargar el medidor de ${sensorType}.`);
-       } finally {
-         setIsLoading(false);
-       }
-     };
- 
-     fetchData();
-   }, [sensorType]);
- 
-   // Extraemos los valores necesarios de forma segura, con valores por defecto.
-   const { value = 0, unit = '', name = 'Cargando...' } = sensor || {};
-   const { min = 0, max = 100 } = thresholds?.[sensorType.toLowerCase() as keyof Thresholds] || {};
- 
-   // Animación del valor numérico
-   const { animatedValue } = useSpring({
-     from: { animatedValue: 0 },
-     to: { animatedValue: value },
-     config: { duration: 750 },
-   });
- 
-   // --- Lógica para el cálculo del medidor ---
-   const percentage = useMemo(() => {
-     if (max === min) return 0;
-     return Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
-   }, [value, min, max]);
- 
-   const status = useMemo(() => {
-     if (value < min || value > max) {
-       return { label: 'Peligro', color: '#EF4444' }; // red-500
-     }
-     // Lógica opcional para advertencia
-     return { label: 'Óptimo', color: '#22C55E' }; // green-500
-   }, [value, min, max]);
- 
-   // --- Renderizado de Esqueleto (Estado de Carga) ---
-   if (isLoading) {
-     return (
-       <Card>
-         <CardHeader>
-           <Skeleton className="h-6 w-3/4" />
-           <Skeleton className="h-4 w-1/2 mt-2" />
-         </CardHeader>
-         <CardContent className="flex items-center justify-center">
-           <Skeleton className="h-48 w-48 rounded-full" />
-         </CardContent>
-       </Card>
-     );
-   }
- 
-   // --- Renderizado de Error ---
-   if (error || !sensor) {
-     return (
-       <Card>
-         <CardHeader>
-           <CardTitle>Error</CardTitle>
-         </CardHeader>
-         <CardContent>
-           <p className="text-red-500">{error || 'Sensor no encontrado.'}</p>
-         </CardContent>
-       </Card>
-     );
-   }
- 
-   // --- Renderizado del Gráfico ---
-   return (
-     <Card>
-       <CardHeader>
-         <CardTitle>{name}</CardTitle>
-         <CardDescription>Estado actual: {status.label}</CardDescription>
-       </CardHeader>
-       <CardContent>
-         <div className="relative flex items-center justify-center h-48">
-           <svg className="w-full h-full" viewBox="0 0 120 120">
-             {/* Círculo de fondo */}
-             <circle cx="60" cy="60" r="50" fill="none" strokeWidth="10" className="stroke-gray-200 dark:stroke-gray-700" />
-             {/* Arco de progreso */}
-             <circle
-               cx="60"
-               cy="60"
-               r="50"
-               fill="none"
-               stroke={status.color}
-               strokeWidth="10"
-               strokeDasharray={2 * Math.PI * 50}
-               strokeDashoffset={(100 - percentage) / 100 * (2 * Math.PI * 50)}
-               transform="rotate(-90 60 60)"
-               className="transition-all duration-500"
-             />
-           </svg>
-           <div className="absolute flex flex-col items-center justify-center">
-             <animated.div className="text-4xl font-bold" style={{ color: status.color }}>
-               {/* Comprobación de seguridad antes de llamar a toFixed */}
-               {animatedValue.to(val => val?.toFixed(1) || '0.0')}
-             </animated.div>
-             <span className="text-xl text-gray-500 dark:text-gray-400">{unit}</span>
-           </div>
-         </div>
-       </CardContent>
-     </Card>
-   );
- };
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/common/Card';
+import { Skeleton } from '@/components/common/Skeleton';
+import { SensorType } from '@/types';
+import { getLatestData } from '@/services/dataService';
+import { Thermometer, Droplet, Zap } from 'lucide-react';
+
+interface GaugeChartProps {
+  sensorType: SensorType;
+  tankId: string;
+}
+
+const gaugeConfig = {
+  [SensorType.TEMPERATURE]: {
+    title: 'Temperatura Actual',
+    icon: <Thermometer className="h-5 w-5 text-gray-500" />,
+    unit: '°C',
+    min: 0,
+    max: 40,
+    color: 'from-red-400 to-red-600',
+  },
+  [SensorType.PH]: {
+    title: 'Nivel de pH Actual',
+    icon: <Droplet className="h-5 w-5 text-gray-500" />,
+    unit: '',
+    min: 0,
+    max: 14,
+    color: 'from-blue-400 to-blue-600',
+  },
+  [SensorType.TDS]: {
+    title: 'TDS Actual',
+    icon: <Zap className="h-5 w-5 text-gray-500" />,
+    unit: 'ppm',
+    min: 0,
+    max: 1000,
+    color: 'from-yellow-400 to-yellow-600',
+  },
+};
+
+const GaugeChart: React.FC<GaugeChartProps> = ({ sensorType, tankId }) => {
+  const [value, setValue] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const config = gaugeConfig[sensorType];
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!tankId) {
+        setValue(null);
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const data = await getLatestData(tankId, sensorType);
+        if (data && data.length > 0) {
+          setValue(data[0].value);
+        } else {
+          setValue(null);
+        }
+      } catch (err) {
+        console.error(`Error al cargar datos para ${sensorType}:`, err);
+        setValue(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [tankId, sensorType]);
+
+  const percentage = value !== null ? ((value - config.min) / (config.max - config.min)) * 100 : 0;
+  const rotation = value !== null ? Math.min(180, Math.max(0, (percentage / 100) * 180)) : 0;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-md font-medium text-gray-700">
+          {config.icon}
+          {config.title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <Skeleton className="h-32 w-full" />
+        ) : (
+          <div className="flex flex-col items-center justify-center">
+            <div className="w-48 h-24 overflow-hidden relative">
+              <div className="w-full h-full rounded-t-full border-t-8 border-l-8 border-r-8 border-gray-200"></div>
+              <div
+                className="absolute top-0 left-0 w-full h-full rounded-t-full"
+                style={{ transform: `rotate(${rotation}deg)`, transformOrigin: 'bottom center', transition: 'transform 0.5s ease-in-out' }}
+              >
+                <div className={`w-2 h-24 bg-gradient-to-b ${config.color} rounded-full absolute bottom-0 left-1/2 -ml-1`}></div>
+              </div>
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-2 border-gray-300 rounded-full"></div>
+            </div>
+            <div className="text-center -mt-4">
+              <p className="text-3xl font-bold text-gray-800">
+                {value !== null ? value.toFixed(2) : 'N/A'}
+              </p>
+              <p className="text-sm text-gray-500">{config.unit || 'unidades'}</p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+export default GaugeChart;

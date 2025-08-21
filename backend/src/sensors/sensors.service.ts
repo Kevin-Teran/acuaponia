@@ -9,14 +9,10 @@ export class SensorsService {
   constructor(private prisma: PrismaService) {}
 
   create(createSensorDto: CreateSensorDto) {
+    // Usamos el DTO directamente. Prisma es suficientemente inteligente para manejarlo.
     return this.prisma.sensor.create({ data: createSensorDto });
   }
 
-  /**
-   * @method findAll
-   * @description Obtiene todos los sensores. Si se proporciona un tankId, filtra los sensores para ese tanque.
-   * @param {string} [tankId] - El ID del tanque para filtrar los sensores (opcional).
-   */
   findAll(tankId?: string) {
     const whereClause = tankId ? { tankId } : {};
     return this.prisma.sensor.findMany({
@@ -30,6 +26,7 @@ export class SensorsService {
   }
 
   findOne(id: string) {
+    // La sintaxis para incluir relaciones múltiples es dentro del mismo objeto 'include'
     return this.prisma.sensor.findUnique({
       where: { id },
       include: {

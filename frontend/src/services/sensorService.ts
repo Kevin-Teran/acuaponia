@@ -1,62 +1,72 @@
+import { api } from '@/config/api';
+import { Sensor } from '@/types';
+
 /**
- * @file sensorService.ts
- * @description Servicio para gestionar todas las operaciones CRUD para los sensores.
+ * Obtiene todos los sensores asociados a un tanque específico.
+ * @param tankId - El ID del tanque.
  */
- import api from '@/config/api';
- import { Sensor } from '@/types';
- 
- /**
-  * @function getSensors
-  * @description Obtiene una lista de sensores, opcionalmente filtrada por ID de usuario para administradores.
-  * @param {string} [userId] - El ID opcional del usuario.
-  * @returns {Promise<Sensor[]>} Una promesa que resuelve a un array de sensores.
-  */
- export const getSensors = async (userId?: string): Promise<Sensor[]> => {
-     const response = await api.get('/sensors', { params: userId ? { userId } : {} });
-     return response.data;
- };
- 
- /**
-  * @function getSensorById
-  * @description Obtiene un sensor específico por su ID.
-  * @param {string} id - El ID del sensor.
-  * @returns {Promise<Sensor>} El sensor encontrado.
-  */
- export const getSensorById = async (id: string): Promise<Sensor> => {
-     const response = await api.get(`/sensors/${id}`);
-     return response.data;
- };
- 
- /**
-  * @function createSensor
-  * @description Crea un nuevo sensor en la base de datos.
-  * @param {Partial<Sensor>} sensorData - Los datos del sensor a crear.
-  * @returns {Promise<Sensor>} El sensor recién creado.
-  */
- export const createSensor = async (sensorData: Partial<Sensor>): Promise<Sensor> => {
-     const response = await api.post('/sensors', sensorData);
-     return response.data;
- };
- 
- /**
-  * @function updateSensor
-  * @description Actualiza un sensor existente por su ID.
-  * @param {string} id - El ID del sensor a actualizar.
-  * @param {Partial<Sensor>} sensorData - Los nuevos datos para el sensor.
-  * @returns {Promise<Sensor>} El sensor actualizado.
-  */
- export const updateSensor = async (id: string, sensorData: Partial<Sensor>): Promise<Sensor> => {
-     const response = await api.put(`/sensors/${id}`, sensorData);
-     return response.data;
- };
- 
- /**
-  * @function deleteSensor
-  * @description Elimina un sensor por su ID.
-  * @param {string} id - El ID del sensor a eliminar.
-  * @returns {Promise<void>}
-  */
- export const deleteSensor = async (id: string): Promise<void> => {
-     await api.delete(`/sensors/${id}`);
- };
- 
+export const getSensorsByTank = async (tankId: string): Promise<Sensor[]> => {
+  try {
+    const response = await api.get(`/sensors?tankId=${tankId}`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching sensors for tank ${tankId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Obtiene todos los sensores registrados en el sistema.
+ */
+export const getAllSensors = async (): Promise<Sensor[]> => {
+  try {
+    const response = await api.get('/sensors/all');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching all sensors:', error);
+    throw error;
+  }
+};
+
+
+/**
+ * Crea un nuevo sensor.
+ * @param sensorData - Los datos del sensor a crear.
+ */
+export const createSensor = async (sensorData: Omit<Sensor, 'id'>): Promise<Sensor> => {
+  try {
+    const response = await api.post('/sensors', sensorData);
+    return response.data;
+  } catch (error) {
+    console.error('Error creating sensor:', error);
+    throw error;
+  }
+};
+
+/**
+ * Actualiza un sensor existente.
+ * @param id - El ID del sensor a actualizar.
+ * @param sensorData - Los datos a actualizar.
+ */
+export const updateSensor = async (id: string, sensorData: Partial<Sensor>): Promise<Sensor> => {
+  try {
+    const response = await api.put(`/sensors/${id}`, sensorData);
+    return response.data;
+  } catch (error) {
+    console.error(`Error updating sensor ${id}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Elimina un sensor.
+ * @param id - El ID del sensor a eliminar.
+ */
+export const deleteSensor = async (id: string): Promise<void> => {
+  try {
+    await api.delete(`/sensors/${id}`);
+  } catch (error) {
+    console.error(`Error deleting sensor ${id}:`, error);
+    throw error;
+  }
+};
