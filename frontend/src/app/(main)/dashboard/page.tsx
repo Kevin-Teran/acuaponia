@@ -1,105 +1,135 @@
-/**
- * @file page.tsx (Dashboard)
- * @description Página principal del dashboard con carga de datos granular y
- * manejo del estado de los filtros.
- * @author Kevin Mariano
- * @version 5.0.0
- */
- 'use client';
+'use client';
 
- import React, { useState, useEffect } from 'react';
- import { useAuth } from '@/context/AuthContext';
- import { SummaryCards } from '@/components/dashboard/SummaryCards';
- import { LineChart } from '@/components/dashboard/LineChart';
- import { GaugeChart } from '@/components/dashboard/GaugeChart';
- import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
- import { AdminStatCards } from '@/components/dashboard/AdminStatCards';
- import { DataCard } from '@/components/common/DataCard';
- import { Tank, SensorData } from '@/types';
- 
- // Simula una llamada a la API con un retardo
- const fetchApiData = (delay = 1500, data: any = []) => {
-   return new Promise(resolve => setTimeout(() => resolve(data), delay));
- };
- 
- /**
-  * @page DashboardPage
-  * @description Ahora gestiona el estado de los filtros y lo pasa a los
-  * componentes hijos, asegurando que `DashboardFilters` reciba los datos que necesita.
-  */
- const DashboardPage: React.FC = () => {
-   const { user } = useAuth();
- 
-   // --- ESTADOS DE CARGA ---
-   const [loadingSummary, setLoadingSummary] = useState(true);
-   const [loadingAdminStats, setLoadingAdminStats] = useState(true);
-   const [loadingLineChart, setLoadingLineChart] = useState(true);
-   const [loadingGaugeChart, setLoadingGaugeChart] = useState(true);
-   const [loadingTanks, setLoadingTanks] = useState(true); // Nuevo estado de carga para los filtros
- 
-   // --- ESTADOS DE DATOS Y FILTROS ---
-   const [sensorData, setSensorData] = useState<SensorData[]>([]);
-   const [tanks, setTanks] = useState<Tank[]>([]); // Estado para la lista de tanques
-   const [selectedTank, setSelectedTank] = useState<string>('all'); // Estado para el tanque seleccionado
- 
-   // Cargar lista de tanques para los filtros
-   useEffect(() => {
-     const loadTanks = async () => {
-       try {
-         // Simulación: Reemplaza esto con tu llamada real, ej: tankService.getAll()
-         const fetchedTanks: Tank[] = await fetchApiData(800, [
-           { id: 'tank-1', name: 'Estanque A-01' },
-           { id: 'tank-2', name: 'Estanque B-02 (Tilapias)' },
-         ]) as Tank[];
-         setTanks(fetchedTanks);
-       } catch (error) {
-         console.error("Error al cargar los estanques:", error);
-       } finally {
-         setLoadingTanks(false);
-       }
-     };
-     loadTanks();
-   }, []);
-   
-   // Aquí mantienes el resto de tus useEffects para cargar los otros datos...
-   // (Opcional: puedes hacer que se vuelvan a ejecutar cuando `selectedTank` cambie)
- 
-   return (
-     <div className="animate-in fade-in duration-500 space-y-6">
-       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-         <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Dashboard</h1>
-         {/* ===== PASANDO LAS PROPS REQUERIDAS ===== */}
-         <DashboardFilters 
-           tanks={tanks} 
-           selectedTank={selectedTank} 
-           onTankChange={setSelectedTank} 
-         />
-       </div>
-       
-       {user?.role === 'ADMIN' && (
-          <DataCard title="Estadísticas del Sistema" isLoading={loadingAdminStats} skeletonClassName="h-24">
-             <AdminStatCards />
-          </DataCard>
-       )}
-       
-       <DataCard title="Resumen de Sensores" isLoading={loadingSummary} skeletonClassName="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 h-28">
-         <SummaryCards data={sensorData} />
-       </DataCard>
-       
-       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         <div className="lg:col-span-2">
-           <DataCard title="Historial de Parámetros" isLoading={loadingLineChart}>
-             <LineChart data={sensorData} />
-           </DataCard>
-         </div>
-         <div>
-           <DataCard title="Nivel de Agua Actual" isLoading={loadingGaugeChart}>
-             <GaugeChart data={sensorData} />
-           </DataCard>
-         </div>
-       </div>
-     </div>
-   );
- };
- 
- export default DashboardPage; 
+/**
+ * @file page.tsx
+ * @description Dashboard principal que carga dinámicamente los datos para los filtros,
+ * seleccionando el usuario actual por defecto.
+ * @author Kevin Mariano
+ */
+import React, { useState, useEffect } from 'react';
+import { SummaryCards } from '@/components/dashboard/SummaryCards';
+import { AdminStatCards } from '@/components/dashboard/AdminStatCards';
+import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
+import { LineChart } from '@/components/dashboard/LineChart';
+import { GaugeChart } from '@/components/dashboard/GaugeChart';
+import { useAuth } from '@/context/AuthContext';
+import { Role, Tank, User } from '@/types';
+import { getAllTanks } from '@/services/tankService';
+import { getAllUsers } from '@/services/userService';
+
+const DashboardPage: React.FC = () => {
+  const { user } = useAuth(); // Obtenemos el usuario de la sesión actual
+  const isAdmin = user?.role === Role.ADMIN;
+
+  // --- Estados para los datos de los filtros ---
+  const [users, setUsers] = useState<User[]>([]);
+  const [tanks, setTanks] = useState<Tank[]>([]);
+  const [isLoadingFilters, setIsLoadingFilters] = useState(true);
+
+  // --- Estados para los valores seleccionados en los filtros ---
+  const [selectedTank, setSelectedTank] = useState('');
+  const [selectedUser, setSelectedUser] = useState('');
+  const [dateRange, setDateRange] = useState({
+    from: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
+    to: new Date().toISOString().split('T')[0],
+  });
+
+  /**
+   * @effect
+   * @description Carga los datos para los filtros (usuarios y tanques).
+   */
+  useEffect(() => {
+    // Si no tenemos la información del usuario, no hacemos nada todavía.
+    if (!user) return;
+
+    // --- CAMBIO CLAVE: Se establece el usuario de la sesión como seleccionado por defecto ---
+    // Hacemos esto al principio para que el filtro lo refleje inmediatamente.
+    setSelectedUser(user.id);
+
+    const fetchFilterData = async () => {
+      setIsLoadingFilters(true);
+      try {
+        // Obtenemos los tanques. El servicio backend ya filtra por usuario si no es admin.
+        const tanksData = await getAllTanks();
+        setTanks(tanksData);
+        
+        // --- LOG DE DIAGNÓSTICO PARA TANQUES ---
+        // Esto nos dirá en la consola del navegador si los tanques llegan vacíos.
+        console.log('Tanques recibidos de la API:', tanksData);
+
+        if (tanksData && tanksData.length > 0) {
+          // Seleccionamos el primer tanque de la lista por defecto.
+          setSelectedTank(tanksData[0].id);
+        } else {
+          console.warn('No se encontraron tanques para el usuario actual.');
+        }
+
+        // Si es admin, cargamos la lista de todos los usuarios para el selector.
+        if (isAdmin) {
+          const usersData = await getAllUsers();
+          setUsers(usersData);
+        }
+      } catch (error) {
+        // --- LOG DE DIAGNÓSTICO MEJORADO ---
+        console.error("Error crítico al cargar datos para los filtros:", error);
+        // Aquí podrías establecer un estado de error para mostrar un mensaje en la UI.
+      } finally {
+        setIsLoadingFilters(false);
+      }
+    };
+
+    fetchFilterData();
+  }, [user, isAdmin]); // Dependemos del objeto 'user' para asegurarnos de que exista.
+
+
+  /**
+   * @effect
+   * @description Se activa cuando un filtro cambia para recargar los datos del dashboard.
+   */
+  useEffect(() => {
+    if (!selectedTank || !selectedUser) {
+      return;
+    }
+    
+    console.log("Filtros actualizados, recargando datos del dashboard con:", {
+      dateRange,
+      selectedTank,
+      selectedUser,
+    });
+    // Aquí iría tu lógica para llamar a la API y actualizar los gráficos/tarjetas.
+    // Ejemplo: updateDashboardData({ dateRange, tankId: selectedTank, userId: selectedUser });
+  }, [dateRange, selectedTank, selectedUser]);
+
+  return (
+    <div className="flex-1 space-y-8 p-8 pt-6">
+      <div className="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
+        <h2 className="text-3xl font-bold tracking-tight text-gray-800 dark:text-white">
+          Dashboard
+        </h2>
+        
+        <DashboardFilters
+          currentUserRole={user?.role}
+          users={users}
+          tanks={tanks}
+          selectedTank={selectedTank}
+          onTankChange={setSelectedTank}
+          selectedUser={selectedUser}
+          onUserChange={setSelectedUser}
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+          isLoading={isLoadingFilters}
+        />
+      </div>
+
+      {/* El resto del contenido del dashboard */}
+      <SummaryCards />
+      {isAdmin && <AdminStatCards />}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <div className="col-span-4"><LineChart /></div>
+        <div className="col-span-3"><GaugeChart /></div>
+      </div>
+    </div>
+  );
+};
+
+export default DashboardPage;
