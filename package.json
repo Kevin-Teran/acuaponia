@@ -1,19 +1,33 @@
 {
-  "name": "acuaponia",
+  "name": "sena-acuaponia-system",
   "version": "1.0.0",
-  "description": "Sistema de monitoreo de acuaponía con backend NestJS y frontend Next.js",
   "scripts": {
-    "dev": "concurrently \"npm run backend:dev\" \"npm run frontend:dev\"",
-    "backend:dev": "cd backend && npm run start:dev",
-    "frontend:dev": "cd frontend && npm run dev",
-    "backend:install": "cd backend && npm install",
-    "frontend:install": "cd frontend && npm install",
-    "install:all": "npm install && npm run backend:install && npm run frontend:install",
-    "build": "npm run backend:build && npm run frontend:build",
-    "backend:build": "cd backend && npm run build",
-    "frontend:build": "cd frontend && npm run build"
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run start:dev",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm run build",
+    "start": "cd backend && npm run start:prod",
+    "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install",
+    "prisma:migrate": "cd backend && DOTENV_CONFIG_PATH=../.env npx prisma migrate dev --name",
+    "prisma:generate": "cd backend && DOTENV_CONFIG_PATH=../.env npx prisma generate",
+    "prisma:seed": "cd backend && DOTENV_CONFIG_PATH=../.env npx prisma db seed",
+    "prisma:studio": "cd backend && DOTENV_CONFIG_PATH=../.env npx prisma studio"
   },
+  "keywords": [
+    "sena",
+    "acuaponia",
+    "iot",
+    "monitoring",
+    "mysql",
+    "mqtt"
+  ],
+  "author": "SENA - Servicio Nacional de Aprendizaje",
+  "license": "MIT",
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "cross-env": "^10.0.0",
+    "dotenv-cli": "^10.0.0"
   }
 }

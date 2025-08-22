@@ -1,149 +1,202 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from '../entities/user.entity';
-import { UserRole } from '../common/types';
-
 /**
- * @typedef {Object} CreateUserDto
- * @property {string} email - Email del usuario
- * @property {string} password - Contraseña hasheada
- * @property {string} name - Nombre del usuario
- * @property {UserRole} [role] - Rol del usuario
+ * @file users.service.ts
+ * @description Servicio que encapsula la lógica de negocio para la gestión de usuarios.
  */
-interface CreateUserDto {
-  email: string;
-  password: string;
-  name: string;
-  role?: UserRole;
-}
+import { Injectable, NotFoundException, ConflictException, ForbiddenException, Logger } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import * as bcrypt from 'bcryptjs';
+import { User, Role, Prisma } from '@prisma/client';
+
+export type UserWithoutPassword = Omit<User, 'password'>;
 
 /**
- * Servicio de usuarios
  * @class UsersService
- * @description Maneja las operaciones CRUD de usuarios
+ * @description Contiene la lógica de negocio para la gestión de usuarios (CRUD).
  */
 @Injectable()
 export class UsersService {
-  /**
-   * Constructor del servicio de usuarios
-   * @param {Repository<User>} userRepository - Repositorio de usuarios
-   */
-  constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-  ) {}
+  private readonly logger = new Logger(UsersService.name);
+
+  constructor(private prisma: PrismaService) {}
 
   /**
-   * Crea un nuevo usuario
-   * @async
-   * @param {CreateUserDto} createUserDto - Datos del usuario a crear
-   * @returns {Promise<User>} Usuario creado
-   * @throws {ConflictException} Si el email ya existe
-   * @example
-   * const user = await usersService.create({
-   *   email: 'user@example.com',
-   *   password: 'hashedPassword',
-   *   name: 'John Doe'
-   * });
+   * @method excludePassword
+   * @private
+   * @description Excluye el campo 'password' de un objeto de usuario.
+   * @param {User} user - El objeto de usuario.
+   * @returns {UserWithoutPassword} El usuario sin la contraseña.
    */
-  async create(createUserDto: CreateUserDto): Promise<User> {
-    const existingUser = await this.userRepository.findOne({
-      where: { email: createUserDto.email },
-    });
+  private excludePassword(user: User): UserWithoutPassword {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, ...result } = user;
+    return result;
+  }
 
+  /**
+   * @method create
+   * @description Crea un nuevo usuario.
+   * @param {CreateUserDto} createUserDto - Datos para la creación del usuario.
+   * @returns {Promise<UserWithoutPassword>} El usuario creado, sin la contraseña.
+   * @throws {ConflictException} Si el correo ya está registrado.
+   */
+  async create(createUserDto: CreateUserDto): Promise<UserWithoutPassword> {
+    const lowerCaseEmail = createUserDto.email.toLowerCase();
+    const existingUser = await this.prisma.user.findUnique({ where: { email: lowerCaseEmail } });
+    
     if (existingUser) {
-      throw new ConflictException('El email ya está registrado');
+      throw new ConflictException('El correo electrónico ya está registrado.');
     }
 
-    const user = this.userRepository.create(createUserDto);
-    return await this.userRepository.save(user);
-  }
-
-  /**
-   * Busca todos los usuarios con paginación
-   * @async
-   * @param {number} [page=1] - Número de página
-   * @param {number} [limit=10] - Elementos por página
-   * @returns {Promise<{ users: User[]; total: number }>} Lista de usuarios y total
-   * @example
-   * const result = await usersService.findAll(1, 10);
-   * // { users: [...], total: 25 }
-   */
-  async findAll(page: number = 1, limit: number = 10): Promise<{ users: User[]; total: number }> {
-    const [users, total] = await this.userRepository.findAndCount({
-      skip: (page - 1) * limit,
-      take: limit,
-      order: { createdAt: 'DESC' },
+    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+    
+    const user = await this.prisma.user.create({
+      data: {
+        ...createUserDto,
+        email: lowerCaseEmail,
+        password: hashedPassword,
+      },
     });
 
-    return { users, total };
+    this.logger.log(`Usuario creado con éxito. ID: ${user.id}`);
+    return this.excludePassword(user);
   }
 
   /**
-   * Busca un usuario por ID
-   * @async
-   * @param {string} id - ID del usuario
-   * @returns {Promise<User>} Usuario encontrado
-   * @throws {NotFoundException} Si el usuario no existe
-   * @example
-   * const user = await usersService.findById('user-uuid');
+   * @method findAll
+   * @description Obtiene todos los usuarios con datos relevantes.
+   * @returns {Promise<any[]>} Una lista de usuarios.
    */
-  async findById(id: string): Promise<User> {
-    const user = await this.userRepository.findOne({
+  async findAll() {
+    return this.prisma.user.findMany({
+      select: { 
+        id: true, name: true, email: true, role: true, status: true,
+        _count: { select: { tanks: true } }, 
+        lastLogin: true, createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  /**
+   * @method findAllSimple
+   * @description Obtiene una lista simplificada de usuarios.
+   * @returns {Promise<any[]>} Una lista simplificada de usuarios.
+   */
+  async findAllSimple() {
+    return this.prisma.user.findMany({
+      select: { id: true, name: true, email: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+  
+  /**
+   * @method findOneWithRelations
+   * @description Busca un usuario por ID e incluye sus relaciones.
+   * @param {string} id - El ID del usuario.
+   * @returns {Promise<UserWithoutPassword>} El usuario encontrado.
+   * @throws {NotFoundException} Si el usuario no se encuentra.
+   */
+  async findOneWithRelations(id: string): Promise<UserWithoutPassword> {
+    const user = await this.prisma.user.findUnique({ 
       where: { id },
-      relations: ['tanks'],
+      include: {
+        tanks: { select: { id: true, name: true, location: true } }
+      }
     });
 
     if (!user) {
-      throw new NotFoundException('Usuario no encontrado');
+      throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
     }
 
-    return user;
+    return this.excludePassword(user);
   }
 
   /**
-   * Busca un usuario por email
-   * @async
-   * @param {string} email - Email del usuario
-   * @returns {Promise<User | null>} Usuario encontrado o null
-   * @example
-   * const user = await usersService.findByEmail('user@example.com');
+   * @method findByEmail
+   * @description Busca un usuario por su email.
+   * @param {string} email - El email a buscar.
+   * @returns {Promise<User | null>} El objeto de usuario completo o null.
    */
   async findByEmail(email: string): Promise<User | null> {
-    return await this.userRepository.findOne({
-      where: { email },
-    });
+    return this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
   }
 
   /**
-   * Actualiza la fecha del último login
-   * @async
-   * @param {string} id - ID del usuario
-   * @returns {Promise<void>}
-   * @example
-   * await usersService.updateLastLogin('user-uuid');
+   * @method update
+   * @description Actualiza los datos de un usuario.
+   * @param {string} id - ID del usuario a actualizar.
+   * @param {UpdateUserDto} updateUserDto - Datos para actualizar.
+   * @param {User} currentUser - El usuario que realiza la operación.
+   * @returns {Promise<UserWithoutPassword>} El usuario actualizado.
    */
-  async updateLastLogin(id: string): Promise<void> {
-    await this.userRepository.update(id, {
-      lastLogin: new Date(),
-    });
-  }
+  async update(id: string, updateUserDto: UpdateUserDto, currentUser: User): Promise<UserWithoutPassword> {
+    if (id === currentUser.id) {
+      if (updateUserDto.role && updateUserDto.role !== currentUser.role) {
+        throw new ForbiddenException('No puedes cambiar tu propio rol.');
+      }
+      if (typeof updateUserDto.status !== 'undefined' && updateUserDto.status !== currentUser.status) {
+        throw new ForbiddenException('No puedes cambiar tu propio estado.');
+      }
+    } else if (currentUser.role !== Role.ADMIN) {
+        if (updateUserDto.role || typeof updateUserDto.status !== 'undefined') {
+            throw new ForbiddenException('No tienes permisos para cambiar el rol o estado de otros usuarios.');
+        }
+    }
 
-  /**
-   * Elimina un usuario
-   * @async
-   * @param {string} id - ID del usuario
-   * @returns {Promise<void>}
-   * @throws {NotFoundException} Si el usuario no existe
-   * @example
-   * await usersService.remove('user-uuid');
-   */
-  async remove(id: string): Promise<void> {
-    const result = await this.userRepository.delete(id);
+    if (updateUserDto.email) {
+      const lowerCaseEmail = updateUserDto.email.toLowerCase();
+      const existingUser = await this.prisma.user.findUnique({ where: { email: lowerCaseEmail } });
+      if (existingUser && existingUser.id !== id) {
+        throw new ConflictException('El correo electrónico ya está en uso por otro usuario.');
+      }
+      updateUserDto.email = lowerCaseEmail;
+    }
+
+    if (updateUserDto.password) {
+      updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
+    }
     
-    if (result.affected === 0) {
-      throw new NotFoundException('Usuario no encontrado');
+    try {
+      const updatedUser = await this.prisma.user.update({
+        where: { id },
+        data: updateUserDto,
+      });
+      
+      this.logger.log(`Usuario con ID ${id} actualizado por ${currentUser.email}.`);
+      return this.excludePassword(updatedUser);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
+      }
+      this.logger.error(`Error al actualizar usuario con ID ${id}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * @method remove
+   * @description Elimina un usuario del sistema.
+   * @param {string} id - ID del usuario a eliminar.
+   * @param {User} currentUser - El usuario que realiza la operación.
+   * @returns {Promise<UserWithoutPassword>} El usuario eliminado.
+   */
+  async remove(id: string, currentUser: User): Promise<UserWithoutPassword> {
+    if (id === currentUser.id) {
+      throw new ForbiddenException('No puedes eliminar tu propia cuenta.');
+    }
+
+    try {
+      const deletedUser = await this.prisma.user.delete({ where: { id } });
+      this.logger.warn(`Usuario con ID ${id} eliminado por ${currentUser.email}.`);
+      return this.excludePassword(deletedUser);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
+      }
+      this.logger.error(`Error al eliminar usuario con ID ${id}:`, error);
+      throw error;
     }
   }
 }

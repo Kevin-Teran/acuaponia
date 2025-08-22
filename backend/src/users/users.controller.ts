@@ -1,79 +1,84 @@
-import { Controller, Get, Delete, Param, UseGuards, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { UsersService } from './users.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ResponseUtil } from '../common/utils/response.util';
-
 /**
- * Controlador de usuarios
- * @class UsersController
- * @description Maneja las rutas relacionadas con la gestión de usuarios
+ * @file users.controller.ts
+ * @description Controlador para la gestión de usuarios (CRUD).
  */
-@ApiTags('users')
-@Controller('users')
-@UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
-export class UsersController {
-  /**
-   * Constructor del controlador de usuarios
-   * @param {UsersService} usersService - Servicio de usuarios
-   */
-  constructor(private readonly usersService: UsersService) {}
-
-  /**
-   * Obtiene todos los usuarios con paginación
-   * @async
-   * @param {string} [page='1'] - Número de página
-   * @param {string} [limit='10'] - Elementos por página
-   * @returns {Promise<any>} Lista paginada de usuarios
-   * @example
-   * GET /users?page=1&limit=10
-   */
-  @Get()
-  @ApiOperation({ summary: 'Obtener todos los usuarios' })
-  @ApiResponse({ status: 200, description: 'Lista de usuarios obtenida exitosamente' })
-  async findAll(
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '10',
-  ) {
-    const result = await this.usersService.findAll(
-      parseInt(page),
-      parseInt(limit),
-    );
-    return ResponseUtil.success(result, 'Usuarios obtenidos exitosamente');
-  }
-
-  /**
-   * Obtiene un usuario por ID
-   * @async
-   * @param {string} id - ID del usuario
-   * @returns {Promise<any>} Usuario encontrado
-   * @example
-   * GET /users/user-uuid
-   */
-  @Get(':id')
-  @ApiOperation({ summary: 'Obtener usuario por ID' })
-  @ApiResponse({ status: 200, description: 'Usuario encontrado' })
-  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
-  async findOne(@Param('id') id: string) {
-    const user = await this.usersService.findById(id);
-    return ResponseUtil.success(user, 'Usuario encontrado');
-  }
-
-  /**
-   * Elimina un usuario
-   * @async
-   * @param {string} id - ID del usuario
-   * @returns {Promise<any>} Confirmación de eliminación
-   * @example
-   * DELETE /users/user-uuid
-   */
-  @Delete(':id')
-  @ApiOperation({ summary: 'Eliminar usuario' })
-  @ApiResponse({ status: 200, description: 'Usuario eliminado exitosamente' })
-  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
-  async remove(@Param('id') id: string) {
-    await this.usersService.remove(id);
-    return ResponseUtil.success(null, 'Usuario eliminado exitosamente');
-  }
-}
+ import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Req, ParseUUIDPipe, HttpCode, HttpStatus } from '@nestjs/common';
+ import { UsersService, UserWithoutPassword } from './users.service';
+ import { CreateUserDto } from './dto/create-user.dto';
+ import { UpdateUserDto } from './dto/update-user.dto';
+ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+ import { RolesGuard } from '../auth/guards/roles.guard';
+ import { Roles } from '../auth/decorators/roles.decorator';
+ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+ import { Role } from '@prisma/client';
+ 
+ /**
+  * @controller UsersController
+  * @description Endpoints para la gestión de usuarios. Protegido por rol de ADMIN.
+  */
+ @ApiBearerAuth()
+ @ApiTags('Usuarios')
+ @Controller('users')
+ @UseGuards(JwtAuthGuard, RolesGuard)
+ @Roles(Role.ADMIN)
+ export class UsersController {
+   constructor(private readonly usersService: UsersService) {}
+ 
+   @Post()
+   @HttpCode(HttpStatus.CREATED)
+   @ApiOperation({ summary: 'Crear un nuevo usuario' })
+   @ApiResponse({ status: 201, description: 'El usuario ha sido creado exitosamente.' })
+   @ApiResponse({ status: 400, description: 'Datos de entrada inválidos.' })
+   @ApiResponse({ status: 409, description: 'El correo electrónico ya está registrado.' })
+   create(@Body() createUserDto: CreateUserDto): Promise<UserWithoutPassword> {
+     return this.usersService.create(createUserDto);
+   }
+ 
+   @Get()
+   @ApiOperation({ summary: 'Obtener todos los usuarios' })
+   @ApiResponse({ status: 200, description: 'Lista de todos los usuarios.' })
+   findAll() {
+     return this.usersService.findAll();
+   }
+ 
+   @Get('all')
+   @ApiOperation({ summary: 'Obtener una lista simplificada de usuarios' })
+   @ApiResponse({ status: 200, description: 'Lista de usuarios con id, nombre y email.' })
+   findAllSimple() {
+     return this.usersService.findAllSimple();
+   }
+ 
+   @Get(':id')
+   @ApiOperation({ summary: 'Obtener un usuario por su ID' })
+   @ApiParam({ name: 'id', description: 'ID del usuario (UUID)' })
+   @ApiResponse({ status: 200, description: 'Detalles del usuario.' })
+   @ApiResponse({ status: 404, description: 'Usuario no encontrado.' })
+   findOne(@Param('id', ParseUUIDPipe) id: string): Promise<UserWithoutPassword> {
+     return this.usersService.findOneWithRelations(id);
+   }
+   
+   @Put(':id')
+   @ApiOperation({ summary: 'Actualizar un usuario existente' })
+   @ApiParam({ name: 'id', description: 'ID del usuario a actualizar (UUID)' })
+   @ApiResponse({ status: 200, description: 'El usuario ha sido actualizado exitosamente.' })
+   @ApiResponse({ status: 404, description: 'Usuario no encontrado.' })
+   @ApiResponse({ status: 403, description: 'Acción no permitida.' })
+   update(
+     @Param('id', ParseUUIDPipe) id: string, 
+     @Body() updateUserDto: UpdateUserDto, 
+     @Req() req
+   ): Promise<UserWithoutPassword> {
+     return this.usersService.update(id, updateUserDto, req.user);
+   }
+ 
+   @Delete(':id')
+   @HttpCode(HttpStatus.OK)
+   @ApiOperation({ summary: 'Eliminar un usuario' })
+   @ApiParam({ name: 'id', description: 'ID del usuario a eliminar (UUID)' })
+   @ApiResponse({ status: 200, description: 'El usuario ha sido eliminado exitosamente.' })
+   @ApiResponse({ status: 404, description: 'Usuario no encontrado.' })
+   @ApiResponse({ status: 403, description: 'No se puede eliminar a sí mismo.' })
+   remove(@Param('id', ParseUUIDPipe) id: string, @Req() req): Promise<UserWithoutPassword> {
+     return this.usersService.remove(id, req.user);
+   }
+ }

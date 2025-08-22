@@ -1,44 +1,43 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
+import { Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
+import { Request } from 'express';
 import { UsersService } from '../../users/users.service';
 
 /**
- * Estrategia JWT para Passport
- * @class JwtStrategy
- * @extends PassportStrategy
- * @description Valida tokens JWT y extrae información del usuario
+ * @function cookieExtractor
+ * @description Extrae el token JWT de la cookie 'access_token' de la petición.
  */
+const cookieExtractor = (req: Request): string | null => {
+  if (req && req.cookies) {
+    return req.cookies['access_token'] || null;
+  }
+  return null;
+};
+
 @Injectable()
-export class JwtStrategy extends PassportStrategy(Strategy) {
-  /**
-   * Constructor de la estrategia JWT
-   * @param {ConfigService} configService - Servicio de configuración
-   * @param {UsersService} usersService - Servicio de usuarios
-   */
+export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
     private readonly configService: ConfigService,
     private readonly usersService: UsersService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: cookieExtractor, 
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET') || 'acuaponia-secret-key',
+      secretOrKey: configService.get<string>('JWT_SECRET'),
     });
   }
 
   /**
-   * Valida el payload del JWT y retorna el usuario
-   * @async
-   * @param {any} payload - Payload del JWT
-   * @returns {Promise<any>} Usuario validado
-   * @example
-   * // Automáticamente llamado por Passport cuando se valida un JWT
-   * const user = await jwtStrategy.validate(payload);
+   * @method validate
+   * @description Valida el payload del token y devuelve el usuario.
+   * Este objeto se adjuntará a `req.user`.
    */
-  async validate(payload: any) {
-    const user = await this.usersService.findById(payload.sub);
-    return user;
+  async validate(payload: { sub: string; email: string; role: string }) {
+    if (!payload || !payload.sub) {
+      throw new UnauthorizedException('Token inválido');
+    }
+    return { id: payload.sub, email: payload.email, role: payload.role };
   }
 }

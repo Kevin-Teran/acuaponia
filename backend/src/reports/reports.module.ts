@@ -1,13 +1,10 @@
 import { Module } from '@nestjs/common';
-import { ReportsService } from './reports.service';
 import { ReportsController } from './reports.controller';
+import { ReportsService } from './reports.service';
+import { EventsModule } from '../events/events.module'; 
 
-/**
- * Módulo de reportes
- * @class ReportsModule
- * @description Configura el módulo de generación de reportes
- */
 @Module({
+  imports: [EventsModule], 
   controllers: [ReportsController],
   providers: [ReportsService],
 })

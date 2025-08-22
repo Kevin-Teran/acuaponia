@@ -1,48 +1,34 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { ValidationPipe, Logger } from '@nestjs/common';
+import * as cookieParser from 'cookie-parser'; 
+import { setupSwagger } from './utils/swagger';
 
-/**
- * Función principal para inicializar la aplicación NestJS
- * @async
- * @function bootstrap
- * @returns {Promise<void>} Promesa que se resuelve cuando la aplicación está iniciada
- * @throws {Error} Error si no se puede inicializar la aplicación
- * @example
- * // Inicializar la aplicación
- * bootstrap().catch(console.error);
- */
-async function bootstrap(): Promise<void> {
+async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  
-  // Configuración de CORS
+  const logger = new Logger('Bootstrap');
+
+  app.setGlobalPrefix('api');
+
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
-    credentials: true,
+    origin: 'http://localhost:3000', 
+    credentials: true, 
   });
 
-  // Configuración de validación global
+  app.use(cookieParser()); 
+
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
-    forbidNonWhitelisted: true,
     transform: true,
+    forbidNonWhitelisted: true,
   }));
 
-  // Configuración de Swagger
-  const config = new DocumentBuilder()
-    .setTitle('Acuaponía API')
-    .setDescription('API para sistema de monitoreo de acuaponía')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  setupSwagger(app);
 
-  await app.listen(3001);
-  console.log('🚀 Backend ejecutándose en http://localhost:3001');
-  console.log('📚 Documentación API disponible en http://localhost:3001/api');
+  const port = process.env.PORT || 5001;
+  await app.listen(port);
+
+  logger.log(`🚀 Aplicación corriendo en: http://localhost:${port}`);
+  logger.log(`📚 Documentación de API disponible en: http://localhost:${port}/api-docs`);
 }
-
 bootstrap();

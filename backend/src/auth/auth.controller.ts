@@ -1,85 +1,76 @@
-import { Controller, Post, Body, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
-import { AuthService } from './auth.service';
-import { LocalAuthGuard } from './guards/local-auth.guard';
-import { ResponseUtil } from '../common/utils/response.util';
-
 /**
- * @typedef {Object} LoginDto
- * @property {string} email - Email del usuario
- * @property {string} password - Contraseña del usuario
+ * @file auth.controller.ts
+ * @description Controlador para gestionar la autenticación de usuarios.
  */
-class LoginDto {
-  email: string;
-  password: string;
-}
-
-/**
- * @typedef {Object} RegisterDto
- * @property {string} email - Email del usuario
- * @property {string} password - Contraseña del usuario
- * @property {string} name - Nombre completo del usuario
- */
-class RegisterDto {
-  email: string;
-  password: string;
-  name: string;
-}
-
-/**
- * Controlador de autenticación
- * @class AuthController
- * @description Maneja las rutas de autenticación (login, registro)
- */
-@ApiTags('auth')
-@Controller('auth')
-export class AuthController {
-  /**
-   * Constructor del controlador de autenticación
-   * @param {AuthService} authService - Servicio de autenticación
-   */
-  constructor(private readonly authService: AuthService) {}
-
-  /**
-   * Endpoint para iniciar sesión
-   * @async
-   * @param {any} req - Request object con usuario validado
-   * @returns {Promise<any>} Respuesta con token de acceso
-   * @example
-   * POST /auth/login
-   * Body: { "email": "user@example.com", "password": "password123" }
-   */
-  @UseGuards(LocalAuthGuard)
-  @Post('login')
-  @ApiOperation({ summary: 'Iniciar sesión' })
-  @ApiBody({ type: LoginDto })
-  @ApiResponse({ status: 200, description: 'Login exitoso' })
-  @ApiResponse({ status: 401, description: 'Credenciales inválidas' })
-  async login(@Request() req: any) {
-    const result = await this.authService.login(req.user);
-    return ResponseUtil.success(result, 'Login exitoso');
-  }
-
-  /**
-   * Endpoint para registrar un nuevo usuario
-   * @async
-   * @param {RegisterDto} registerDto - Datos de registro
-   * @returns {Promise<any>} Respuesta con token de acceso
-   * @example
-   * POST /auth/register
-   * Body: { "email": "user@example.com", "password": "password123", "name": "John Doe" }
-   */
-  @Post('register')
-  @ApiOperation({ summary: 'Registrar nuevo usuario' })
-  @ApiBody({ type: RegisterDto })
-  @ApiResponse({ status: 201, description: 'Usuario registrado exitosamente' })
-  @ApiResponse({ status: 400, description: 'Datos inválidos' })
-  async register(@Body() registerDto: RegisterDto) {
-    const result = await this.authService.register(
-      registerDto.email,
-      registerDto.password,
-      registerDto.name,
-    );
-    return ResponseUtil.success(result, 'Usuario registrado exitosamente');
-  }
-}
+ import { Controller, Post, Body, Get, UseGuards, Req, HttpCode, HttpStatus } from '@nestjs/common';
+ import { AuthService } from './auth.service';
+ import { LoginDto } from './dto/login.dto';
+ import { JwtAuthGuard } from './guards/jwt-auth.guard';
+ import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
+ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+ 
+ /**
+  * @controller AuthController
+  * @description Gestiona las rutas de autenticación, incluyendo inicio de sesión,
+  * obtención del perfil de usuario y refresco de tokens de acceso.
+  * @path /auth
+  */
+ @ApiTags('Autenticación')
+ @Controller('auth')
+ export class AuthController {
+   constructor(private readonly authService: AuthService) {}
+ 
+   /**
+    * @route   POST /auth/login
+    * @desc    Autentica a un usuario y devuelve sus datos junto con los tokens.
+    * @param   {LoginDto} loginDto - Credenciales del usuario.
+    * @returns {Promise<object>} El usuario (sin contraseña) y sus tokens.
+    * @access  Público
+    */
+   @Post('login')
+   @HttpCode(HttpStatus.OK)
+   @ApiOperation({ summary: 'Iniciar sesión de usuario' })
+   @ApiResponse({ status: 200, description: 'Autenticación exitosa.' })
+   @ApiResponse({ status: 401, description: 'Credenciales incorrectas.' })
+   @ApiResponse({ status: 403, description: 'La cuenta del usuario no está activa.' })
+   login(@Body() loginDto: LoginDto) {
+     return this.authService.login(loginDto.email, loginDto.password, loginDto.rememberMe);
+   }
+ 
+   /**
+    * @route   GET /auth/me
+    * @desc    Obtiene el perfil del usuario autenticado.
+    * @param   {any} req - El objeto de la petición con el usuario.
+    * @returns {Omit<User, 'password'>} Los datos del usuario sin la contraseña.
+    * @access  Privado (Requiere token de acceso)
+    */
+   @UseGuards(JwtAuthGuard)
+   @Get('me')
+   @ApiBearerAuth()
+   @ApiOperation({ summary: 'Obtener perfil del usuario actual' })
+   @ApiResponse({ status: 200, description: 'Perfil del usuario obtenido con éxito.' })
+   @ApiResponse({ status: 401, description: 'No autorizado.' })
+   getProfile(@Req() req) {
+     return req.user;
+   }
+ 
+   /**
+    * @route   POST /auth/refresh
+    * @desc    Genera un nuevo token de acceso usando un token de refresco.
+    * @param   {any} req - La petición con el usuario adjunto.
+    * @returns {Promise<{accessToken: string}>} Un objeto con el nuevo token de acceso.
+    * @access  Privado (Requiere token de refresco)
+    */
+   @UseGuards(JwtRefreshGuard)
+   @Post('refresh')
+   @HttpCode(HttpStatus.OK)
+   @ApiBearerAuth('JWT-refresh')
+   @ApiOperation({ summary: 'Refrescar token de acceso' })
+   @ApiResponse({ status: 200, description: 'Token de acceso refrescado exitosamente.' })
+   @ApiResponse({ status: 401, description: 'Token de refresco inválido o expirado.' })
+   refreshToken(@Req() req) {
+     const userId = req.user.sub;
+     const refreshToken = req.headers.authorization.split(' ')[1];
+     return this.authService.refreshToken(userId, refreshToken);
+   }
+ }
