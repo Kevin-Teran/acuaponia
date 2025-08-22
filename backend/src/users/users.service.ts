@@ -1,4 +1,15 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+/**
+ * @file users.service.ts
+ * @description
+ * Lógica de negocio para la gestión de usuarios. Este servicio se comunica
+ * directamente con la base de datos a través de Prisma para realizar
+ * operaciones CRUD sobre la entidad User.
+ * @author Sistema de Acuaponía SENA
+ * @version 2.2.0
+ * @since 1.0.0
+ */
+
+import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -9,24 +20,25 @@ import { User, Role } from '@prisma/client';
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * Crea un nuevo usuario. La contraseña se hashea antes de guardarla.
-   */
-  async create(createUserDto: CreateUserDto) {
+  async create(createUserDto: CreateUserDto): Promise<Omit<User, 'password'>> {
+    const existingUser = await this.findByEmail(createUserDto.email);
+    if (existingUser) {
+      throw new ConflictException('El correo electrónico ya está registrado.');
+    }
+    
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
-    return this.prisma.user.create({
+    const user = await this.prisma.user.create({
       data: {
         ...createUserDto,
         password: hashedPassword,
       },
     });
+
+    const { password, ...result } = user;
+    return result;
   }
 
-  /**
-   * Devuelve una lista de todos los usuarios sin su contraseña.
-   * Solo para administradores.
-   */
-  async findAll() {
+  async findAll(): Promise<Omit<User, 'password'>[]> {
     return this.prisma.user.findMany({
       select: {
         id: true,
@@ -36,15 +48,13 @@ export class UsersService {
         status: true,
         createdAt: true,
         lastLogin: true,
+        updatedAt: true,
+        settings: true,
       },
     });
   }
 
-  /**
-   * Encuentra un usuario por su ID.
-   * Lanza una excepción si no se encuentra.
-   */
-  async findOne(id: string) {
+  async findOne(id: string): Promise<User> {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) {
       throw new NotFoundException(`Usuario con ID "${id}" no encontrado.`);
@@ -52,25 +62,13 @@ export class UsersService {
     return user;
   }
 
-  /**
-   * Encuentra un usuario por su email (insensible a mayúsculas/minúsculas).
-   * Esencial para la lógica de login.
-   */
-  async findByEmail(email: string) {
-    if (typeof email !== 'string') {
-      console.error("Error: findByEmail recibió un tipo no válido:", email);
-      return null;
-    }
+  async findByEmail(email: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { email: email.toLowerCase() },
     });
   }
 
-  /**
-   * Actualiza un usuario.
-   * Verifica los permisos: un admin puede editar a cualquiera, un usuario solo a sí mismo.
-   */
-  async update(id: string, updateUserDto: UpdateUserDto, currentUser: User) {
+  async update(id: string, updateUserDto: UpdateUserDto, currentUser: User): Promise<Omit<User, 'password'>> {
     if (currentUser.role !== Role.ADMIN && currentUser.id !== id) {
       throw new ForbiddenException('No tienes permiso para actualizar este usuario.');
     }
@@ -78,23 +76,28 @@ export class UsersService {
     if (updateUserDto.password) {
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
     }
-    return this.prisma.user.update({
+
+    const updatedUser = await this.prisma.user.update({
       where: { id },
       data: updateUserDto,
     });
+
+    const { password, ...result } = updatedUser;
+    return result;
   }
 
-  /**
-   * Elimina un usuario.
-   * Verifica los permisos: un admin puede eliminar a cualquiera, un usuario solo a sí mismo.
-   */
-  async remove(id: string, currentUser: User) {
+  async remove(id: string, currentUser: User): Promise<Omit<User, 'password'>> {
     if (currentUser.role !== Role.ADMIN && currentUser.id !== id) {
       throw new ForbiddenException('No tienes permiso para eliminar este usuario.');
     }
     if (currentUser.role === Role.ADMIN && currentUser.id === id) {
         throw new ForbiddenException('Un administrador no puede eliminarse a sí mismo.');
     }
-    return this.prisma.user.delete({ where: { id } });
+    
+    const userToDelete = await this.findOne(id);
+    await this.prisma.user.delete({ where: { id } });
+    
+    const { password, ...result } = userToDelete;
+    return result;
   }
 }

@@ -1,85 +1,64 @@
 /**
  * @file userService.ts
- * @description Servicio para gestionar todas las operaciones CRUD relacionadas con los usuarios.
+ * @description Servicio para gestionar las operaciones CRUD de usuarios.
+ * @author Sistema de Acuaponía SENA
+ * @version 1.2.0
+ * @since 1.0.0
  */
-import { api } from '@/config/api';
-import { User } from '@/types';
+
+import api from '@/config/api';
+import { User, CreateUserDto, UpdateUserDto } from '@/types';
 
 /**
- * @function getAllUsers
- * @description Obtiene una lista de todos los usuarios para la tabla de administración.
- * @returns {Promise<User[]>} Un array de usuarios.
+ * Obtiene una lista de todos los usuarios.
+ * @returns {Promise<User[]>} Una promesa que se resuelve con un array de usuarios.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
-export const getAllUsers = async (): Promise<User[]> => {
-  try {
-    const response = await api.get('/users');
-    return response.data;
-  } catch (error) {
-    console.error("Error al obtener todos los usuarios:", error);
-    throw error;
-  }
+export const getUsers = async (): Promise<User[]> => {
+  const response = await api.get('/users');
+  return response.data;
 };
 
 /**
- * @function getUserById
- * @description Obtiene los detalles completos de un solo usuario por su ID.
- * @param {string} userId - El ID del usuario a consultar.
- * @returns {Promise<User>} El objeto de usuario completo.
+ * Obtiene un usuario específico por su ID.
+ * @param {string} id - El ID del usuario a obtener.
+ * @returns {Promise<User>} Una promesa que se resuelve con los datos del usuario.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
-export const getUserById = async (userId: string): Promise<User> => {
-  try {
-    const response = await api.get(`/users/${userId}`);
+export const getUserById = async (id: string): Promise<User> => {
+    const response = await api.get(`/users/${id}`);
     return response.data;
-  } catch (error) {
-    console.error(`Error al obtener el usuario ${userId}:`, error);
-    throw error;
-  }
 };
 
 /**
- * @function createUser
- * @description Envía los datos de un nuevo usuario al backend para su creación.
- * @param {Omit<User, 'id'>} userData - Los datos del usuario a crear.
- * @returns {Promise<User>} El usuario recién creado.
+ * Crea un nuevo usuario.
+ * @param {CreateUserDto} userData - Los datos del nuevo usuario.
+ * @returns {Promise<User>} Una promesa que se resuelve con los datos del usuario creado.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
-export const createUser = async (userData: Omit<User, 'id'>): Promise<User> => {
-  try {
-    const response = await api.post('/users', userData);
-    return response.data;
-  } catch (error) {
-    console.error("Error al crear el usuario:", error);
-    throw error;
-  }
+export const createUser = async (userData: CreateUserDto): Promise<User> => {
+  const response = await api.post('/users', userData);
+  return response.data;
 };
 
 /**
- * @function updateUser
- * @description Actualiza la información de un usuario específico por su ID.
- * @param {string} userId - El ID del usuario a actualizar.
- * @param {Partial<User>} userData - Los datos del usuario a actualizar.
- * @returns {Promise<User>} El usuario con los datos actualizados.
+ * Actualiza los datos de un usuario existente.
+ * @param {string} id - El ID del usuario a actualizar.
+ * @param {UpdateUserDto} userData - Los nuevos datos para el usuario.
+ * @returns {Promise<User>} Una promesa que se resuelve con los datos del usuario actualizado.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
-export const updateUser = async (userId: string, userData: Partial<User>): Promise<User> => {
-  try {
-    const response = await api.put(`/users/${userId}`, userData);
-    return response.data;
-  } catch (error) {
-    console.error(`Error al actualizar el usuario ${userId}:`, error);
-    throw error;
-  }
+export const updateUser = async (id: string, userData: UpdateUserDto): Promise<User> => {
+  const response = await api.put(`/users/${id}`, userData);
+  return response.data;
 };
 
 /**
- * @function deleteUser
- * @description Elimina un usuario por su ID.
- * @param {string} userId - El ID del usuario a eliminar.
- * @returns {Promise<void>}
+ * Elimina un usuario del sistema.
+ * @param {string} id - El ID del usuario a eliminar.
+ * @returns {Promise<void>} Una promesa que se resuelve cuando el usuario es eliminado.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
-export const deleteUser = async (userId: string): Promise<void> => {
-  try {
-    await api.delete(`/users/${userId}`);
-  } catch (error) {
-    console.error(`Error al eliminar el usuario ${userId}:`, error);
-    throw error;
-  }
+export const deleteUser = async (id: string): Promise<void> => {
+  await api.delete(`/users/${id}`);
 };

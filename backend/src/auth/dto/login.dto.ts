@@ -1,29 +1,50 @@
-import { IsEmail, IsString, MinLength, IsBoolean, IsOptional } from 'class-validator';
+/**
+ * @file login.dto.ts
+ * @description
+ * Define la estructura de datos y las reglas de validación para el cuerpo (body)
+ * de la solicitud de inicio de sesión. Incluye las credenciales del usuario y
+ * una opción para mantener la sesión activa.
+ * @author Sistema de Acuaponía SENA
+ * @version 1.1.0
+ * @since 1.0.0
+ */
+
+import { IsEmail, IsNotEmpty, IsString, MinLength, IsBoolean, IsOptional } from 'class-validator';
 
 /**
  * @class LoginDto
- * @description Data Transfer Object (DTO) para la validación de los datos de inicio de sesión.
- * Define las reglas que deben cumplir los datos de entrada para la ruta de login.
+ * @description
+ * Objeto de Transferencia de Datos (DTO) que encapsula la información necesaria para
+ * que un usuario inicie sesión en el sistema.
  */
 export class LoginDto {
   /**
-   * @property {string} email - El correo electrónico del usuario.
-   * @description Debe ser una dirección de correo válida.
+   * La dirección de correo electrónico del usuario. Debe ser un email válido.
+   * @type {string}
+   * @public
+   * @example 'usuario@example.com'
    */
-  @IsEmail({}, { message: 'El correo electrónico debe ser válido.' })
+  @IsEmail({}, { message: 'El formato del correo electrónico no es válido.' })
+  @IsNotEmpty({ message: 'El correo electrónico no puede estar vacío.' })
   email: string;
 
   /**
-   * @property {string} password - La contraseña del usuario.
-   * @description Debe tener al menos 6 caracteres.
+   * La contraseña del usuario. Debe tener al menos 6 caracteres.
+   * @type {string}
+   * @public
+   * @example 'PasswordSegura123'
    */
   @IsString()
+  @IsNotEmpty({ message: 'La contraseña no puede estar vacía.' })
   @MinLength(6, { message: 'La contraseña debe tener al menos 6 caracteres.' })
   password: string;
 
   /**
-   * @property {boolean} [rememberMe] - Opción para recordar la sesión.
-   * @description Si es true, el token de refresco tendrá una mayor duración.
+   * Campo opcional para indicar si el usuario desea que su sesión persista
+   * después de cerrar el navegador.
+   * @type {boolean | undefined}
+   * @public
+   * @example true
    */
   @IsBoolean()
   @IsOptional()

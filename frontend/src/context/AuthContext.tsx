@@ -1,128 +1,77 @@
 /**
  * @file AuthContext.tsx
- * @description Proveedor de contexto para gestionar el estado de autenticación global y la sesión del usuario.
+ * @description Proveedor de contexto para gestionar el estado de autenticación en toda la aplicación.
+ * @author Sistema de Acuaponía SENA
+ * @version 1.1.0
+ * @since 1.0.0
  */
+
  'use client';
 
- import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+ import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+ import { User } from '@/types';
+ import { getCurrentUser, login as apiLogin, logout as apiLogout } from '@/services/authService';
  import { useRouter } from 'next/navigation';
- import * as authService from '@/services/authService';
- import { User, LoginCredentials } from '@/types';
- import { LoadingSpinner } from '@/components/common/LoadingSpinner';
- 
- type Theme = 'light' | 'dark';
  
  interface AuthContextType {
    user: User | null;
    isAuthenticated: boolean;
-   loading: boolean;
-   theme: Theme;
-   login: (credentials: LoginCredentials) => Promise<void>;
-   logout: () => void;
-   updateProfile: (userData: Partial<User>) => Promise<User>;
-   toggleTheme: () => void;
+   isLoading: boolean;
+   login: (credentials: any) => Promise<void>;
+   logout: () => Promise<void>;
  }
  
  const AuthContext = createContext<AuthContextType | undefined>(undefined);
  
  export const AuthProvider = ({ children }: { children: ReactNode }) => {
    const [user, setUser] = useState<User | null>(null);
-   const [loading, setLoading] = useState(true);
-   const [theme, setTheme] = useState<Theme>('light');
+   const [isLoading, setIsLoading] = useState(true);
    const router = useRouter();
  
    useEffect(() => {
-     const initializeApp = () => {
+     const initializeApp = async () => {
        try {
-         const storedTheme = localStorage.getItem('theme') as Theme | null;
-         if (storedTheme) {
-           setTheme(storedTheme);
-           document.documentElement.classList.toggle('dark', storedTheme === 'dark');
-         } else {
-           const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-           const initialTheme = prefersDark ? 'dark' : 'light';
-           setTheme(initialTheme);
-           localStorage.setItem('theme', initialTheme);
-           document.documentElement.classList.toggle('dark', prefersDark);
-         }
-         
-         const storedUser = authService.getCurrentUser();
-         if (storedUser) {
-           setUser(storedUser);
-         }
+         // La cookie httpOnly se envía automáticamente. Si tenemos una sesión válida,
+         // esta llamada devolverá los datos del usuario.
+         const currentUser = await getCurrentUser();
+         setUser(currentUser);
        } catch (error) {
-         console.error('Error al inicializar la aplicación:', error);
-         authService.logout(); // Limpiar sesión en caso de error
+         // Si hay un error (ej. 401 Unauthorized), significa que no hay sesión válida.
+         setUser(null);
        } finally {
-         setLoading(false);
+         setIsLoading(false);
        }
      };
      initializeApp();
    }, []);
  
-   const login = async (credentials: LoginCredentials) => {
-     try {
-       const loggedUser = await authService.login(credentials);
-       setUser(loggedUser);
-       router.push('/dashboard');
-     } catch (error) {
-       console.error('Fallo en el login desde AuthContext:', error);
-       throw error; 
-     }
+   const login = async (credentials: any) => {
+     const { user: loggedInUser } = await apiLogin(credentials);
+     setUser(loggedInUser);
+     router.push('/dashboard');
    };
  
-   const logout = useCallback(() => {
-     authService.logout();
+   const logout = async () => {
+     await apiLogout();
      setUser(null);
      router.push('/login');
-   }, [router]);
+   };
  
-   const updateProfile = useCallback(async (userData: Partial<User>): Promise<User> => {
-     if (!user) throw new Error("Usuario no autenticado");
- 
-     const updatedUser = { ...user, ...userData };
-     
-     setUser(updatedUser);
-     localStorage.setItem('user', JSON.stringify(updatedUser)); // Actualizar también en localStorage
-     return updatedUser;
-   }, [user]);
- 
-   const toggleTheme = useCallback(() => {
-     setTheme((prevTheme) => {
-       const newTheme = prevTheme === 'light' ? 'dark' : 'light';
-       localStorage.setItem('theme', newTheme);
-       document.documentElement.classList.toggle('dark', newTheme === 'dark');
-       return newTheme;
-     });
-   }, []);
- 
-   if (loading) {
-     return <LoadingSpinner fullScreen message="Cargando sistema..." />;
-   }
- 
-   const value: AuthContextType = {
+   const value = {
      user,
      isAuthenticated: !!user,
-     loading,
-     theme,
+     isLoading,
      login,
      logout,
-     updateProfile,
-     toggleTheme,
    };
  
    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
  };
  
- /**
-  * @hook useAuth
-  * @description Hook para consumir el AuthContext de forma segura.
-  * @returns {AuthContextType} El valor del contexto de autenticación.
-  */
- export const useAuth = (): AuthContextType => {
+ export const useAuth = () => {
    const context = useContext(AuthContext);
    if (context === undefined) {
-     throw new Error('useAuth debe ser utilizado dentro de un AuthProvider');
+     throw new Error('useAuth debe ser usado dentro de un AuthProvider');
    }
    return context;
  };

@@ -1,79 +1,66 @@
-"use client";
-
+/**
+ * @file useSensorData.ts
+ * @description
+ * Hook personalizado de React para encapsular la lógica de obtención y manejo
+ * de los datos históricos de los sensores. Provee el estado de carga, los datos,
+ * posibles errores y una función para volver a cargar la información.
+ * @author Sistema de Acuaponía SENA
+ * @version 1.1.0
+ * @since 1.0.0
+ */
 import { useState, useEffect, useCallback } from 'react';
-import { SensorData, ProcessedDataPoint } from '@/types';
-import { getSensorData } from '@/services/dataService';
-import { socketService } from '@/services/socketService';
+import { getHistoricalData } from '@/services/dataService'; 
+import { SensorData, HistoricalDataParams } from '@/types';
 
 /**
- * @function processRawData
- * @description Procesa los datos crudos de los sensores para adaptarlos al formato requerido por los gráficos.
- * @param rawData - Un array de datos de sensores en formato crudo.
- * @returns Un array de puntos de datos procesados para los gráficos.
+ * @typedef {object} UseSensorDataResult
+ * @property {SensorData[]} data - El array de datos del sensor obtenidos de la API.
+ * @property {boolean} loading - Un booleano que es `true` mientras los datos se están cargando.
+ * @property {string | null} error - Un string con el mensaje de error si la carga falla, o `null`.
+ * @property {(params: HistoricalDataParams) => Promise<void>} refetch - Una función para volver
+ * a ejecutar la carga de datos con nuevos parámetros.
  */
-export const processRawData = (rawData: SensorData[]): ProcessedDataPoint[] => {
-    return rawData.map(d => ({
-        timestamp: new Date(d.timestamp).getTime(),
-        temperature: d.type === 'TEMPERATURE' ? d.value : null,
-        ph: d.type === 'PH' ? d.value : null,
-        oxygen: d.type === 'OXYGEN' ? d.value : null,
-    }));
-};
 
 /**
- * @hook useSensorData
- * @description Hook personalizado para obtener y gestionar los datos de los sensores de un estanque específico.
- * Combina la carga de datos históricos con actualizaciones en tiempo real a través de WebSockets.
- * @param {string | null} tankId - El ID del estanque del cual se quieren obtener los datos.
- * @returns Un objeto con los datos de los sensores, el estado de carga y posibles errores.
+ * Un hook de React para obtener datos históricos de los sensores.
+ *
+ * @param {HistoricalDataParams} initialParams - Los parámetros iniciales para la primera
+ * carga de datos al montar el componente.
+ * @returns {UseSensorDataResult} Un objeto con el estado de la carga de datos y la
+ * función para recargar.
+ * @example
+ * const initialParams = {
+ * startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+ * endDate: new Date().toISOString(),
+ * tankId: 'some-tank-id'
+ * };
+ * const { data, loading, error } = useSensorData(initialParams);
+ *
+ * if (loading) return <p>Cargando...</p>;
+ * if (error) return <p>Error: {error}</p>;
+ * return <MyChart sensorData={data} />;
  */
-export const useSensorData = (tankId: string | null) => {
+export const useSensorData = (initialParams: HistoricalDataParams) => {
   const [data, setData] = useState<SensorData[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchInitialData = useCallback(async () => {
-    if (!tankId) {
-        setData([]);
-        setLoading(false);
-        return;
-    }
-
+  const fetchData = useCallback(async (params: HistoricalDataParams) => {
     setLoading(true);
     setError(null);
     try {
-      const initialData = await getSensorData(tankId);
-      setData(initialData);
-    } catch (err) {
-      console.error(`Error al cargar los datos para el estanque ${tankId}:`, err);
-      setError('No se pudieron cargar los datos iniciales.');
+      const result = await getHistoricalData(params);
+      setData(result);
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar los datos de los sensores');
     } finally {
       setLoading(false);
     }
-  }, [tankId]);
+  }, []);
 
   useEffect(() => {
-    fetchInitialData();
-  }, [fetchInitialData]);
+    fetchData(initialParams);
+  }, [fetchData, initialParams]);
 
-  const handleNewData = useCallback((newDataPoint: SensorData) => {
-    if (newDataPoint.tankId === tankId) {
-      setData(currentData => {
-        const updatedData = [...currentData, newDataPoint];
-        return updatedData.slice(-500); 
-      });
-    }
-  }, [tankId]);
-
-  useEffect(() => {
-    socketService.connect();
-    socketService.onSensorData(handleNewData);
-
-    return () => {
-      socketService.offSensorData(handleNewData);
-      socketService.disconnect();
-    };
-  }, [handleNewData]);
-
-  return { data, loading, error };
+  return { data, loading, error, refetch: fetchData };
 };

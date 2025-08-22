@@ -1,77 +1,45 @@
 /**
  * @file reportService.ts
- * @description Servicio para gestionar la creación y descarga de reportes de datos.
+ * @description Servicio para la creación y gestión de reportes.
+ * @author Sistema de Acuaponía SENA
+ * @version 1.2.0
+ * @since 1.0.0
  */
 
-import { api } from '@/config/api'; // <-- CORRECCIÓN APLICADA: Importación nombrada
+import api from '@/config/api';
 import { Report, CreateReportDto } from '@/types';
 
 /**
- * Obtiene el historial de reportes generados por un usuario.
- *
- * @param {string} userId - El ID del usuario para obtener sus reportes.
- * @returns {Promise<Report[]>} Una promesa que resuelve a un arreglo de reportes.
- * @throws Lanza un error si la petición a la API falla.
+ * Obtiene una lista de todos los reportes generados.
+ * @returns {Promise<Report[]>} Una promesa que se resuelve con un array de reportes.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
-export const getReports = async (userId: string): Promise<Report[]> => {
-  try {
-    const response = await api.get(`/reports?userId=${userId}`);
-    return response.data;
-  } catch (error) {
-    console.error('Error al obtener los reportes:', error);
-    throw error;
-  }
+export const getReports = async (): Promise<Report[]> => {
+  const response = await api.get('/reports');
+  return response.data;
 };
 
 /**
- * Solicita la creación de un nuevo reporte en el backend.
- *
- * @param {CreateReportDto} reportData - Los parámetros para generar el reporte.
- * @returns {Promise<Report>} Una promesa que resuelve con el objeto del reporte recién creado (en estado PENDING o PROCESSING).
- * @throws Lanza un error si la petición a la API falla.
+ * Crea una solicitud para generar un nuevo reporte.
+ * @param {CreateReportDto} reportData - Los parámetros para el nuevo reporte.
+ * @returns {Promise<Report>} Una promesa que se resuelve con los datos del reporte creado.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
 export const createReport = async (reportData: CreateReportDto): Promise<Report> => {
-  try {
-    const response = await api.post('/reports', reportData);
-    return response.data;
-  } catch (error) {
-    console.error('Error al crear el reporte:', error);
-    throw error;
-  }
+  const response = await api.post('/reports', reportData);
+  return response.data;
 };
 
 /**
- * Descarga un reporte generado en el formato especificado (PDF o XLSX).
- *
+ * Descarga un archivo de reporte generado.
  * @param {string} reportId - El ID del reporte a descargar.
- * @param {'pdf' | 'xlsx'} format - El formato deseado para la descarga.
- * @throws Lanza un error si la descarga falla.
+ * @param {'pdf' | 'csv' | 'xlsx'} format - El formato en el que se desea descargar el reporte.
+ * @returns {Promise<Blob>} Una promesa que se resuelve con el archivo del reporte como un Blob.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
-export const downloadReport = async (reportId: string, format: 'pdf' | 'xlsx'): Promise<void> => {
-  try {
-    const response = await api.get(`/reports/${reportId}/download?format=${format}`, {
-      responseType: 'blob', // Importante para manejar la descarga de archivos
-    });
-
-    // Crear un enlace temporal en el navegador para iniciar la descarga
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    const contentDisposition = response.headers['content-disposition'];
-    let filename = `reporte-${reportId}.${format}`; // Nombre por defecto
-    if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
-        if (filenameMatch.length > 1) {
-            filename = filenameMatch[1];
-        }
-    }
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-  } catch (error) {
-    console.error(`Error al descargar el reporte ${reportId}:`, error);
-    throw new Error('No se pudo descargar el archivo.');
-  }
+export const downloadReport = async (reportId: string, format: 'pdf' | 'csv' | 'xlsx'): Promise<Blob> => {
+  const response = await api.get(`/reports/download/${reportId}/${format}`, {
+    responseType: 'blob', // Importante para manejar la descarga de archivos
+  });
+  return response.data;
 };

@@ -1,8 +1,10 @@
 /**
  * @file sensors.service.ts
- * @description Servicio para gestionar la lógica de negocio de los sensores.
- * @author kevin mariano
- * @version 2.0.0
+ * @description
+ * Lógica de negocio para la gestión de sensores. Provee los métodos para
+ * interactuar con la base de datos para operaciones CRUD de sensores.
+ * @author Sistema de Acuaponía SENA
+ * @version 2.1.0
  * @since 1.0.0
  */
 
@@ -10,68 +12,51 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSensorDto } from './dto/create-sensor.dto';
 import { UpdateSensorDto } from './dto/update-sensor.dto';
-import { Prisma, Sensor } from '@prisma/client';
+import { FindSensorsDto } from './dto/find-sensors.dto';
+import { Sensor } from '@prisma/client';
 
 @Injectable()
 export class SensorsService {
   constructor(private prisma: PrismaService) {}
 
-  create(createSensorDto: CreateSensorDto): Promise<Sensor> {
-    const sensorData: Prisma.SensorCreateInput = {
-      name: createSensorDto.name,
-      hardwareId: createSensorDto.hardwareId,
-      type: createSensorDto.type,
-      location: createSensorDto.location,
-      calibrationDate: createSensorDto.calibrationDate,
-      tank: { connect: { id: createSensorDto.tankId } },
-    };
-    return this.prisma.sensor.create({ data: sensorData });
+  async create(createSensorDto: CreateSensorDto): Promise<Sensor> {
+    return this.prisma.sensor.create({
+      data: createSensorDto,
+    });
   }
 
-  findAll(tankId?: string): Promise<Sensor[]> {
-    const whereClause: Prisma.SensorWhereInput = tankId ? { tankId } : {};
+  async findAll(findSensorsDto: FindSensorsDto): Promise<Sensor[]> {
+    const { tankId } = findSensorsDto;
     return this.prisma.sensor.findMany({
-      where: whereClause,
-      include: { tank: { select: { name: true } } },
-      orderBy: { createdAt: 'desc' },
+      where: {
+        tankId: tankId ? tankId : undefined,
+      },
+      include: {
+        tank: true,
+      },
     });
   }
+  
+  async findAllFlat(): Promise<Sensor[]> {
+    return this.prisma.sensor.findMany();
+  }
 
-  async findOne(id: string): Promise<Sensor | null> {
-    const sensor = await this.prisma.sensor.findUnique({
-      where: { id },
-      include: { tank: true, sensorData: { orderBy: { timestamp: 'desc' }, take: 20 } },
-    });
+  async findOne(id: string): Promise<Sensor> {
+    const sensor = await this.prisma.sensor.findUnique({ where: { id } });
     if (!sensor) {
-      throw new NotFoundException(`Sensor con ID ${id} no encontrado.`);
+      throw new NotFoundException(`Sensor con ID "${id}" no encontrado.`);
     }
     return sensor;
   }
 
   async update(id: string, updateSensorDto: UpdateSensorDto): Promise<Sensor> {
-    try {
-      return await this.prisma.sensor.update({
-        where: { id },
-        data: updateSensorDto,
-      });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        throw new NotFoundException(`Sensor con ID ${id} no encontrado para actualizar.`);
-      }
-      throw error;
-    }
+    return this.prisma.sensor.update({
+      where: { id },
+      data: updateSensorDto,
+    });
   }
 
   async remove(id: string): Promise<Sensor> {
-    try {
-      return await this.prisma.sensor.delete({
-        where: { id },
-      });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        throw new NotFoundException(`Sensor con ID ${id} no encontrado para eliminar.`);
-      }
-      throw error;
-    }
+    return this.prisma.sensor.delete({ where: { id } });
   }
 }

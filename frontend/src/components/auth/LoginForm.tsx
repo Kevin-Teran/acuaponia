@@ -199,7 +199,7 @@ export const LoginForm: React.FC = () => {
                         </button>
                     </form>
                     <div className="text-center mt-4">
-                        <a href="/recover-password" className="text-sm text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition-colors">
+                        <a href="/forgot-password" className="text-sm text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition-colors">
                             ¿Olvidaste tu contraseña?
                         </a>
                     </div>

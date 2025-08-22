@@ -1,111 +1,75 @@
-import { api } from '@/config/api';
-import { Sensor } from '@/types';
+/**
+ * @file sensorService.ts
+ * @description Servicio para gestionar las operaciones CRUD de los sensores.
+ * @author Sistema de Acuaponía SENA
+ * @version 1.2.0
+ * @since 1.0.0
+ */
+
+import api from '@/config/api';
+import { Sensor, CreateSensorDto, UpdateSensorDto } from '@/types';
 
 /**
- * Obtiene todos los sensores asociados a un usuario específico.
- * Esta función es útil para obtener una lista completa de sensores
- * que un usuario puede gestionar, antes de filtrar por tanque.
- *
- * @param {string} userId - El ID del usuario.
- * @returns {Promise<Sensor[]>} Una promesa que resuelve a un arreglo de sensores.
- * @throws {Error} Lanza un error si la petición a la API falla.
+ * Obtiene todos los sensores, opcionalmente filtrados por tanque.
+ * @param {string} [tankId] - ID opcional del tanque para filtrar los sensores.
+ * @returns {Promise<Sensor[]>} Una promesa que se resuelve con un array de sensores.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
-export const getSensors = async (userId: string): Promise<Sensor[]> => {
-    try {
-        const response = await api.get(`/sensors?userId=${userId}`);
-        return response.data;
-    } catch (error) {
-        console.error(`Error fetching sensors for user ${userId}:`, error);
-        throw error;
-    }
+export const getSensors = async (tankId?: string): Promise<Sensor[]> => {
+  const response = await api.get('/sensors', { params: { tankId } });
+  return response.data;
 };
 
 /**
- * Obtiene todos los sensores asociados a un tanque específico.
- *
- * @param {string} tankId - El ID del tanque.
- * @returns {Promise<Sensor[]>} Una promesa que resuelve a un arreglo de sensores.
- * @throws {Error} Lanza un error si la petición a la API falla.
- */
-export const getSensorsByTank = async (tankId: string): Promise<Sensor[]> => {
-  try {
-    const response = await api.get(`/sensors?tankId=${tankId}`);
-    return response.data;
-  } catch (error) {
-    console.error(`Error fetching sensors for tank ${tankId}:`, error);
-    throw error;
-  }
-};
-
-/**
- * Obtiene todos los sensores registrados en el sistema (ruta para administradores).
- *
- * @returns {Promise<Sensor[]>} Una promesa que resuelve a un arreglo con todos los sensores.
- * @throws {Error} Lanza un error si la petición a la API falla.
+ * Obtiene todos los sensores sin agrupar por tanque.
+ * @returns {Promise<Sensor[]>} Una promesa que se resuelve con un array de todos los sensores.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
 export const getAllSensors = async (): Promise<Sensor[]> => {
-  try {
     const response = await api.get('/sensors/all');
     return response.data;
-  } catch (error) {
-    console.error('Error fetching all sensors:', error);
-    throw error;
-  }
 };
 
 /**
- * @typedef {Omit<Sensor, 'id'>} SensorCreationData
- * @description Define la estructura de datos para crear un nuevo sensor,
- * omitiendo el campo 'id' que es generado por el backend.
+ * Obtiene un sensor específico por su ID.
+ * @param {string} id - El ID del sensor a obtener.
+ * @returns {Promise<Sensor>} Una promesa que se resuelve con los datos del sensor.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
+export const getSensorById = async (id: string): Promise<Sensor> => {
+    const response = await api.get(`/sensors/${id}`);
+    return response.data;
+};
 
 /**
- * Crea un nuevo sensor en el sistema.
- *
- * @param {SensorCreationData} sensorData - Los datos del sensor a crear.
- * @returns {Promise<Sensor>} Una promesa que resuelve al objeto del sensor creado.
- * @throws {Error} Lanza un error si la petición a la API falla.
+ * Crea un nuevo sensor.
+ * @param {CreateSensorDto} sensorData - Los datos para el nuevo sensor.
+ * @returns {Promise<Sensor>} Una promesa que se resuelve con los datos del sensor creado.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
-export const createSensor = async (sensorData: Omit<Sensor, 'id'>): Promise<Sensor> => {
-  try {
-    const response = await api.post('/sensors', sensorData);
-    return response.data;
-  } catch (error) {
-    console.error('Error creating sensor:', error);
-    throw error;
-  }
+export const createSensor = async (sensorData: CreateSensorDto): Promise<Sensor> => {
+  const response = await api.post('/sensors', sensorData);
+  return response.data;
 };
 
 /**
  * Actualiza un sensor existente.
- *
  * @param {string} id - El ID del sensor a actualizar.
- * @param {Partial<Sensor>} sensorData - Los datos a actualizar del sensor.
- * @returns {Promise<Sensor>} Una promesa que resuelve al objeto del sensor actualizado.
- * @throws {Error} Lanza un error si la petición a la API falla.
+ * @param {UpdateSensorDto} sensorData - Los nuevos datos para el sensor.
+ * @returns {Promise<Sensor>} Una promesa que se resuelve con los datos del sensor actualizado.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
-export const updateSensor = async (id: string, sensorData: Partial<Sensor>): Promise<Sensor> => {
-  try {
-    const response = await api.put(`/sensors/${id}`, sensorData);
-    return response.data;
-  } catch (error) {
-    console.error(`Error updating sensor ${id}:`, error);
-    throw error;
-  }
+export const updateSensor = async (id: string, sensorData: UpdateSensorDto): Promise<Sensor> => {
+  const response = await api.put(`/sensors/${id}`, sensorData);
+  return response.data;
 };
 
 /**
- * Elimina un sensor del sistema.
- *
+ * Elimina un sensor.
  * @param {string} id - El ID del sensor a eliminar.
- * @returns {Promise<void>} Una promesa que resuelve cuando el sensor ha sido eliminado.
- * @throws {Error} Lanza un error si la petición a la API falla.
+ * @returns {Promise<void>} Una promesa que se resuelve cuando el sensor ha sido eliminado.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
 export const deleteSensor = async (id: string): Promise<void> => {
-  try {
-    await api.delete(`/sensors/${id}`);
-  } catch (error) {
-    console.error(`Error deleting sensor ${id}:`, error);
-    throw error;
-  }
+  await api.delete(`/sensors/${id}`);
 };

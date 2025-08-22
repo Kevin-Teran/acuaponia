@@ -1,77 +1,64 @@
 /**
  * @file tankService.ts
- * @description Servicio para gestionar todas las operaciones CRUD relacionadas con los tanques.
+ * @description Servicio para gestionar las operaciones CRUD de los tanques.
+ * @author Sistema de Acuaponía SENA
+ * @version 1.2.0
+ * @since 1.0.0
  */
 
-import { api } from '@/config/api'; // <-- CORRECCIÓN APLICADA: Importación nombrada
-import { Tank } from '@/types';
+import api from '@/config/api';
+import { Tank, CreateTankDto, UpdateTankDto } from '@/types';
 
 /**
- * Obtiene todos los tanques asociados a un ID de usuario específico.
- * Si no se provee un userId, el backend debería devolver los tanques del usuario autenticado.
- *
- * @param {string} [userId] - El ID del usuario para filtrar los tanques.
- * @returns {Promise<Tank[]>} Una promesa que resuelve a un arreglo de tanques.
- * @throws Lanza un error si la petición a la API falla.
+ * Obtiene una lista de todos los tanques.
+ * @returns {Promise<Tank[]>} Una promesa que se resuelve con un array de tanques.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
-export const getTanks = async (userId?: string): Promise<Tank[]> => {
-  try {
-    const endpoint = userId ? `/tanks?userId=${userId}` : '/tanks';
-    const response = await api.get(endpoint);
-    return response.data;
-  } catch (error) {
-    console.error('Error al obtener los tanques:', error);
-    throw error;
-  }
+export const getTanks = async (): Promise<Tank[]> => {
+  const response = await api.get('/tanks');
+  return response.data;
 };
 
 /**
- * Crea un nuevo tanque en la base de datos.
- *
- * @param {Omit<Tank, 'id'>} tankData - Los datos del tanque a crear, sin el 'id'.
- * @returns {Promise<Tank>} Una promesa que resuelve con el objeto del tanque creado.
- * @throws Lanza un error si la petición a la API falla.
+ * Obtiene un tanque específico por su ID.
+ * @param {string} id - El ID del tanque a obtener.
+ * @returns {Promise<Tank>} Una promesa que se resuelve con los datos del tanque.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
-export const createTank = async (tankData: Omit<Tank, 'id'>): Promise<Tank> => {
-  try {
-    const response = await api.post('/tanks', tankData);
+export const getTankById = async (id: string): Promise<Tank> => {
+    const response = await api.get(`/tanks/${id}`);
     return response.data;
-  } catch (error) {
-    console.error('Error al crear el tanque:', error);
-    throw error;
-  }
 };
 
 /**
- * Actualiza la información de un tanque existente.
- *
+ * Crea un nuevo tanque.
+ * @param {CreateTankDto} tankData - Los datos del nuevo tanque.
+ * @returns {Promise<Tank>} Una promesa que se resuelve con los datos del tanque creado.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
+ */
+export const createTank = async (tankData: CreateTankDto): Promise<Tank> => {
+  const response = await api.post('/tanks', tankData);
+  return response.data;
+};
+
+/**
+ * Actualiza un tanque existente.
  * @param {string} id - El ID del tanque a actualizar.
- * @param {Partial<Tank>} tankData - Los campos del tanque a actualizar.
- * @returns {Promise<Tank>} Una promesa que resuelve con el objeto del tanque actualizado.
- * @throws Lanza un error si la petición a la API falla.
+ * @param {UpdateTankDto} tankData - Los nuevos datos para el tanque.
+ * @returns {Promise<Tank>} Una promesa que se resuelve con los datos del tanque actualizado.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
-export const updateTank = async (id: string, tankData: Partial<Tank>): Promise<Tank> => {
-  try {
-    const response = await api.put(`/tanks/${id}`, tankData);
-    return response.data;
-  } catch (error) {
-    console.error(`Error al actualizar el tanque ${id}:`, error);
-    throw error;
-  }
+export const updateTank = async (id: string, tankData: UpdateTankDto): Promise<Tank> => {
+  const response = await api.put(`/tanks/${id}`, tankData);
+  return response.data;
 };
 
 /**
- * Elimina un tanque de la base de datos.
- *
+ * Elimina un tanque.
  * @param {string} id - El ID del tanque a eliminar.
- * @returns {Promise<void>} Una promesa que resuelve cuando la operación se completa.
- * @throws Lanza un error si la petición a la API falla.
+ * @returns {Promise<void>} Una promesa que se resuelve cuando el tanque ha sido eliminado.
+ * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
 export const deleteTank = async (id: string): Promise<void> => {
-  try {
-    await api.delete(`/tanks/${id}`);
-  } catch (error) {
-    console.error(`Error al eliminar el tanque ${id}:`, error);
-    throw error;
-  }
+  await api.delete(`/tanks/${id}`);
 };

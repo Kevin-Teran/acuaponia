@@ -1,8 +1,6 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
   "/(auth)/login/page": "app/(auth)/login/page.js",
-  "/(main)/dashboard/page": "app/(main)/dashboard/page.js",
-  "/(main)/predictions/page": "app/(main)/predictions/page.js",
-  "/(main)/ai-assistant/page": "app/(main)/ai-assistant/page.js",
-  "/(main)/reports/page": "app/(main)/reports/page.js"
+  "/(main)/users/page": "app/(main)/users/page.js",
+  "/(main)/dashboard/page": "app/(main)/dashboard/page.js"
 }

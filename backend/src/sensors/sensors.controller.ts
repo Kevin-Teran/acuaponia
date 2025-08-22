@@ -1,62 +1,63 @@
 /**
  * @file sensors.controller.ts
- * @description Controlador para manejar las rutas relacionadas con los sensores.
- * @author kevin mariano
- * @version 2.0.0
+ * @description
+ * Controlador de NestJS para gestionar las rutas relacionadas con los sensores.
+ * Provee endpoints para las operaciones CRUD.
+ * @author Sistema de Acuaponía SENA
+ * @version 1.2.0
  * @since 1.0.0
  */
 
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, ParseUUIDPipe, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, Query } from '@nestjs/common';
 import { SensorsService } from './sensors.service';
 import { CreateSensorDto } from './dto/create-sensor.dto';
 import { UpdateSensorDto } from './dto/update-sensor.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { FindSensorsDto } from './dto/find-sensors.dto';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
-@ApiBearerAuth()
-@ApiTags('Sensors')
 @Controller('sensors')
-@UseGuards(JwtAuthGuard)
 export class SensorsController {
   constructor(private readonly sensorsService: SensorsService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Crear un nuevo sensor' })
+  @Roles(Role.ADMIN)
   create(@Body() createSensorDto: CreateSensorDto) {
     return this.sensorsService.create(createSensorDto);
   }
 
-  // --- ENDPOINT MODIFICADO PARA SOLUCIONAR EL ERROR 400 ---
+  /**
+   * Obtiene sensores, opcionalmente filtrados por tankId.
+   */
   @Get()
-  @ApiOperation({ summary: 'Obtener sensores, opcionalmente filtrados por tanque' })
-  @ApiQuery({ name: 'tankId', required: false, description: 'ID del tanque para filtrar sensores', type: 'string' })
-  findAll(@Query('tankId') tankId?: string) {
-    // El servicio ya maneja el caso donde tankId es opcional.
-    return this.sensorsService.findAll(tankId);
+  findAll(@Query() findSensorsDto: FindSensorsDto) {
+    // CORRECCIÓN 1: Se pasa el DTO completo, que puede contener tankId.
+    return this.sensorsService.findAll(findSensorsDto);
   }
 
+  /**
+   * Obtiene una lista plana de todos los sensores sin filtros.
+   */
   @Get('all')
-  @ApiOperation({ summary: 'Obtener todos los sensores del sistema' })
-  @ApiResponse({ status: 200, description: 'Lista de todos los sensores del sistema.'})
-  findAllSystemSensors() {
-    return this.sensorsService.findAll();
+  findAllFlat() {
+    // CORRECCIÓN 2: Se llama al método correcto 'findAllFlat' que no necesita argumentos.
+    return this.sensorsService.findAllFlat();
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Obtener un sensor por su ID' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
+  findOne(@Param('id') id: string) {
     return this.sensorsService.findOne(id);
   }
 
   @Put(':id')
-  @ApiOperation({ summary: 'Actualizar un sensor existente' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() updateSensorDto: UpdateSensorDto) {
+  @Roles(Role.ADMIN)
+  update(@Param('id') id: string, @Body() updateSensorDto: UpdateSensorDto) {
     return this.sensorsService.update(id, updateSensorDto);
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Eliminar un sensor' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
+  @Roles(Role.ADMIN)
+  remove(@Param('id') id: string) {
     return this.sensorsService.remove(id);
   }
 }
