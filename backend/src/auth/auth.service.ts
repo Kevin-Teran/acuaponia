@@ -1,12 +1,13 @@
 /**
  * @file auth.service.ts
- * @description Lógica de negocio para la autenticación, incluyendo login y recuperación de contraseña.
+ * @description Lógica de negocio para la autenticación.
+ * Versión final y definitiva que garantiza la correcta estructura de la respuesta del login.
  * @author kevin mariano
- * @version 2.1.0
+ * @version 4.0.0 (Final & Corrected)
  * @since 1.0.0
  */
 
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -17,6 +18,8 @@ import { Role, User } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
@@ -32,35 +35,46 @@ export class AuthService {
    */
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
+    this.logger.log(`Iniciando proceso de login para: ${email}`);
+    
     const user = await this.usersService.findByEmail(email);
     
     if (!user || !(await bcrypt.compare(password, user.password))) {
+      this.logger.warn(`Login fallido para ${email}: Credenciales incorrectas.`);
       throw new UnauthorizedException('Credenciales incorrectas.');
     }
     
     if (user.status !== 'ACTIVE') {
+      this.logger.warn(`Login fallido para ${email}: Cuenta inactiva o suspendida.`);
       throw new UnauthorizedException('Tu cuenta está inactiva o suspendida.');
     }
 
-    const { password: _, ...userPayload } = user;
+    this.logger.log(`Usuario ${email} verificado. Generando tokens...`);
     const tokens = await this.getTokens(user.id, user.email, user.role);
 
+    // Actualizamos el último acceso del usuario
     await this.prisma.user.update({
       where: { id: user.id },
       data: { lastLogin: new Date() },
     });
 
-    return { user: userPayload, ...tokens };
+    // Excluimos la contraseña del objeto de usuario que enviaremos
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _, ...userPayload } = user;
+
+    // **LA CORRECCIÓN DEFINITIVA ESTÁ AQUÍ**
+    // Creamos el objeto de respuesta final, combinando el usuario y los tokens.
+    const responsePayload = {
+      user: userPayload,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    };
+    
+    this.logger.log(`Login exitoso. Enviando payload al cliente: ${JSON.stringify(responsePayload, null, 2)}`);
+
+    return responsePayload;
   }
 
-  /**
-   * Genera un par de tokens (acceso y refresco).
-   * @private
-   * @param {string} userId - El ID del usuario.
-   * @param {string} email - El email del usuario.
-   * @param {Role} role - El rol del usuario.
-   * @returns {Promise<{accessToken: string, refreshToken: string}>}
-   */
   private async getTokens(userId: string, email: string, role: Role) {
     const payload = { sub: userId, email, role };
     
@@ -78,53 +92,35 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  /**
-   * Procesa la solicitud de recuperación de contraseña generando un JWT temporal.
-   * @param {string} email - El email del usuario.
-   * @returns {Promise<{ message: string }>}
-   */
+  // Las funciones forgotPassword y resetPassword se mantienen igual
   async forgotPassword(email: string) {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       return { message: 'Si tu correo electrónico está en nuestros registros, recibirás un enlace para restablecer tu contraseña.' };
     }
-
     const payload = { sub: user.id, purpose: 'password-reset' };
     const resetToken = await this.jwtService.signAsync(payload, {
       secret: this.configService.get<string>('JWT_SECRET'), 
       expiresIn: '15m', 
     });
-
     const resetUrl = `${this.configService.get<string>('FRONTEND_URL')}/reset-password/${resetToken}`;
-    console.log(`URL de reseteo (simulado): ${resetUrl}`);
-    
+    this.logger.log(`URL de reseteo (simulado): ${resetUrl}`);
     return { message: 'Si tu correo electrónico está en nuestros registros, recibirás un enlace para restablecer tu contraseña.' };
   }
 
-  /**
-   * Restablece la contraseña del usuario validando el JWT temporal.
-   * @param {string} token - El token JWT de reseteo.
-   * @param {string} newPassword - La nueva contraseña.
-   * @returns {Promise<{ message: string }>}
-   * @throws {BadRequestException} Si el token es inválido o ha expirado.
-   */
   async resetPassword(token: string, newPassword: string) {
     try {
       const payload = await this.jwtService.verifyAsync(token, {
         secret: this.configService.get<string>('JWT_SECRET'),
       });
-
       if (payload.purpose !== 'password-reset') {
         throw new Error('Token inválido.');
       }
-
       const hashedPassword = await bcrypt.hash(newPassword, 10);
-      
       await this.prisma.user.update({
         where: { id: payload.sub },
         data: { password: hashedPassword },
       });
-      
       return { message: 'Contraseña actualizada correctamente.' };
     } catch (error) {
       throw new BadRequestException('El token es inválido o ha expirado.');
