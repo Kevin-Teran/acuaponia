@@ -1,6 +1,8 @@
 /**
  * @file jwt.strategy.ts
- * @description Estrategia de autenticación JWT para validar y proteger rutas.
+ * @description Estrategia de Passport.js para validar tokens de acceso JWT.
+ * Se encarga de extraer el token de la cabecera de autorización, verificar su firma
+ * y extraer el payload del usuario para adjuntarlo a la petición.
  * @author kevin mariano
  * @version 2.0.0
  * @since 1.0.0
@@ -14,20 +16,16 @@ import { UsersService } from '../../users/users.service';
 import { User } from '@prisma/client';
 
 /**
- * @typedef {object} JwtPayload
- * @description Define la estructura del payload decodificado del token JWT.
- * @property {string} sub - El ID del usuario (subject).
- * @property {string} email - El email del usuario.
- * @property {string} role - El rol del usuario.
+ * @class JwtStrategy
+ * @description Implementa la lógica de validación de tokens JWT para proteger rutas.
+ * @extends {PassportStrategy(Strategy)}
  */
-
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   /**
-   * @public
    * @constructor
    * @param {ConfigService} configService - Servicio para acceder a variables de entorno.
-   * @param {UsersService} usersService - Servicio para interactuar con los datos de usuarios.
+   * @param {UsersService} usersService - Servicio para interactuar con la base de datos de usuarios.
    */
   constructor(
     private readonly configService: ConfigService,
@@ -41,27 +39,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   /**
-   * Valida el payload del token y devuelve el usuario si es válido.
-   * Este método es invocado por Passport después de verificar la firma del JWT en rutas protegidas.
-   *
-   * @public
-   * @async
-   * @param {JwtPayload} payload - El payload decodificado del token JWT.
-   * @returns {Promise<Omit<User, 'password'>>} El objeto de usuario sin la contraseña.
-   * @throws {UnauthorizedException} Si el usuario no se encuentra en la base de datos o su estado es inactivo.
-   * @example
-   * // Passport invoca este método internamente.
-   * const user = await validate({ sub: 'user-id-123', email: 'test@example.com', role: 'ADMIN' });
+   * @function validate
+   * @description Método que se ejecuta después de que el token es decodificado y verificado con éxito.
+   * @param {any} payload - El payload decodificado del JWT (generalmente { sub: userId, email: userEmail }).
+   * @returns {Promise<User>} El objeto de usuario completo que se adjuntará a `request.user`.
+   * @throws {UnauthorizedException} Si el usuario extraído del payload ya no existe.
    */
-  async validate(payload: { sub: string; email: string; role: string }): Promise<Omit<User, 'password'>> {
+  async validate(payload: any): Promise<User> {
     const user = await this.usersService.findOne(payload.sub);
 
-    if (!user || user.status !== 'ACTIVE') {
-      throw new UnauthorizedException('Acceso denegado. El usuario no es válido o está inactivo.');
+    if (!user) {
+      throw new UnauthorizedException('Token inválido: el usuario no fue encontrado.');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password, ...result } = user;
-    return result;
+    return user;
   }
 }

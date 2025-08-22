@@ -2,68 +2,70 @@
  * @file userService.ts
  * @description Servicio para gestionar las operaciones CRUD de usuarios.
  * @author kevin mariano
- * @version 2.0.0
+ * @version 2.3.0
  * @since 1.0.0
  */
 
 import api from '@/config/api';
-import { User, CreateUserDto, UpdateUserDto } from '@/types';
+import { User, CreateUserDto, UpdateUserDto, UserFromApi } from '@/types';
 
 /**
- * Obtiene una lista de todos los usuarios.
- * @returns {Promise<User[]>} Una promesa que se resuelve con un array de usuarios.
- * @throws {Error} Si ocurre un error durante la llamada a la API.
+ * @function getUsers
+ * @description Obtiene una lista de todos los usuarios desde la API.
+ * @returns {Promise<UserFromApi[]>} Una promesa que se resuelve con un array de usuarios.
+ * @throws {Error} Si la petición falla.
  */
-const getUsers = async (): Promise<User[]> => {
-  const response = await api.get('/users');
+const getUsers = async (): Promise<UserFromApi[]> => {
+  const response = await api.get<UserFromApi[]>('/users');
   return response.data;
 };
 
 /**
- * Obtiene un usuario específico por su ID.
- * @param {string} id - El ID del usuario a obtener.
- * @returns {Promise<User>} Una promesa que se resuelve con los datos del usuario.
+ * @function getUserById
+ * @description Obtiene un usuario específico por su ID.
+ * @param {string} id - El ID del usuario.
+ * @returns {Promise<User>}
  */
 const getUserById = async (id: string): Promise<User> => {
-  const response = await api.get(`/users/${id}`);
+  const response = await api.get<User>(`/users/${id}`);
   return response.data;
 };
 
 /**
- * Crea un nuevo usuario.
- * @param {CreateUserDto} userData - Los datos del nuevo usuario.
- * @returns {Promise<User>} Una promesa que se resuelve con los datos del usuario creado.
+ * @function createUser
+ * @description Crea un nuevo usuario.
+ * @param {CreateUserDto} userData - Datos del nuevo usuario.
+ * @returns {Promise<User>}
  */
 const createUser = async (userData: CreateUserDto): Promise<User> => {
-  const response = await api.post('/users', userData);
+  const response = await api.post<User>('/users', userData);
   return response.data;
 };
 
 /**
- * Actualiza los datos de un usuario existente.
- * @param {string} id - El ID del usuario a actualizar.
- * @param {UpdateUserDto} userData - Los nuevos datos para el usuario.
- * @returns {Promise<User>} Una promesa que se resuelve con los datos del usuario actualizado.
+ * @function updateUser
+ * @description Actualiza un usuario existente.
+ * @param {string} id - ID del usuario.
+ * @param {UpdateUserDto} userData - Datos a actualizar.
+ * @returns {Promise<User>}
  */
 const updateUser = async (id: string, userData: UpdateUserDto): Promise<User> => {
-  const response = await api.put(`/users/${id}`, userData);
+  const response = await api.put<User>(`/users/${id}`, userData);
   return response.data;
 };
 
 /**
- * Elimina un usuario del sistema.
- * @param {string} id - El ID del usuario a eliminar.
- * @returns {Promise<void>} Una promesa que se resuelve cuando el usuario es eliminado.
+ * @function deleteUser
+ * @description Elimina un usuario.
+ * @param {string} id - ID del usuario.
+ * @returns {Promise<void>}
  */
 const deleteUser = async (id: string): Promise<void> => {
   await api.delete(`/users/${id}`);
 };
 
-/**
- * @description Objeto que agrupa y exporta todos los métodos del servicio de usuarios.
- */
 export const userService = {
-  getUsers,
+  getUsers, 
   getUserById,
   createUser,
   updateUser,

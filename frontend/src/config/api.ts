@@ -1,37 +1,40 @@
 /**
  * @file api.ts
- * @description Configuración centralizada del cliente Axios para las peticiones a la API.
+ * @description Configuración centralizada de la instancia de Axios.
+ * Intercepta las peticiones para adjuntar el token de autenticación.
  * @author kevin mariano
- * @version 2.0.0
+ * @version 1.1.0
  * @since 1.0.0
  */
 
 import axios from 'axios';
 
-/**
- * @type {import('axios').AxiosInstance}
- * @description Instancia de Axios configurada con la URL base de la API.
- */
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api',
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
 /**
- * @function
- * @description Interceptor de peticiones de Axios para inyectar el token de autenticación.
- * Obtiene el token del localStorage y lo añade al encabezado 'Authorization' de cada petición.
- *
- * @param {import('axios').InternalAxiosRequestConfig} config - La configuración de la petición saliente.
- * @returns {import('axios').InternalAxiosRequestConfig} La configuración modificada con el token.
+ * @description Interceptor de peticiones de Axios.
+ * Este es el código clave que soluciona el error 401 Unauthorized.
  */
-api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+api.interceptors.request.use(
+  (config) => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
   }
-  return config;
-});
+);
 
 export default api;
