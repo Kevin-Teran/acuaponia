@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import * as cookieParser from 'cookie-parser'; 
+import * as cookieParser from 'cookie-parser';
 import { setupSwagger } from './utils/swagger';
 
 async function bootstrap() {
@@ -11,24 +11,26 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   app.enableCors({
-    origin: 'http://localhost:3000', 
-    credentials: true, 
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    credentials: true,
   });
 
-  app.use(cookieParser()); 
+  app.use(cookieParser());
 
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    transform: true,
-    forbidNonWhitelisted: true,
-  }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
 
   setupSwagger(app);
 
-  const port = process.env.PORT || 5001;
+  const port = process.env.PORT || 5001; 
   await app.listen(port);
 
-  logger.log(`🚀 Aplicación corriendo en: http://localhost:${port}`);
-  logger.log(`📚 Documentación de API disponible en: http://localhost:${port}/api-docs`);
+  logger.log(`🚀 La aplicación está corriendo en: http://localhost:${port}/api`);
+  logger.log(`📄 La documentación de Swagger está disponible en: http://localhost:${port}/docs`);
 }
 bootstrap();

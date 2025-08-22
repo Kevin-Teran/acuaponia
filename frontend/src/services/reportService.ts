@@ -1,49 +1,77 @@
-import api from '@/config/api';
-import { Report } from '@/types';
-
 /**
- * @fileoverview Servicio para interactuar con los endpoints de `/api/reports` del backend.
+ * @file reportService.ts
+ * @description Servicio para gestionar la creación y descarga de reportes de datos.
  */
 
+import { api } from '@/config/api'; // <-- CORRECCIÓN APLICADA: Importación nombrada
+import { Report, CreateReportDto } from '@/types';
+
 /**
- * @function getReports
- * @description Obtiene el historial de reportes generados para un usuario.
- * @param {string | undefined} userId - ID del usuario. Si es admin, puede ser opcional.
- * @returns {Promise<Report[]>} Una promesa que se resuelve con un array de reportes.
+ * Obtiene el historial de reportes generados por un usuario.
+ *
+ * @param {string} userId - El ID del usuario para obtener sus reportes.
+ * @returns {Promise<Report[]>} Una promesa que resuelve a un arreglo de reportes.
+ * @throws Lanza un error si la petición a la API falla.
  */
-export const getReports = async (userId?: string): Promise<Report[]> => {
-  const response = await api.get('/reports', { params: userId ? { userId } : {} });
-  return response.data;
+export const getReports = async (userId: string): Promise<Report[]> => {
+  try {
+    const response = await api.get(`/reports?userId=${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener los reportes:', error);
+    throw error;
+  }
 };
 
 /**
- * @function createReport
- * @description Crea un registro de reporte en el backend.
- * @param {object} reportData - Datos del reporte a crear.
- * @returns {Promise<Report>} El nuevo reporte creado.
+ * Solicita la creación de un nuevo reporte en el backend.
+ *
+ * @param {CreateReportDto} reportData - Los parámetros para generar el reporte.
+ * @returns {Promise<Report>} Una promesa que resuelve con el objeto del reporte recién creado (en estado PENDING o PROCESSING).
+ * @throws Lanza un error si la petición a la API falla.
  */
-export const createReport = async (reportData: any): Promise<Report> => {
-  const response = await api.post('/reports', reportData);
-  return response.data;
+export const createReport = async (reportData: CreateReportDto): Promise<Report> => {
+  try {
+    const response = await api.post('/reports', reportData);
+    return response.data;
+  } catch (error) {
+    console.error('Error al crear el reporte:', error);
+    throw error;
+  }
 };
 
 /**
- * @function downloadReport
- * @description Descarga un reporte generado desde el backend.
- * @param {string} reportId - ID del reporte a descargar.
- * @param {'pdf' | 'xlsx'} format - Formato de archivo deseado.
- * @returns {Promise<void>}
+ * Descarga un reporte generado en el formato especificado (PDF o XLSX).
+ *
+ * @param {string} reportId - El ID del reporte a descargar.
+ * @param {'pdf' | 'xlsx'} format - El formato deseado para la descarga.
+ * @throws Lanza un error si la descarga falla.
  */
 export const downloadReport = async (reportId: string, format: 'pdf' | 'xlsx'): Promise<void> => {
-  const response = await api.get(`/reports/download/${reportId}/${format}`, {
-    responseType: 'blob',
-  });
+  try {
+    const response = await api.get(`/reports/${reportId}/download?format=${format}`, {
+      responseType: 'blob', // Importante para manejar la descarga de archivos
+    });
 
-  const url = window.URL.createObjectURL(new Blob([response.data]));
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', `reporte-${reportId}.${format}`);
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+    // Crear un enlace temporal en el navegador para iniciar la descarga
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    const contentDisposition = response.headers['content-disposition'];
+    let filename = `reporte-${reportId}.${format}`; // Nombre por defecto
+    if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+        if (filenameMatch.length > 1) {
+            filename = filenameMatch[1];
+        }
+    }
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error(`Error al descargar el reporte ${reportId}:`, error);
+    throw new Error('No se pudo descargar el archivo.');
+  }
 };

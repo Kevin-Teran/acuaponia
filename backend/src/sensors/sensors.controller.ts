@@ -1,3 +1,11 @@
+/**
+ * @file sensors.controller.ts
+ * @description Controlador para manejar las rutas relacionadas con los sensores.
+ * @author kevin mariano
+ * @version 2.0.0
+ * @since 1.0.0
+ */
+
 import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, ParseUUIDPipe, BadRequestException } from '@nestjs/common';
 import { SensorsService } from './sensors.service';
 import { CreateSensorDto } from './dto/create-sensor.dto';
@@ -18,13 +26,12 @@ export class SensorsController {
     return this.sensorsService.create(createSensorDto);
   }
 
+  // --- ENDPOINT MODIFICADO PARA SOLUCIONAR EL ERROR 400 ---
   @Get()
-  @ApiOperation({ summary: 'Obtener todos los sensores de un tanque específico' })
-  @ApiQuery({ name: 'tankId', required: true, description: 'ID del tanque para filtrar sensores', type: 'string' })
-  findAll(@Query('tankId', ParseUUIDPipe) tankId: string) {
-    if (!tankId) {
-      throw new BadRequestException('El parámetro tankId es requerido.');
-    }
+  @ApiOperation({ summary: 'Obtener sensores, opcionalmente filtrados por tanque' })
+  @ApiQuery({ name: 'tankId', required: false, description: 'ID del tanque para filtrar sensores', type: 'string' })
+  findAll(@Query('tankId') tankId?: string) {
+    // El servicio ya maneja el caso donde tankId es opcional.
     return this.sensorsService.findAll(tankId);
   }
 
@@ -32,7 +39,7 @@ export class SensorsController {
   @ApiOperation({ summary: 'Obtener todos los sensores del sistema' })
   @ApiResponse({ status: 200, description: 'Lista de todos los sensores del sistema.'})
   findAllSystemSensors() {
-    return this.sensorsService.findAll(); // Llama al servicio sin tankId
+    return this.sensorsService.findAll();
   }
 
   @Get(':id')

@@ -1,84 +1,63 @@
-/**
- * @file users.controller.ts
- * @description Controlador para la gestión de usuarios (CRUD).
- */
- import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Req, ParseUUIDPipe, HttpCode, HttpStatus } from '@nestjs/common';
- import { UsersService, UserWithoutPassword } from './users.service';
- import { CreateUserDto } from './dto/create-user.dto';
- import { UpdateUserDto } from './dto/update-user.dto';
- import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
- import { RolesGuard } from '../auth/guards/roles.guard';
- import { Roles } from '../auth/decorators/roles.decorator';
- import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
- import { Role } from '@prisma/client';
- 
- /**
-  * @controller UsersController
-  * @description Endpoints para la gestión de usuarios. Protegido por rol de ADMIN.
-  */
- @ApiBearerAuth()
- @ApiTags('Usuarios')
- @Controller('users')
- @UseGuards(JwtAuthGuard, RolesGuard)
- @Roles(Role.ADMIN)
- export class UsersController {
-   constructor(private readonly usersService: UsersService) {}
- 
-   @Post()
-   @HttpCode(HttpStatus.CREATED)
-   @ApiOperation({ summary: 'Crear un nuevo usuario' })
-   @ApiResponse({ status: 201, description: 'El usuario ha sido creado exitosamente.' })
-   @ApiResponse({ status: 400, description: 'Datos de entrada inválidos.' })
-   @ApiResponse({ status: 409, description: 'El correo electrónico ya está registrado.' })
-   create(@Body() createUserDto: CreateUserDto): Promise<UserWithoutPassword> {
-     return this.usersService.create(createUserDto);
-   }
- 
-   @Get()
-   @ApiOperation({ summary: 'Obtener todos los usuarios' })
-   @ApiResponse({ status: 200, description: 'Lista de todos los usuarios.' })
-   findAll() {
-     return this.usersService.findAll();
-   }
- 
-   @Get('all')
-   @ApiOperation({ summary: 'Obtener una lista simplificada de usuarios' })
-   @ApiResponse({ status: 200, description: 'Lista de usuarios con id, nombre y email.' })
-   findAllSimple() {
-     return this.usersService.findAllSimple();
-   }
- 
-   @Get(':id')
-   @ApiOperation({ summary: 'Obtener un usuario por su ID' })
-   @ApiParam({ name: 'id', description: 'ID del usuario (UUID)' })
-   @ApiResponse({ status: 200, description: 'Detalles del usuario.' })
-   @ApiResponse({ status: 404, description: 'Usuario no encontrado.' })
-   findOne(@Param('id', ParseUUIDPipe) id: string): Promise<UserWithoutPassword> {
-     return this.usersService.findOneWithRelations(id);
-   }
-   
-   @Put(':id')
-   @ApiOperation({ summary: 'Actualizar un usuario existente' })
-   @ApiParam({ name: 'id', description: 'ID del usuario a actualizar (UUID)' })
-   @ApiResponse({ status: 200, description: 'El usuario ha sido actualizado exitosamente.' })
-   @ApiResponse({ status: 404, description: 'Usuario no encontrado.' })
-   @ApiResponse({ status: 403, description: 'Acción no permitida.' })
-   update(
-     @Param('id', ParseUUIDPipe) id: string, 
-     @Body() updateUserDto: UpdateUserDto, 
-     @Req() req
-   ): Promise<UserWithoutPassword> {
-     return this.usersService.update(id, updateUserDto, req.user);
-   }
- 
-   @Delete(':id')
-   @HttpCode(HttpStatus.OK)
-   @ApiOperation({ summary: 'Eliminar un usuario' })
-   @ApiParam({ name: 'id', description: 'ID del usuario a eliminar (UUID)' })
-   @ApiResponse({ status: 200, description: 'El usuario ha sido eliminado exitosamente.' })
-   @ApiResponse({ status: 404, description: 'Usuario no encontrado.' })
-   @ApiResponse({ status: 403, description: 'No se puede eliminar a sí mismo.' })
-   remove(@Param('id', ParseUUIDPipe) id: string, @Req() req): Promise<UserWithoutPassword> {
-     return this.usersService.remove(id, req.user);
-   }
- }
+import { Controller, Get, Post, Body, Param, Delete, Put, Req } from '@nestjs/common';
+import { UsersService } from './users.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role, User } from '@prisma/client';
+import { Request } from 'express';
+import { Public } from '../auth/decorators/public.decorator';
+
+@Controller('users')
+export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
+
+  /**
+   * Crea un nuevo usuario. Puede ser una ruta pública si se permite el registro,
+   * o protegida para que solo un admin pueda crear usuarios.
+   * Por seguridad, la dejaremos protegida por defecto.
+   */
+  @Post()
+  @Roles(Role.ADMIN) 
+  create(@Body() createUserDto: CreateUserDto) {
+    return this.usersService.create(createUserDto);
+  }
+
+  /**
+   * Obtiene una lista de todos los usuarios.
+   * Protegido para que solo los administradores puedan acceder.
+   */
+  @Get()
+  @Roles(Role.ADMIN)
+  findAll() {
+    return this.usersService.findAll();
+  }
+
+  /**
+   * Obtiene un usuario específico por su ID.
+   * Protegido, pero la lógica de permisos está en el servicio.
+   */
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.usersService.findOne(id);
+  }
+
+  /**
+   * Actualiza un usuario.
+   * El usuario que realiza la acción se obtiene de la request.
+   */
+  @Put(':id')
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Req() req: Request) {
+    const currentUser = req.user as User;
+    return this.usersService.update(id, updateUserDto, currentUser);
+  }
+
+  /**
+   * Elimina un usuario.
+   * El usuario que realiza la acción se obtiene de la request.
+   */
+  @Delete(':id')
+  remove(@Param('id') id: string, @Req() req: Request) {
+    const currentUser = req.user as User;
+    return this.usersService.remove(id, currentUser);
+  }
+}

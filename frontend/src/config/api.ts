@@ -1,32 +1,31 @@
 import axios from 'axios';
 
+const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5001/api'; // <-- Lee desde frontend/.env.local
+
 /**
  * @description Instancia de Axios pre-configurada para la API.
  */
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api',
+  baseURL,
   /**
    * @property {boolean} withCredentials - ¡CRÍTICO!
-   * Esto permite a Axios enviar y recibir automáticamente las cookies
-   * seguras (httpOnly) en cada petición al backend.
+   * Permite a Axios enviar y recibir cookies seguras (httpOnly) en cada petición.
    */
   withCredentials: true,
 });
 
 /**
- * @description Interceptor de respuestas para manejar errores de forma centralizada.
- * Particularmente útil para el error 401 (No Autorizado), que indica una sesión expirada.
+ * @description Interceptor para manejar errores 401 (Sesión Expirada) de forma global.
  */
 api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      console.error('Sesión expirada o inválida. Se requiere re-autenticación.');
+      console.error('Sesión expirada o inválida. Disparando evento de logout global.');
+      window.dispatchEvent(new Event('auth-error'));
     }
     return Promise.reject(error);
   },
 );
 
-export default api;
+export { api };

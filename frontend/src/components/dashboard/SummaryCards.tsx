@@ -29,7 +29,7 @@ const cardConfig = {
   },
 };
 
-const SummaryCards: React.FC<SummaryCardsProps> = ({ selectedTankId }) => {
+export const SummaryCards: React.FC<SummaryCardsProps> = ({ selectedTankId }) => {
   const [latestData, setLatestData] = useState<SensorData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -99,5 +99,3 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({ selectedTankId }) => {
     </div>
   );
 };
-
-export default SummaryCards;

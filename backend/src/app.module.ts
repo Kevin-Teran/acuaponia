@@ -10,14 +10,13 @@ import { ReportsModule } from './reports/reports.module';
 import { EventsModule } from './events/events.module';
 import { DataModule } from './data/data.module';
 import { MqttModule } from './mqtt/mqtt.module';
-
-import * as path from 'path';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: path.resolve(__dirname, '../../../.env'), 
     }),
     PrismaModule,
     AuthModule,
@@ -29,6 +28,12 @@ import * as path from 'path';
     EventsModule,
     SettingsModule,
     MqttModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
   ],
 })
 export class AppModule {}

@@ -39,7 +39,7 @@ const gaugeConfig = {
   },
 };
 
-const GaugeChart: React.FC<GaugeChartProps> = ({ sensorType, tankId }) => {
+export const GaugeChart: React.FC<GaugeChartProps> = ({ sensorType, tankId }) => {
   const [value, setValue] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const config = gaugeConfig[sensorType];
@@ -108,5 +108,3 @@ const GaugeChart: React.FC<GaugeChartProps> = ({ sensorType, tankId }) => {
     </Card>
   );
 };
-
-export default GaugeChart;
