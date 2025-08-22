@@ -4,7 +4,7 @@
  * Controlador de NestJS que gestiona las rutas de autenticación. Expone los
  * endpoints para el inicio de sesión, cierre de sesión, obtención del perfil
  * del usuario y el flujo de recuperación de contraseña.
- * @author Sistema de Acuaponía SENA
+ * @author kevin mariano
  * @version 1.2.0
  * @since 1.0.0
  */

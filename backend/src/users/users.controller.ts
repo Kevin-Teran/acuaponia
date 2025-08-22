@@ -1,63 +1,72 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, Req } from '@nestjs/common';
+/**
+ * @file users.controller.ts
+ * @description Controlador para gestionar las operaciones CRUD de usuarios.
+ * @author Sistema de Acuaponía SENA
+ * @version 2.0.0
+ * @since 1.0.0
+ */
+
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { Role, User } from '@prisma/client';
-import { Request } from 'express';
-import { Public } from '../auth/decorators/public.decorator';
+import { Role } from '@prisma/client';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
+@ApiTags('Users')
+@ApiBearerAuth() 
+@UseGuards(JwtAuthGuard, RolesGuard) 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  /**
-   * Crea un nuevo usuario. Puede ser una ruta pública si se permite el registro,
-   * o protegida para que solo un admin pueda crear usuarios.
-   * Por seguridad, la dejaremos protegida por defecto.
-   */
   @Post()
-  @Roles(Role.ADMIN) 
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Crear un nuevo usuario' })
+  @ApiResponse({ status: 201, description: 'El usuario ha sido creado exitosamente.' })
+  @ApiResponse({ status: 403, description: 'Acceso denegado.' })
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
 
-  /**
-   * Obtiene una lista de todos los usuarios.
-   * Protegido para que solo los administradores puedan acceder.
-   */
   @Get()
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.OPERATOR)
+  @ApiOperation({ summary: 'Obtener todos los usuarios' })
+  @ApiResponse({ status: 200, description: 'Lista de usuarios obtenida.' })
   findAll() {
     return this.usersService.findAll();
   }
 
-  /**
-   * Obtiene un usuario específico por su ID.
-   * Protegido, pero la lógica de permisos está en el servicio.
-   */
   @Get(':id')
+  @Roles(Role.ADMIN, Role.OPERATOR)
+  @ApiOperation({ summary: 'Obtener un usuario por ID' })
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
   }
 
-  /**
-   * Actualiza un usuario.
-   * El usuario que realiza la acción se obtiene de la request.
-   */
   @Put(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Req() req: Request) {
-    const currentUser = req.user as User;
-    return this.usersService.update(id, updateUserDto, currentUser);
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Actualizar un usuario' })
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.update(id, updateUserDto);
   }
 
-  /**
-   * Elimina un usuario.
-   * El usuario que realiza la acción se obtiene de la request.
-   */
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() req: Request) {
-    const currentUser = req.user as User;
-    return this.usersService.remove(id, currentUser);
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Eliminar un usuario' })
+  remove(@Param('id') id: string) {
+    return this.usersService.remove(id);
   }
 }

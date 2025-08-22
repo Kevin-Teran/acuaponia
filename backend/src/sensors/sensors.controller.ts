@@ -3,7 +3,7 @@
  * @description
  * Controlador de NestJS para gestionar las rutas relacionadas con los sensores.
  * Provee endpoints para las operaciones CRUD.
- * @author Sistema de Acuaponía SENA
+ * @author kevin mariano
  * @version 1.2.0
  * @since 1.0.0
  */

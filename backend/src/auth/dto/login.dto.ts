@@ -4,7 +4,7 @@
  * Define la estructura de datos y las reglas de validación para el cuerpo (body)
  * de la solicitud de inicio de sesión. Incluye las credenciales del usuario y
  * una opción para mantener la sesión activa.
- * @author Sistema de Acuaponía SENA
+ * @author kevin mariano
  * @version 1.1.0
  * @since 1.0.0
  */

@@ -3,7 +3,7 @@
  * @description
  * Lógica de negocio para la gestión de sensores. Provee los métodos para
  * interactuar con la base de datos para operaciones CRUD de sensores.
- * @author Sistema de Acuaponía SENA
+ * @author kevin mariano
  * @version 2.1.0
  * @since 1.0.0
  */

@@ -1,7 +1,7 @@
 /**
  * @file tankService.ts
  * @description Servicio para gestionar las operaciones CRUD de los tanques.
- * @author Sistema de Acuaponía SENA
+ * @author kevin mariano
  * @version 1.2.0
  * @since 1.0.0
  */

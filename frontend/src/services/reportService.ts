@@ -1,7 +1,7 @@
 /**
  * @file reportService.ts
  * @description Servicio para la creación y gestión de reportes.
- * @author Sistema de Acuaponía SENA
+ * @author kevin mariano
  * @version 1.2.0
  * @since 1.0.0
  */

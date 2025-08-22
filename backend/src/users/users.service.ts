@@ -4,7 +4,7 @@
  * Lógica de negocio para la gestión de usuarios. Este servicio se comunica
  * directamente con la base de datos a través de Prisma para realizar
  * operaciones CRUD sobre la entidad User.
- * @author Sistema de Acuaponía SENA
+ * @author kevin mariano
  * @version 2.2.0
  * @since 1.0.0
  */

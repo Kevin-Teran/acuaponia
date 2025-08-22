@@ -1,7 +1,7 @@
 /**
  * @file dataService.ts
  * @description Servicio para gestionar todas las operaciones relacionadas con los datos de los sensores.
- * @author Sistema de Acuaponía SENA
+ * @author kevin mariano
  * @version 1.2.0
  * @since 1.0.0
  */

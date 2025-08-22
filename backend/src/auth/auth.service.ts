@@ -1,7 +1,7 @@
 /**
  * @file auth.service.ts
  * @description Lógica de negocio para la autenticación, incluyendo login y recuperación de contraseña.
- * @author Sistema de Acuaponía SENA
+ * @author kevin mariano
  * @version 2.1.0
  * @since 1.0.0
  */

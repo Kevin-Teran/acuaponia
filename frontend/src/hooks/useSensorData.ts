@@ -4,7 +4,7 @@
  * Hook personalizado de React para encapsular la lógica de obtención y manejo
  * de los datos históricos de los sensores. Provee el estado de carga, los datos,
  * posibles errores y una función para volver a cargar la información.
- * @author Sistema de Acuaponía SENA
+ * @author kevin mariano
  * @version 1.1.0
  * @since 1.0.0
  */
