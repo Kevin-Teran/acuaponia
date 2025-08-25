@@ -1,6 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* Tus opciones de configuración de Next.js van aquí */
+  output: 'export',
+
+  basePath: '/acuaponia', 
+  assetPrefix: '/acuaponia/',
+
+  images: {
+    unoptimized: true,
+  },
 };
 
 module.exports = nextConfig;

@@ -1,23 +1,31 @@
+/**
+ * @file create-sensor.dto.ts
+ * @description DTO para la creación de un sensor.
+ * @author Kevin Mariano
+ * @version 5.0.0
+ * @since 1.0.0
+ */
 import { IsString, IsNotEmpty, IsEnum, IsDateString } from 'class-validator';
 import { SensorType } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
- * DTO (Data Transfer Object) para la creación de un nuevo sensor.
- * Define la estructura y validaciones de los datos de entrada.
+ * @class CreateSensorDto
+ * @description Define la estructura y validaciones para crear un nuevo sensor.
+ * La ubicación se hereda del tanque asociado y no es una propiedad directa del sensor.
  */
 export class CreateSensorDto {
   /**
-   * Nombre descriptivo del sensor.
-   * @example "Sensor de pH Piscina 1"
+   * @property {string} name - Nombre descriptivo del sensor.
+   * @example "Sensor de pH Piscina Tilapias"
    */
-  @ApiProperty({ description: 'Nombre descriptivo del sensor.', example: 'Sensor de pH Piscina 1' })
+  @ApiProperty({ description: 'Nombre descriptivo del sensor.', example: 'Sensor de pH Piscina Tilapias' })
   @IsString({ message: 'El nombre debe ser un texto.' })
   @IsNotEmpty({ message: 'El nombre del sensor es obligatorio.' })
   name: string;
 
   /**
-   * Identificador único del hardware del sensor.
+   * @property {string} hardwareId - Identificador único del hardware físico del sensor.
    * @example "ph-sensor-xyz-123"
    */
   @ApiProperty({ description: 'Identificador único del hardware del sensor.', example: 'ph-sensor-xyz-123' })
@@ -26,7 +34,7 @@ export class CreateSensorDto {
   hardwareId: string;
 
   /**
-   * Tipo de sensor, basado en el enum de Prisma.
+   * @property {SensorType} type - El tipo de medición que realiza el sensor.
    * @enum SensorType
    * @example "PH"
    */
@@ -35,16 +43,7 @@ export class CreateSensorDto {
   type: SensorType;
 
   /**
-   * Ubicación física o descriptiva del sensor.
-   * @example "Extremo norte del tanque"
-   */
-  @ApiProperty({ description: 'Ubicación física o descriptiva del sensor.', example: 'Extremo norte del tanque' })
-  @IsString({ message: 'La ubicación debe ser un texto.' })
-  @IsNotEmpty({ message: 'La ubicación del sensor es obligatoria.' })
-  location: string;
-
-  /**
-   * ID del tanque al que está asociado el sensor.
+   * @property {string} tankId - ID del tanque al que está asociado el sensor.
    * @example "clp7a8q9w0000dc08z1z1z1z1"
    */
   @ApiProperty({ description: 'ID del tanque al que está asociado el sensor.', example: 'clp7a8q9w0000dc08z1z1z1z1' })
@@ -53,10 +52,10 @@ export class CreateSensorDto {
   tankId: string;
 
   /**
-   * Fecha de la última calibración en formato ISO 8601.
-   * @example "2025-08-21T10:00:00.000Z"
+   * @property {string} calibrationDate - Fecha de la última calibración en formato ISO 8601.
+   * @example "2025-08-25T10:00:00.000Z"
    */
-  @ApiProperty({ description: 'Fecha de la última calibración en formato ISO 8601.', example: '2025-08-21T10:00:00.000Z' })
+  @ApiProperty({ description: 'Fecha de la última calibración.', example: '2025-08-25T10:00:00.000Z' })
   @IsDateString({}, { message: 'La fecha de calibración debe ser una fecha válida.' })
   calibrationDate: string;
 }
