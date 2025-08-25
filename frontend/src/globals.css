@@ -1,3 +1,13 @@
+/**
+ * @file globals.css
+ * @description Archivo de estilos globales que utiliza Tailwind CSS.
+ * Define estilos base, componentes personalizados reutilizables (@layer components)
+ * y utilidades de Tailwind para toda la aplicación.
+ * @author Kevin Mariano
+ * @version 1.2.0
+ * @since 1.0.0
+ */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

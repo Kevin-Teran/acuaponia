@@ -1,9 +1,9 @@
 /**
  * @file AuthContext.tsx
  * @description Proveedor de contexto para la gestión de la autenticación.
- * Versión final con manejo de estado robusto y depuración.
+ * Versión final con manejo de estado robusto y la función para actualizar perfil.
  * @author Kevin Mariano
- * @version 7.0.0 
+ * @version 8.0.0 
  * @since 1.0.0
  */
 'use client';
@@ -18,6 +18,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { authService } from '../services/authService';
+import { userService } from '../services/userService'; 
 import { User, LoginCredentials } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 
@@ -27,6 +28,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => void;
+  updateProfile: (dataToUpdate: Partial<Pick<User, 'name' | 'email'> & { password?: string }>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -36,15 +38,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // Computed property para isAuthenticated
   const isAuthenticated = !!user;
 
   const checkUserSession = useCallback(async () => {
     console.log('🔍 [AuthContext] Verificando sesión existente...');
-    
     const token = localStorage.getItem('accessToken');
-    console.log('🔑 [AuthContext] Token en localStorage:', token ? 'ENCONTRADO' : 'NO ENCONTRADO');
-    
     if (token) {
       try {
         console.log('📡 [AuthContext] Obteniendo datos del usuario...');
@@ -53,15 +51,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(userData);
       } catch (error) {
         console.error('❌ [AuthContext] Error al obtener usuario:', error);
-        // Token inválido o expirado, limpiar
         localStorage.removeItem('accessToken');
         setUser(null);
       }
     } else {
       console.log('⚠️ [AuthContext] No hay token, usuario no autenticado');
-      setUser(null);
     }
-    
     setLoading(false);
   }, []);
 
@@ -71,46 +66,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (credentials: LoginCredentials) => {
     console.log('🚀 [AuthContext] Iniciando proceso de login...');
-    
     try {
       const response = await authService.login(credentials);
-      
-      console.log('📥 [AuthContext] Respuesta RECIBIDA del backend:', {
-        hasUser: !!response?.user,
-        hasAccessToken: !!response?.accessToken,
-        hasRefreshToken: !!response?.refreshToken,
-        userEmail: response?.user?.email
-      });
-
       if (response && response.accessToken && response.user) {
-        // Guardar el token en localStorage
         localStorage.setItem('accessToken', response.accessToken);
-        console.log('💾 [AuthContext] Token guardado en localStorage');
-        
-        // Opcional: También guardar refresh token si lo necesitas
         if (response.refreshToken) {
           localStorage.setItem('refreshToken', response.refreshToken);
-          console.log('💾 [AuthContext] Refresh token guardado en localStorage');
         }
-        
-        // Establecer el usuario en el estado
         setUser(response.user);
-        console.log('✅ [AuthContext] Usuario establecido en el estado');
-        
-        // Redirigir al dashboard
-        console.log('🔄 [AuthContext] Redirigiendo a /dashboard...');
+        console.log('✅ [AuthContext] Usuario establecido y token guardado');
         router.push('/dashboard');
       } else {
-        console.error('❌ [AuthContext] Respuesta inválida:', {
-          response: response,
-          hasAccessToken: !!response?.accessToken,
-          hasUser: !!response?.user
-        });
         throw new Error('Respuesta de login inválida desde el servidor.');
       }
     } catch (error: any) {
       console.error('💥 [AuthContext] Falló el proceso de login:', error.message);
-      // Limpiar cualquier token que pueda existir
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       setUser(null);
@@ -120,18 +90,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = () => {
     console.log('🚪 [AuthContext] Cerrando sesión...');
-    
-    // Limpiar el estado
     setUser(null);
-    
-    // Limpiar localStorage
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
-    console.log('🧹 [AuthContext] Tokens eliminados de localStorage');
-    
-    // Redirigir al login
     router.push('/login');
-    console.log('🔄 [AuthContext] Redirigiendo a /login');
+  };
+
+  const updateProfile = async (dataToUpdate: Partial<Pick<User, 'name' | 'email'> & { password?: string }>) => {
+    if (!user) {
+      throw new Error("No se puede actualizar el perfil: no hay usuario autenticado.");
+    }
+    console.log(`🚀 [AuthContext] Iniciando actualización de perfil para ${user.email}...`);
+    try {
+      const updatedUser = await userService.updateUser(user.id, dataToUpdate);
+      setUser(updatedUser); 
+      console.log('✅ [AuthContext] Perfil actualizado y estado sincronizado.');
+    } catch (error) {
+      console.error('💥 [AuthContext] Falló la actualización del perfil:', error);
+      throw error;
+    }
   };
 
   if (loading) {
@@ -142,14 +119,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
   }
 
-  console.log('🏗️ [AuthContext] Renderizando con estado:', {
-    isAuthenticated,
-    userEmail: user?.email,
-    loading
-  });
-
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      isAuthenticated,
+      login,
+      logout,
+      updateProfile,
+    }}>
       {children}
     </AuthContext.Provider>
   );
