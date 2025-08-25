@@ -491,3 +491,19 @@ export interface UserSettings {
   language: string;
   theme: 'light' | 'dark' | 'auto';
 }
+
+/**
+ * @typedef {object} ResetPasswordCredentials
+ * @description Estructura de datos para la recuperación de contraseña.
+ * @property {string} token - Token de recuperación enviado por email
+ * @property {string} newPassword - Nueva contraseña a establecer
+ * @example
+ * const resetData: ResetPasswordCredentials = {
+ *   token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+ *   newPassword: 'nuevaPassword123'
+ * };
+ */
+ export interface ResetPasswordCredentials {
+  token: string;
+  newPassword: string;
+}

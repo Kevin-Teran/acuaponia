@@ -4,7 +4,7 @@
  * Esta es la configuración definitiva que intercepta cada petición para inyectar
  * el token de autenticación, con logging detallado para depuración.
  * @author Kevin Mariano
- * @version 4.0.0 
+ * @version 5.0.0 - Depuración mejorada
  * @since 1.0.0
  */
 
@@ -29,27 +29,33 @@ const api = axios.create({
  */
 api.interceptors.request.use(
   (config) => {
-    console.log(`[API Interceptor Request] -> Petición saliente a: ${config.url}`);
+    console.log(`🌐 [API Request] -> Petición ${config.method?.toUpperCase()} a: ${config.url}`);
 
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('accessToken');
       
       if (token) {
-        console.log('[API Interceptor Request] -> Token encontrado. Adjuntando a cabecera...');
+        console.log('🔑 [API Request] -> Token encontrado. Longitud:', token.length);
+        console.log('🔑 [API Request] -> Primeros 20 caracteres:', token.substring(0, 20) + '...');
         config.headers.Authorization = `Bearer ${token}`;
+        console.log('✅ [API Request] -> Token adjuntado a cabecera Authorization');
       } else {
-        console.warn(`[API Interceptor Request] -> No se encontró 'accessToken' en localStorage. La petición irá sin autenticación.`);
+        console.warn(`⚠️ [API Request] -> No se encontró 'accessToken' en localStorage.`);
+        console.log('📝 [API Request] -> Contenido actual de localStorage:', 
+          Object.keys(localStorage).map(key => `${key}: ${localStorage.getItem(key)?.substring(0, 20)}...`)
+        );
       }
+    } else {
+      console.log('🪟 [API Request] -> Ejecutándose en servidor (window undefined)');
     }
     
     return config;
   },
   (error) => {
-    console.error('[API Interceptor Request] -> Error al configurar la petición:', error);
+    console.error('❌ [API Request] -> Error al configurar la petición:', error);
     return Promise.reject(error);
   }
 );
-
 
 /**
  * @interceptor response
@@ -58,15 +64,27 @@ api.interceptors.request.use(
  */
 api.interceptors.response.use(
   (response) => {
+    console.log(`✅ [API Response] -> ${response.config.method?.toUpperCase()} ${response.config.url} - Status: ${response.status}`);
     return response;
   },
   (error) => {
-    console.error(`[API Interceptor Response] -> Error en la respuesta de: ${error.config.url}`, error.response);
+    const status = error.response?.status;
+    const url = error.config?.url;
+    const method = error.config?.method?.toUpperCase();
+    
+    console.error(`💥 [API Response] -> ${method} ${url} - Error ${status}:`, error.response?.data);
 
-    if (error.response && error.response.status === 401) {
-      console.error('[API Interceptor Response] -> ¡ERROR 401 DETECTADO! Token inválido o expirado. Redirigiendo al login.');
+    if (status === 401) {
+      console.error('🚨 [API Response] -> ERROR 401 DETECTADO! Token inválido o expirado.');
+      
+      // Mostrar contenido de localStorage antes de limpiar
+      console.log('🔍 [API Response] -> localStorage antes de limpiar:', {
+        accessToken: localStorage.getItem('accessToken')?.substring(0, 20) + '...',
+        refreshToken: localStorage.getItem('refreshToken')?.substring(0, 20) + '...'
+      });
       
       localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
       
       Swal.fire({
           title: 'Sesión Expirada',
@@ -78,11 +96,14 @@ api.interceptors.response.use(
               window.location.href = '/login';
            }
       });
+    } else if (status === 403) {
+      console.error('🔒 [API Response] -> ERROR 403: Sin permisos suficientes');
+    } else if (status >= 500) {
+      console.error('🔥 [API Response] -> ERROR del servidor:', status);
     }
 
     return Promise.reject(error);
   }
 );
-
 
 export default api;

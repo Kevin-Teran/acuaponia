@@ -1,10 +1,10 @@
 /**
  * @file jwt.strategy.ts
  * @description Estrategia de Passport.js para validar tokens de acceso JWT.
- * Se encarga de extraer el token de la cabecera de autorización, verificar su firma
- * y extraer el payload del usuario para adjuntarlo a la petición.
+ * Se encarga de extraer el token tanto de la cabecera de autorización como de cookies,
+ * verificar su firma y extraer el payload del usuario para adjuntarlo a la petición.
  * @author kevin mariano
- * @version 2.0.0
+ * @version 3.0.0 - CORREGIDO
  * @since 1.0.0
  */
 
@@ -14,6 +14,38 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../../users/users.service';
 import { User } from '@prisma/client';
+import { Request } from 'express';
+
+/**
+ * @function cookieExtractor
+ * @description Función personalizada para extraer el JWT de cookies.
+ * @param {Request} req - Objeto de solicitud de Express
+ * @returns {string | null} El token extraído o null si no existe
+ */
+const cookieExtractor = (req: Request): string | null => {
+  if (req && req.cookies) {
+    return req.cookies['access_token'] || null;
+  }
+  return null;
+};
+
+/**
+ * @function combinedExtractor
+ * @description Extractor combinado que busca el token primero en cookies, 
+ * luego en el header Authorization.
+ * @param {Request} req - Objeto de solicitud de Express
+ * @returns {string | null} El token extraído o null si no existe
+ */
+const combinedExtractor = (req: Request): string | null => {
+  // Primero intenta extraer de cookies
+  const fromCookie = cookieExtractor(req);
+  if (fromCookie) {
+    return fromCookie;
+  }
+  
+  // Si no hay cookie, intenta extraer del header Authorization
+  return ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+};
 
 /**
  * @class JwtStrategy
@@ -32,7 +64,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly usersService: UsersService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: combinedExtractor, // ✅ Usar el extractor combinado
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('JWT_SECRET'),
     });

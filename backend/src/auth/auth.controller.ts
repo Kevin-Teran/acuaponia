@@ -5,7 +5,7 @@
  * endpoints para el inicio de sesión, cierre de sesión, obtención del perfil
  * del usuario y el flujo de recuperación de contraseña.
  * @author kevin mariano
- * @version 1.2.0
+ * @version 1.3.0 - CORREGIDO
  * @since 1.0.0
  */
 
@@ -31,9 +31,10 @@ export class AuthController {
    * Maneja la solicitud POST a /api/auth/login. Valida las credenciales del usuario
    * y, si son correctas, establece una cookie HTTP-Only con el token de acceso.
    * La duración de la cookie depende del campo `rememberMe`.
+   * CORREGIDO: Ahora retorna tanto el usuario como los tokens al frontend.
    * @param {LoginDto} loginDto - El cuerpo de la solicitud con email, password y rememberMe.
    * @param {Response} response - El objeto de respuesta de Express, para manipular cookies.
-   * @returns {Promise<{ user: any }>} El objeto del usuario sin la contraseña.
+   * @returns {Promise<{ user: any, accessToken: string, refreshToken: string }>} El objeto completo de respuesta.
    */
   @Public()
   @Post('login')
@@ -51,8 +52,15 @@ export class AuthController {
       cookieOptions.expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); 
     }
 
+    // Establecer la cookie con el token de acceso
     response.cookie('access_token', data.accessToken, cookieOptions);
-    return { user: data.user };
+    
+    // ✅ CORRECCIÓN: Retornar la respuesta completa con tokens
+    return {
+      user: data.user,
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken
+    };
   }
   
   /**
