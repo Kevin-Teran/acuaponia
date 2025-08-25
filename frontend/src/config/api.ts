@@ -76,8 +76,6 @@ api.interceptors.response.use(
 
     if (status === 401) {
       console.error('🚨 [API Response] -> ERROR 401 DETECTADO! Token inválido o expirado.');
-      
-      // Mostrar contenido de localStorage antes de limpiar
       console.log('🔍 [API Response] -> localStorage antes de limpiar:', {
         accessToken: localStorage.getItem('accessToken')?.substring(0, 20) + '...',
         refreshToken: localStorage.getItem('refreshToken')?.substring(0, 20) + '...'

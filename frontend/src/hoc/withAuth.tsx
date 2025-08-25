@@ -1,61 +1,55 @@
 /**
  * @file withAuth.tsx
- * @description HOC (Higher-Order Component) para proteger rutas basadas en el estado de
- * autenticación y opcionalmente en roles de usuario.
+ * @description HOC para proteger rutas basado en roles de usuario.
+ * Ahora incluye redirección automática si el usuario no tiene los permisos necesarios.
+ * @author Kevin Mariano
+ * @version 2.0.0
+ * @since 1.0.0
  */
- 'use client';
 
- import { useEffect } from 'react';
- import { useRouter } from 'next/navigation';
- import { useAuth } from '@/context/AuthContext';
- import { LoadingSpinner } from '@/components/common/LoadingSpinner';
- import { Role } from '@/types'; 
- 
- interface WithAuthOptions {
-   roles?: Role[];
- }
- 
- /**
-  * @hoc withAuth
-  * @description Un HOC que protege un componente. Redirige a /login si el usuario no está
-  * autenticado o a una página de no autorizado si no tiene el rol requerido.
-  * @param {React.ComponentType<P>} WrappedComponent - El componente a proteger.
-  * @param {WithAuthOptions} [options] - Opciones de autorización, como los roles permitidos.
-  * @returns {React.ComponentType<P>} El componente envuelto con la lógica de autenticación.
-  */
- export function withAuth<P extends object>(
-   WrappedComponent: React.ComponentType<P>,
-   options?: WithAuthOptions
- ) {
-   const AuthComponent = (props: P) => {
-     const { isAuthenticated, user, loading } = useAuth();
-     const router = useRouter();
- 
-     useEffect(() => {
-       if (loading) return; 
- 
-       if (!isAuthenticated) {
-         router.replace('/login');
-         return;
-       }
- 
-       if (options?.roles && user) {
-         const hasRequiredRole = options.roles.includes(user.role);
-         if (!hasRequiredRole) {
-           router.replace('/unauthorized'); 
-         }
-       }
-     }, [isAuthenticated, user, loading, router, options?.roles]);
- 
-     const isAuthorized = !options?.roles || (user && options.roles.includes(user.role));
-     if (loading || !isAuthenticated || !isAuthorized) {
-       return <LoadingSpinner fullScreen message="Verificando autorización..." />;
-     }
- 
-     return <WrappedComponent {...props} />;
-   };
-   
-   AuthComponent.displayName = `withAuth(${WrappedComponent.displayName || WrappedComponent.name || 'Component'})`;
- 
-   return AuthComponent;
- }
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+import { Role } from '@/types';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+
+export const withAuth = (
+  WrappedComponent: React.ComponentType<any>,
+  allowedRoles: Role[]
+) => {
+  const AuthComponent = (props: any) => {
+    const { user, loading } = useAuth();
+    const router = useRouter();
+
+    useEffect(() => {
+      if (!loading && !user) {
+        router.push('/login');
+        return;
+      }
+
+      if (!loading && user && !allowedRoles.includes(user.role)) {
+        router.push('/dashboard');
+      }
+    }, [user, loading, router, allowedRoles]);
+
+    if (loading || !user) {
+      return (
+        <div className="flex items-center justify-center h-screen">
+          <LoadingSpinner message="Verificando acceso..." />
+        </div>
+      );
+    }
+
+    if (allowedRoles.includes(user.role)) {
+      return <WrappedComponent {...props} />;
+    }
+
+    return (
+        <div className="flex items-center justify-center h-screen">
+          <LoadingSpinner message="Redirigiendo..." />
+        </div>
+    );
+  };
+
+  return AuthComponent;
+};

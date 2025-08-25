@@ -3,61 +3,34 @@
  * @description Hook personalizado para la gestión del estado de los usuarios en la UI.
  * Proporciona lógica para obtener, agregar, editar y eliminar usuarios.
  * @author Kevin Mariano
- * @version 1.1.0
+ * @version 1.2.0
  * @since 1.0.0
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { userService } from '../services/userService';
-import { User } from '../types';
+import { User, UserFromApi } from '../types'; // Asumiendo que UserFromApi es el tipo correcto
 
 /**
  * @typedef {Omit<User, 'id' | 'createdAt' | 'updatedAt'> & { password?: string }} UserFormData
  * @description Define la estructura de los datos del formulario para crear o editar un usuario.
  */
-export type UserFormData = Omit<User, 'id' | 'createdAt' | 'updatedAt'> & {
+export type UserFormData = Omit<User, 'id' | 'createdAt' | 'updatedAt' | 'lastLogin' | '_count'> & {
   password?: string;
 };
 
 /**
  * @function useUsers
  * @description Hook de React para manejar la lógica y el estado de la lista de usuarios.
- * @returns {{
- * users: User[];
- * loading: boolean;
- * error: string | null;
- * fetchUsers: () => Promise<void>;
- * addUser: (userData: UserFormData) => Promise<void>;
- * editUser: (id: string, userData: Partial<UserFormData>) => Promise<void>;
- * removeUser: (id: string) => Promise<void>;
- * }}
- * Un objeto que contiene el estado de los usuarios (lista, carga, error) y las funciones para manipularlos.
- *
- * @example
- * const { users, loading, error, removeUser } = useUsers();
- *
- * if (loading) return <p>Cargando...</p>;
- * if (error) return <p>Error: {error}</p>;
- *
- * return (
- * <ul>
- * {users.map(user => (
- * <li key={user.id}>
- * {user.name} <button onClick={() => removeUser(user.id)}>Eliminar</button>
- * </li>
- * ))}
- * </ul>
- * );
  */
 export const useUsers = () => {
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserFromApi[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   /**
    * @name fetchUsers
    * @description Función para obtener la lista de usuarios desde el servicio y actualizar el estado.
-   * Es memorizada con `useCallback` para evitar re-creaciones innecesarias.
    */
   const fetchUsers = useCallback(async () => {
     try {
@@ -66,8 +39,9 @@ export const useUsers = () => {
       const userList = await userService.getUsers();
       setUsers(userList);
     } catch (err) {
-      setError('Error al obtener la lista de usuarios');
-      console.error(err);
+      const errorMessage = 'Error al obtener la lista de usuarios';
+      setError(errorMessage);
+      console.error(errorMessage, err);
     } finally {
       setLoading(false);
     }
@@ -80,53 +54,60 @@ export const useUsers = () => {
   /**
    * @name addUser
    * @description Agrega un nuevo usuario y actualiza la lista local.
-   * @param {UserFormData} userData - Datos del nuevo usuario.
    */
   const addUser = async (userData: UserFormData) => {
     try {
-      const newUser = await userService.createUser(userData);
-      setUsers(prevUsers => [...prevUsers, newUser]);
+      await userService.createUser(userData);
+      await fetchUsers(); // Recarga la lista para mostrar el nuevo usuario
     } catch (err) {
-      setError('Error al agregar el usuario');
-      console.error(err);
-      throw err; // Relanza el error para que el componente pueda manejarlo (e.g., mostrar notificación)
+      console.error('Error al agregar el usuario:', err);
+      throw err; 
     }
   };
 
   /**
    * @name editUser
    * @description Edita un usuario existente y actualiza la lista local.
-   * @param {string} id - ID del usuario a editar.
-   * @param {Partial<UserFormData>} userData - Nuevos datos para el usuario.
    */
   const editUser = async (id: string, userData: Partial<UserFormData>) => {
     try {
       const updatedUser = await userService.updateUser(id, userData);
       setUsers(prevUsers =>
-        prevUsers.map(user => (user.id === id ? updatedUser : user)),
+        prevUsers.map(user => (user.id === id ? { ...user, ...updatedUser } : user)),
       );
     } catch (err) {
-      setError('Error al editar el usuario');
-      console.error(err);
+      console.error('Error al editar el usuario:', err);
       throw err;
     }
   };
 
   /**
-   * @name removeUser
-   * @description Elimina un usuario y lo quita de la lista local.
+   * @name deleteUser
+   * @description Elimina un usuario y recarga la lista desde el servidor para asegurar consistencia.
    * @param {string} id - ID del usuario a eliminar.
    */
-  const removeUser = async (id: string) => {
+  const deleteUser = async (id: string) => {
     try {
+      // 1. Llama al servicio para eliminar el usuario en el backend.
       await userService.deleteUser(id);
-      setUsers(prevUsers => prevUsers.filter(user => user.id !== id));
+      
+      // 2. **LÓGICA CORREGIDA**: En lugar de filtrar el estado local,
+      // volvemos a solicitar la lista completa al servidor.
+      // Esto garantiza que la UI refleje el estado real de la base de datos.
+      await fetchUsers();
+
     } catch (err) {
-      setError('Error al eliminar el usuario');
-      console.error(err);
-      throw err;
+      const errorMessage = 'Error al eliminar el usuario';
+      setError(errorMessage);
+      console.error(errorMessage, err);
+      throw err; // Relanza el error para que el componente muestre la alerta de error.
     }
   };
+  
+  const clearError = () => {
+    setError(null);
+  };
+
 
   return {
     users,
@@ -135,6 +116,7 @@ export const useUsers = () => {
     fetchUsers,
     addUser,
     editUser,
-    removeUser,
+    deleteUser, // Exportamos con el nombre correcto
+    clearError,
   };
 };

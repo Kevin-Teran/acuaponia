@@ -1,40 +1,56 @@
 /**
  * @file SensorDetailModal.tsx
- * @description Modal para mostrar los detalles de un sensor.
+ * @description Componente modal para mostrar los detalles de un tanque, incluyendo sus sensores.
+ * @author Kevin Mariano
+ * @version 1.0.0
+ * @since 1.0.0
  */
- import React from 'react';
- import { Modal } from '@/components/common/Modal';
- import { Sensor, SensorType } from '@/types';
- import { format, parseISO } from 'date-fns';
- import { es } from 'date-fns/locale';
- import { clsx } from 'clsx';
- 
- const getStatusChip = (status: Sensor['status']) => {
-     const styles = { ACTIVE: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300', MAINTENANCE: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300', INACTIVE: 'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-200', ERROR: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' };
-     const text = { ACTIVE: 'Activo', MAINTENANCE: 'Mantenimiento', INACTIVE: 'Inactivo', ERROR: 'Error' };
-     return <span className={clsx('px-2 py-1 rounded-full text-xs font-medium', styles[status])}>{text[status]}</span>;
- };
- const translateSensorType = (type: SensorType): string => ({ TEMPERATURE: 'Temperatura', PH: 'pH', OXYGEN: 'Oxígeno', LEVEL: 'Nivel', FLOW: 'Flujo' })[type] || type;
- const getSensorUnit = (type: SensorType): string => ({ TEMPERATURE: '°C', OXYGEN: 'mg/L', PH: '', LEVEL: '%', FLOW: 'L/min' })[type] || '';
- 
- interface SensorDetailModalProps {
-   isOpen: boolean;
-   sensor: Sensor;
-   onClose: () => void;
- }
- 
- export const SensorDetailModal: React.FC<SensorDetailModalProps> = ({ isOpen, sensor, onClose }) => {
-     return (
-         <Modal title="Detalles del Sensor" isOpen={isOpen} onClose={onClose}>
-             <div className="space-y-3 text-gray-800 dark:text-gray-200">
-                 <div className="flex justify-between"><strong>Nombre:</strong> <span className="text-gray-700 dark:text-gray-300">{sensor.name}</span></div>
-                 <div className="flex justify-between"><strong>Tipo:</strong> <span className="text-gray-700 dark:text-gray-300">{translateSensorType(sensor.type)}</span></div>
-                 <div className="flex justify-between items-center"><strong>Estado:</strong> {getStatusChip(sensor.status)}</div>
-                 <div className="flex justify-between"><strong>Hardware ID:</strong> <span className="font-mono text-sm p-1 bg-gray-100 dark:bg-gray-700 rounded">{sensor.hardwareId}</span></div>
-                 <div className="flex justify-between"><strong>Última Lectura:</strong> <span className="text-gray-700 dark:text-gray-300">{sensor.lastReading?.toFixed(2) ?? 'N/A'} {getSensorUnit(sensor.type)}</span></div>
-                 <div className="flex justify-between"><strong>Fecha de Calibración:</strong> <span className="text-gray-700 dark:text-gray-300">{format(parseISO(sensor.calibrationDate), 'dd/MM/yyyy', { locale: es })}</span></div>
-                 <div className="flex justify-between"><strong>Última Actualización:</strong> <span className="text-gray-700 dark:text-gray-300">{sensor.lastUpdate ? format(parseISO(sensor.lastUpdate), 'dd/MM/yyyy HH:mm', { locale: es }) : 'N/A'}</span></div>
-             </div>
-         </Modal>
-     );
- };
+
+import { Tank } from '@/types';
+import Modal from '@/components/common/Modal'; // Asumiendo que tienes un componente Modal genérico
+
+/**
+ * @typedef {object} SensorDetailModalProps
+ * @property {Tank} tank - El objeto del tanque a mostrar.
+ * @property {() => void} onClose - Función para cerrar el modal.
+ */
+interface SensorDetailModalProps {
+    tank: Tank;
+    onClose: () => void;
+}
+
+/**
+ * @function SensorDetailModal
+ * @param {SensorDetailModalProps} props - Propiedades del componente.
+ * @returns {JSX.Element}
+ */
+const SensorDetailModal = ({ tank, onClose }: SensorDetailModalProps) => {
+    return (
+        <Modal title="Detalles del Tanque" onClose={onClose}>
+            <div className="p-4 text-gray-200">
+                <div className="mb-4">
+                    <h3 className="font-bold text-lg">Nombre</h3>
+                    <p>{tank.name}</p>
+                </div>
+                <div className="mb-4">
+                    <h3 className="font-bold text-lg">Descripción</h3>
+                    <p>{tank.description || 'Sin descripción'}</p>
+                </div>
+                <div>
+                    <h3 className="font-bold text-lg">Sensores Vinculados</h3>
+                    {tank.sensors && tank.sensors.length > 0 ? (
+                        <ul className="list-disc list-inside mt-2">
+                            {tank.sensors.map(sensor => (
+                                <li key={sensor.id}>{sensor.name} ({sensor.type})</li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p>No hay sensores vinculados a este tanque.</p>
+                    )}
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+export default SensorDetailModal;

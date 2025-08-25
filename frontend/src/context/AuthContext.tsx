@@ -3,7 +3,7 @@
  * @description Proveedor de contexto para la gestión de la autenticación.
  * Versión final con manejo de estado robusto y depuración.
  * @author Kevin Mariano
- * @version 7.0.0 (Corregido)
+ * @version 7.0.0 
  * @since 1.0.0
  */
 'use client';

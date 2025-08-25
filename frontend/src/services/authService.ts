@@ -3,7 +3,7 @@
  * @description Servicio de frontend para gestionar la autenticación con la API.
  * Versión final, corregida y sin código de backend.
  * @author Kevin Mariano
- * @version 6.0.0 (Final)
+ * @version 6.0.0 
  * @since 1.0.0
  */
 import api from '../config/api';
