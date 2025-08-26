@@ -1,18 +1,18 @@
 /**
  * @file sensors.controller.ts
  * @description Controlador de NestJS para gestionar las rutas de los sensores con nuevas funcionalidades.
- * @author Kevin Mariano
- * @version 5.0.0
+ * @author Kevin Mariano 
+ * @version 6.0.0
  * @since 1.0.0
  */
-import { 
+ import { 
   Controller, 
   Get, 
   Post, 
   Body, 
   Param, 
   Delete, 
-  Put, 
+  Patch, 
   Query, 
   UseGuards,
   Req
@@ -25,11 +25,13 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { Role, SensorType, User } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 
 /**
  * @class SensorsController
  * @description Expone los endpoints de la API para las operaciones CRUD de sensores.
  */
+@ApiTags('sensors')
 @Controller('sensors')
 @UseGuards(JwtAuthGuard)
 export class SensorsController {
@@ -54,6 +56,10 @@ export class SensorsController {
    * @returns {Promise<Sensor[]>} Una lista de los sensores encontrados.
    */
   @Get()
+  @ApiOperation({ summary: 'Obtener todos los sensores', description: 'Obtiene una lista de todos los sensores, opcionalmente filtrada por ID de tanque o ID de usuario.' })
+  @ApiOkResponse({ description: 'Lista de sensores recuperada con éxito.', type: [CreateSensorDto] })
+  @ApiQuery({ name: 'tankId', required: false, type: String, description: 'ID del tanque para filtrar los sensores' })
+  @ApiQuery({ name: 'userId', required: false, type: String, description: 'ID del usuario para filtrar los sensores' })
   findAll(@Query() findSensorsDto: FindSensorsDto) {
     return this.sensorsService.findAll(findSensorsDto);
   }
@@ -81,12 +87,11 @@ export class SensorsController {
   @Get('available-tanks/:sensorType')
   @Roles(Role.ADMIN, Role.USER)
   getAvailableTanks(
+    @Req() req: { user: User },
     @Param('sensorType') sensorType: SensorType,
     @Query('userId') userId: string,
     @Query('excludeSensorId') excludeSensorId?: string,
-    @Req() req: { user: User }
   ) {
-    // Los usuarios normales solo pueden ver sus propios tanques
     const targetUserId = req.user.role === 'ADMIN' ? userId : req.user.id;
     
     return this.sensorsService.getAvailableTanksForSensorType(
@@ -126,7 +131,7 @@ export class SensorsController {
    * @param {UpdateSensorDto} updateSensorDto - Los datos para actualizar.
    * @returns {Promise<Sensor>} El sensor actualizado.
    */
-  @Put(':id')
+  @Patch(':id') 
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   update(@Param('id') id: string, @Body() updateSensorDto: UpdateSensorDto) {

@@ -2,20 +2,22 @@
  * @file useUsers.ts
  * @description Hook personalizado para la gestión del estado de los usuarios en la UI.
  * Proporciona lógica para obtener, agregar, editar y eliminar usuarios.
- * @author Kevin Mariano
- * @version 1.2.0
+ * @author Kevin Mariano 
+ * @version 2.0.0
  * @since 1.0.0
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { userService } from '../services/userService';
-import { User, UserFromApi } from '../types'; // Asumiendo que UserFromApi es el tipo correcto
+// --- CORRECCIÓN CLAVE ---
+// Importamos las funciones directamente, no el objeto `userService` que ya no existe.
+import { getUsers, createUser, updateUser, deleteUser as deleteUserService } from '../services/userService';
+import { UserFromApi } from '../types';
 
 /**
- * @typedef {Omit<User, 'id' | 'createdAt' | 'updatedAt'> & { password?: string }} UserFormData
+ * @typedef {Omit<UserFromApi, 'id' | 'createdAt' | 'updatedAt' | 'lastLogin' | '_count' | 'tanks'> & { password?: string }} UserFormData
  * @description Define la estructura de los datos del formulario para crear o editar un usuario.
  */
-export type UserFormData = Omit<User, 'id' | 'createdAt' | 'updatedAt' | 'lastLogin' | '_count'> & {
+export type UserFormData = Omit<UserFromApi, 'id' | 'createdAt' | 'updatedAt' | 'lastLogin' | '_count' | 'tanks'> & {
   password?: string;
 };
 
@@ -36,7 +38,8 @@ export const useUsers = () => {
     try {
       setLoading(true);
       setError(null);
-      const userList = await userService.getUsers();
+      // Se llama directamente a la función importada
+      const userList = await getUsers();
       setUsers(userList);
     } catch (err) {
       const errorMessage = 'Error al obtener la lista de usuarios';
@@ -57,11 +60,12 @@ export const useUsers = () => {
    */
   const addUser = async (userData: UserFormData) => {
     try {
-      await userService.createUser(userData);
-      await fetchUsers(); // Recarga la lista para mostrar el nuevo usuario
+      // Se llama directamente a la función importada
+      await createUser(userData);
+      await fetchUsers();
     } catch (err) {
       console.error('Error al agregar el usuario:', err);
-      throw err; 
+      throw err;
     }
   };
 
@@ -71,9 +75,10 @@ export const useUsers = () => {
    */
   const editUser = async (id: string, userData: Partial<UserFormData>) => {
     try {
-      const updatedUser = await userService.updateUser(id, userData);
+      // Se llama directamente a la función importada
+      const updatedUserResponse = await updateUser(id, userData);
       setUsers(prevUsers =>
-        prevUsers.map(user => (user.id === id ? { ...user, ...updatedUser } : user)),
+        prevUsers.map(user => (user.id === id ? { ...user, ...updatedUserResponse } : user)),
       );
     } catch (err) {
       console.error('Error al editar el usuario:', err);
@@ -83,31 +88,24 @@ export const useUsers = () => {
 
   /**
    * @name deleteUser
-   * @description Elimina un usuario y recarga la lista desde el servidor para asegurar consistencia.
-   * @param {string} id - ID del usuario a eliminar.
+   * @description Elimina un usuario y recarga la lista desde el servidor.
    */
   const deleteUser = async (id: string) => {
     try {
-      // 1. Llama al servicio para eliminar el usuario en el backend.
-      await userService.deleteUser(id);
-      
-      // 2. **LÓGICA CORREGIDA**: En lugar de filtrar el estado local,
-      // volvemos a solicitar la lista completa al servidor.
-      // Esto garantiza que la UI refleje el estado real de la base de datos.
+      // Se llama directamente a la función importada (con alias para evitar conflicto de nombres)
+      await deleteUserService(id);
       await fetchUsers();
-
     } catch (err) {
       const errorMessage = 'Error al eliminar el usuario';
       setError(errorMessage);
       console.error(errorMessage, err);
-      throw err; // Relanza el error para que el componente muestre la alerta de error.
+      throw err;
     }
   };
-  
+
   const clearError = () => {
     setError(null);
   };
-
 
   return {
     users,
@@ -116,7 +114,7 @@ export const useUsers = () => {
     fetchUsers,
     addUser,
     editUser,
-    deleteUser, // Exportamos con el nombre correcto
+    deleteUser,
     clearError,
   };
 };

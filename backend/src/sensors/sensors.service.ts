@@ -1,8 +1,8 @@
 /**
  * @file sensors.service.ts
  * @description Lógica de negocio para la gestión de sensores, con validación de límite por tipo de sensor por tanque.
- * @author Kevin Mariano
- * @version 1.0.0
+ * @author Kevin Mariano 
+ * @version 2.1.0
  * @since 1.0.0
  */
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
@@ -14,24 +14,10 @@ import { Sensor, SensorType } from '@prisma/client';
 
 const MAX_SENSORS_PER_TYPE_PER_TANK = 1;
 
-/**
- * @class SensorsService
- * @description Provee los métodos para interactuar con la tabla de sensores,
- * incluyendo la lógica de negocio para la creación, consulta, actualización y eliminación.
- * Implementa validaciones por tipo de sensor por tanque (máximo 1 por tipo).
- */
 @Injectable()
 export class SensorsService {
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * @method create
-   * @description Crea un nuevo sensor, heredando la ubicación del tanque y validando el límite de sensores por tipo.
-   * @param {CreateSensorDto} createSensorDto - Datos del sensor a crear.
-   * @returns {Promise<Sensor>} El sensor recién creado.
-   * @throws {NotFoundException} Si el tanque asociado no se encuentra.
-   * @throws {ConflictException} Si el tanque ya tiene un sensor del tipo especificado.
-   */
   async create(createSensorDto: CreateSensorDto): Promise<Sensor> {
     const { tankId, type, hardwareId, ...sensorData } = createSensorDto;
 
@@ -50,7 +36,7 @@ export class SensorsService {
 
     if (tank.sensors.length >= MAX_SENSORS_PER_TYPE_PER_TANK) {
       throw new ConflictException(
-        `El tanque "${tank.name}" ya tiene un sensor de tipo ${type}.`
+        `El tanque "${tank.name}" ya tiene un sensor de tipo ${type}.`,
       );
     }
 
@@ -60,7 +46,7 @@ export class SensorsService {
 
     if (existingHardwareSensor) {
       throw new ConflictException(
-        `Ya existe un sensor con el ID de hardware "${hardwareId}".`
+        `Ya existe un sensor con el ID de hardware "${hardwareId}".`,
       );
     }
 
@@ -80,12 +66,6 @@ export class SensorsService {
     });
   }
 
-  /**
-   * @method findAll
-   * @description Busca y devuelve una lista de sensores, opcionalmente filtrada por tanque.
-   * @param {FindSensorsDto} findSensorsDto - Objeto con los parámetros de consulta.
-   * @returns {Promise<Sensor[]>} Una lista de sensores que cumplen con el filtro.
-   */
   async findAll(findSensorsDto: FindSensorsDto): Promise<Sensor[]> {
     const { tankId, userId } = findSensorsDto;
     
@@ -115,11 +95,6 @@ export class SensorsService {
     });
   }
 
-  /**
-   * @method findAllFlat
-   * @description Obtiene todos los sensores sin filtros para uso administrativo.
-   * @returns {Promise<Sensor[]>} Lista completa de sensores.
-   */
   async findAllFlat(): Promise<Sensor[]> {
     return this.prisma.sensor.findMany({
       include: {
@@ -144,13 +119,6 @@ export class SensorsService {
     });
   }
 
-  /**
-   * @method findOne
-   * @description Busca un único sensor por su ID.
-   * @param {string} id - El ID del sensor a buscar.
-   * @returns {Promise<Sensor>} El sensor encontrado con información completa.
-   * @throws {NotFoundException} Si no se encuentra ningún sensor con el ID proporcionado.
-   */
   async findOne(id: string): Promise<Sensor> {
     const sensor = await this.prisma.sensor.findUnique({
       where: { id },
@@ -168,7 +136,7 @@ export class SensorsService {
         },
         _count: {
           select: {
-            SensorData: true,
+            sensorData: true,
           },
         },
       },
@@ -181,15 +149,23 @@ export class SensorsService {
     return sensor;
   }
 
-  /**
-   * @method update
-   * @description Actualiza los datos de un sensor existente.
-   * @param {string} id - El ID del sensor a actualizar.
-   * @param {UpdateSensorDto} updateSensorDto - Los datos a modificar.
-   * @returns {Promise<Sensor>} El sensor con los datos actualizados.
-   */
   async update(id: string, updateSensorDto: UpdateSensorDto): Promise<Sensor> {
-    const sensor = await this.findOne(id);
+    const sensorToUpdate = await this.findOne(id);
+
+    if (updateSensorDto.tankId && updateSensorDto.tankId !== sensorToUpdate.tankId) {
+      const newTank = await this.prisma.tank.findUnique({
+        where: { id: updateSensorDto.tankId },
+        include: { sensors: { where: { type: sensorToUpdate.type } } },
+      });
+
+      if (!newTank) {
+        throw new NotFoundException(`El nuevo tanque con ID "${updateSensorDto.tankId}" no fue encontrado.`);
+      }
+
+      if (newTank.sensors.length >= MAX_SENSORS_PER_TYPE_PER_TANK) {
+        throw new ConflictException(`El tanque "${newTank.name}" ya tiene un sensor de tipo ${sensorToUpdate.type}.`);
+      }
+    }
 
     return this.prisma.sensor.update({
       where: { id },
@@ -200,12 +176,6 @@ export class SensorsService {
     });
   }
 
-  /**
-   * @method remove
-   * @description Elimina un sensor de la base de datos.
-   * @param {string} id - El ID del sensor a eliminar.
-   * @returns {Promise<Sensor>} Los datos del sensor que fue eliminado.
-   */
   async remove(id: string): Promise<Sensor> {
     await this.findOne(id);
     
@@ -217,18 +187,10 @@ export class SensorsService {
     });
   }
 
-  /**
-   * @method getAvailableTanksForSensorType
-   * @description Obtiene los tanques que pueden recibir un sensor del tipo especificado.
-   * @param {SensorType} sensorType - El tipo de sensor.
-   * @param {string} userId - ID del usuario (para filtrar sus tanques).
-   * @param {string} [excludeSensorId] - ID del sensor a excluir (para edición).
-   * @returns {Promise<Tank[]>} Lista de tanques disponibles.
-   */
   async getAvailableTanksForSensorType(
     sensorType: SensorType,
     userId: string,
-    excludeSensorId?: string
+    excludeSensorId?: string,
   ) {
     const tanks = await this.prisma.tank.findMany({
       where: { userId },
@@ -245,12 +207,6 @@ export class SensorsService {
     return tanks.filter(tank => tank.sensors.length < MAX_SENSORS_PER_TYPE_PER_TANK);
   }
 
-  /**
-   * @method getSensorCountByTypeForTank
-   * @description Obtiene el conteo de sensores por tipo para un tanque específico.
-   * @param {string} tankId - ID del tanque.
-   * @returns {Promise<Record<SensorType, number>>} Conteo por tipo de sensor.
-   */
   async getSensorCountByTypeForTank(tankId: string): Promise<Record<SensorType, number>> {
     const sensors = await this.prisma.sensor.findMany({
       where: { tankId },

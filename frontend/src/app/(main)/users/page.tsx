@@ -4,7 +4,7 @@
  * @description Versión final y pulida de la gestión de usuarios. Incluye modales de diseño profesional,
  * campos de filtro mejorados y toda la lógica de negocio y seguridad implementada.
  * @author Kevin Mariano
- * @version 17.0.0
+ * @version 18.0.0
  * @since 1.0.0
  */
 'use client';
@@ -17,115 +17,18 @@ import {
   PlusCircle,
   Edit,
   Trash2,
-  AlertTriangle,
   Search,
   Users,
   Shield,
   Clock,
   FileText,
   Container,
-  Save,
-  X,
-  Lock,
-  Mail,
-  ShieldCheck,
-  CalendarDays,
-  LogIn,
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import Swal from 'sweetalert2';
 import { useUsers } from '@/hooks/useUsers';
-import { Modal } from '@/components/common/Modal';
-
-// --- Componente del Formulario para Crear/Editar ---
-const UserForm = ({ user, onSubmit, onCancel, currentUser }: { user?: UserFromApi | null, onSubmit: (data: any) => void, onCancel: () => void, currentUser: UserFromApi | null }) => {
-  const [formData, setFormData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
-    password: '',
-    role: user?.role || Role.USER,
-    status: user?.status || 'ACTIVE',
-  });
-
-  const isEditingSelf = user?.id === currentUser?.id;
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const dataToSend = { ...formData };
-    if (!dataToSend.password) delete (dataToSend as any).password;
-    if (isEditingSelf) {
-        delete (dataToSend as any).role;
-        delete (dataToSend as any).status;
-    }
-    onSubmit(dataToSend);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-      <div>
-        <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nombre Completo</label>
-        <input type="text" name="name" id="name" value={formData.name} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600" required />
-      </div>
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Correo Electrónico</label>
-        <input type="email" name="email" id="email" value={formData.email} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600" required />
-      </div>
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Contraseña</label>
-        <input type="password" name="password" id="password" value={formData.password} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600" placeholder={user ? '(Dejar en blanco para no cambiar)' : ''} required={!user} />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="role" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Rol</label>
-          <select name="role" id="role" value={formData.role} onChange={handleChange} disabled={isEditingSelf} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 disabled:bg-gray-200 dark:disabled:bg-gray-800 dark:bg-gray-700 dark:border-gray-600">
-            <option value={Role.USER}>Usuario</option>
-            <option value={Role.ADMIN}>Administrador</option>
-          </select>
-        </div>
-        <div>
-          <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Estado</label>
-          <select name="status" id="status" value={formData.status} onChange={handleChange} disabled={isEditingSelf} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 disabled:bg-gray-200 dark:disabled:bg-gray-800 dark:bg-gray-700 dark:border-gray-600">
-            <option value="ACTIVE">Activo</option>
-            <option value="INACTIVE">Inactivo</option>
-            <option value="SUSPENDED">Suspendido</option>
-          </select>
-        </div>
-      </div>
-      {isEditingSelf && <p className="text-xs text-center text-yellow-600 dark:text-yellow-400"><Lock className="inline h-3 w-3 mr-1" />No puedes editar tu propio rol o estado.</p>}
-      <div className="flex justify-end space-x-3 pt-4">
-        <button type="button" onClick={onCancel} className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-500 dark:hover:bg-gray-600">
-          <X className="h-4 w-4 mr-2" />Cancelar
-        </button>
-        <button type="submit" className="flex items-center px-4 py-2 text-sm font-medium text-white bg-[#39A900] border border-transparent rounded-lg hover:bg-[#2F8B00]">
-          <Save className="h-4 w-4 mr-2" />Guardar Cambios
-        </button>
-      </div>
-    </form>
-  );
-};
-
-// --- Componente para Mostrar Detalles ---
-const UserDetails = ({ user }: { user: UserFromApi }) => (
-  <div className="space-y-4 text-sm pt-2">
-    <div className="flex justify-between items-center"><span className="flex items-center text-gray-500 dark:text-gray-400 font-semibold"><Mail className="h-4 w-4 mr-2" />Email</span><span>{user.email}</span></div>
-    <div className="flex justify-between items-center"><span className="flex items-center text-gray-500 dark:text-gray-400 font-semibold"><ShieldCheck className="h-4 w-4 mr-2" />Rol</span><span>{user.role}</span></div>
-    <div className="flex justify-between items-center"><span className="flex items-center text-gray-500 dark:text-gray-400 font-semibold"><Clock className="h-4 w-4 mr-2" />Estado</span><span>{user.status}</span></div>
-    <div className="flex justify-between items-center"><span className="flex items-center text-gray-500 dark:text-gray-400 font-semibold"><CalendarDays className="h-4 w-4 mr-2" />Registrado</span><span>{new Date(user.createdAt).toLocaleDateString()}</span></div>
-    <div className="flex justify-between items-center"><span className="flex items-center text-gray-500 dark:text-gray-400 font-semibold"><LogIn className="h-4 w-4 mr-2" />Último Acceso</span><span>{user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Nunca'}</span></div>
-    <hr className="my-3 border-gray-200 dark:border-gray-600" />
-    <h4 className="font-semibold text-gray-500 dark:text-gray-400">Tanques Asignados ({user._count?.tanks ?? 0})</h4>
-    {user.tanks?.length > 0 ? (
-      <ul className="list-disc list-inside">{user.tanks.map(tank => <li key={tank.id}>{tank.name}</li>)}</ul>
-    ) : (
-      <p className="text-gray-500">No tiene tanques asignados.</p>
-    )}
-  </div>
-);
+import { UserModal } from '@/components/users/UserModal'; // Importar UserModal
+import { UserDetailsModal } from '@/components/users/UserDetailsModal'; // Importar UserDetailsModal
 
 // --- Componente Principal de la Página ---
 const UsersManagementPage = () => {
@@ -219,6 +122,10 @@ const UsersManagementPage = () => {
     </div>
   );
   
+  if (loading) {
+    return <LoadingSpinner fullScreen message="Cargando usuarios..." />;
+  }
+  
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8">
       <div className="flex justify-between items-center mb-6">
@@ -254,19 +161,24 @@ const UsersManagementPage = () => {
         </table>
       </div>
 
-      <Modal
-        isOpen={modal.isOpen}
-        onClose={() => setModal({ isOpen: false, type: null })}
-        title={
-            modal.type === 'create' ? 'Crear Nuevo Usuario' :
-            modal.type === 'edit' ? `Editar a ${modal.data?.name}` :
-            modal.type === 'details' ? `Ficha de ${modal.data?.name}` : ''
-        }
-      >
-        {modal.type === 'create' && <UserForm onSubmit={handleFormSubmit} onCancel={() => setModal({ isOpen: false, type: null })} currentUser={currentUser} />}
-        {modal.type === 'edit' && modal.data && <UserForm user={modal.data} onSubmit={handleFormSubmit} onCancel={() => setModal({ isOpen: false, type: null })} currentUser={currentUser} />}
-        {modal.type === 'details' && modal.data && <UserDetails user={modal.data} />}
-      </Modal>
+        {(modal.type === 'create' || modal.type === 'edit') && (
+            <UserModal
+                isOpen={modal.isOpen}
+                isEditing={modal.type === 'edit'}
+                user={modal.data}
+                currentUser={currentUser}
+                onSubmit={handleFormSubmit}
+                onClose={() => setModal({ isOpen: false, type: null })}
+            />
+        )}
+        
+        {modal.type === 'details' && modal.data && (
+            <UserDetailsModal
+                isOpen={modal.isOpen}
+                user={modal.data}
+                onClose={() => setModal({ isOpen: false, type: null })}
+            />
+        )}
     </div>
   );
 };

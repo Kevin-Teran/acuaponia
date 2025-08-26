@@ -2,8 +2,8 @@
  * @file AuthContext.tsx
  * @description Proveedor de contexto para la gestión de la autenticación.
  * Versión final con manejo de estado robusto y la función para actualizar perfil.
- * @author Kevin Mariano
- * @version 8.0.0 
+ * @author Kevin Mariano 
+ * @version 9.0.0 
  * @since 1.0.0
  */
 'use client';
@@ -18,7 +18,9 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { authService } from '../services/authService';
-import { userService } from '../services/userService'; 
+// --- CORRECCIÓN CLAVE ---
+// Importamos la función `updateUser` directamente, ya que `userService` como objeto ya no se exporta.
+import { updateUser as updateUserService } from '../services/userService'; 
 import { User, LoginCredentials } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 
@@ -102,7 +104,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     console.log(`🚀 [AuthContext] Iniciando actualización de perfil para ${user.email}...`);
     try {
-      const updatedUser = await userService.updateUser(user.id, dataToUpdate);
+      // Se llama a la función importada directamente.
+      const updatedUser = await updateUserService(user.id, dataToUpdate);
       setUser(updatedUser); 
       console.log('✅ [AuthContext] Perfil actualizado y estado sincronizado.');
     } catch (error) {
