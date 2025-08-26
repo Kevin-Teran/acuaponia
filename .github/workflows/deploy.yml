@@ -1,5 +1,5 @@
 # Nombre del flujo de trabajo que aparecerá en la pestaña "Actions" de GitHub.
-name: Desplegar Frontend en GitHub Pages
+name: Construir y Desplegar Aplicación Completa
 
 on:
   # Se activa cada vez que haces un push a la rama 'master'.
@@ -14,8 +14,8 @@ permissions:
   id-token: write
 
 jobs:
-  # Un único trabajo llamado 'build-and-deploy' que construye y despliega.
-  build-and-deploy:
+  # Trabajo para construir y desplegar el frontend
+  build-and-deploy-frontend:
     # Se ejecutará en un servidor Ubuntu mantenido por GitHub.
     runs-on: ubuntu-latest
     
@@ -39,13 +39,13 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       # 3. Instala las dependencias del frontend.
-      - name: Instalar Dependencias
+      - name: Instalar Dependencias del Frontend
         run: npm ci
         # IMPORTANTE: Se especifica que este comando se ejecute dentro de la carpeta 'frontend'.
         working-directory: ./frontend
 
       # 4. Construye la aplicación Next.js para exportación estática.
-      - name: Construir Aplicación
+      - name: Construir Aplicación Frontend
         run: npm run build
         working-directory: ./frontend
 
@@ -54,7 +54,7 @@ jobs:
         uses: actions/configure-pages@v5
         
       # 6. Sube el artefacto. Next.js genera los archivos estáticos en la carpeta 'out'.
-      - name: Subir Artefacto
+      - name: Subir Artefacto de Frontend
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./frontend/out
@@ -63,3 +63,39 @@ jobs:
       - name: Desplegar en GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  # Trabajo para construir el backend
+  build-backend:
+    # Se ejecutará en un servidor Ubuntu mantenido por GitHub.
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Descarga el código de tu repositorio.
+      - name: Checkout del Repositorio
+        uses: actions/checkout@v4
+
+      # 2. Configura el entorno de Node.js.
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          # Apunta a la caché de npm dentro de la carpeta backend.
+          cache-dependency-path: backend/package-lock.json
+
+      # 3. Instala las dependencias del backend.
+      - name: Instalar Dependencias del Backend
+        run: npm ci
+        working-directory: ./backend
+
+      # 4. Construye la aplicación Nest.js.
+      - name: Construir Aplicación Backend
+        run: npm run build
+        working-directory: ./backend
+
+      # 5. Sube el artefacto del backend (la carpeta 'dist' con el código transpilado).
+      - name: Subir Artefacto de Backend
+        uses: actions/upload-artifact@v3
+        with:
+          name: backend-build
+          path: ./backend/dist
