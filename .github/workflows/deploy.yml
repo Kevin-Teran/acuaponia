@@ -1,87 +1,72 @@
 # Nombre del flujo de trabajo
-name: Construir y Desplegar Aplicación Completa
+name: Desplegar Frontend a GitHub Pages
 
 on:
   # Se activa con cada push a la rama 'master'
   push:
     branches:
       - master
+  # Permite ejecutarlo manualmente desde la pestaña Actions
+  workflow_dispatch:
 
+# Permisos para que la Action pueda desplegar en GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# Solo permitir un despliegue a la vez
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
 jobs:
-  #--- TRABAJO PARA EL FRONTEND ---
-  build-and-deploy-frontend:
-    runs-on: ubuntu-latest
+  # Trabajo único para construir y desplegar el frontend
+  deploy-frontend:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    
+    # Especificamos que todos los comandos por defecto se ejecuten dentro de la carpeta 'frontend'
+    defaults:
+      run:
+        working-directory: ./frontend
 
     steps:
+      # 1. Descarga el código del repositorio
       - name: Checkout del Repositorio
         uses: actions/checkout@v4
 
-      - name: Configurar Node.js para Frontend
+      # 2. Configura Node.js
+      - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+          # La ruta al archivo de dependencias está ahora relativa a la raíz
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Instalar Dependencias del Frontend
+      # 3. Instala las dependencias (se ejecutará en ./frontend gracias a 'defaults')
+      - name: Instalar Dependencias
         run: npm ci
-        working-directory: ./frontend
 
-      - name: Construir Aplicación Frontend
+      # 4. Construye la aplicación (se ejecutará en ./frontend gracias a 'defaults')
+      # Le pasamos la URL del backend como una variable de entorno vacía, 
+      # ya que en la versión estática no la necesitará o usará un mock.
+      - name: Construir Aplicación
         run: npm run build
-        working-directory: ./frontend
+        env:
+          NEXT_PUBLIC_API_URL: '' # Puedes ajustar esto si lo necesitas
 
-      - name: Configurar GitHub Pages
-        uses: actions/configure-pages@v5
-        
-      - name: Subir Artefacto de Frontend para Despliegue
+      # 5. Prepara el artefacto para subirlo a GitHub Pages
+      - name: Subir Artefacto de Páginas
         uses: actions/upload-pages-artifact@v3
         with:
+          # La ruta a la carpeta 'out' que genera el build de Next.js
           path: ./frontend/out
 
-      - name: Desplegar Frontend en GitHub Pages
+      # 6. Despliega el artefacto en GitHub Pages
+      - name: Desplegar en GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-  #--- TRABAJO PARA EL BACKEND ---
-  build-backend:
-    runs-on: ubuntu-latest
-    # Este trabajo se ejecuta en paralelo con el del frontend
-    needs: build-and-deploy-frontend
-
-    steps:
-      - name: Checkout del Repositorio
-        uses: actions/checkout@v4
-
-      - name: Configurar Node.js para Backend
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
-
-      - name: Instalar Dependencias del Backend
-        run: npm ci
-        working-directory: ./backend
-
-      - name: Construir Aplicación Backend
-        run: npm run build
-        working-directory: ./backend
-
-      - name: Subir Artefacto de Backend para Despliegue Manual
-        uses: actions/upload-artifact@v3
-        with:
-          name: backend-build
-          path: |
-            ./backend/dist
-            ./backend/node_modules
-            ./backend/package.json
-            ./backend/prisma
