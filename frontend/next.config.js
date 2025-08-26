@@ -2,9 +2,6 @@
 const nextConfig = {
   output: 'export',
 
-  basePath: '/acuaponia', 
-  assetPrefix: '/acuaponia/',
-
   images: {
     unoptimized: true,
   },
