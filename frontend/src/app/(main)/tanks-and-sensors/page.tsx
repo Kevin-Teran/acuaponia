@@ -1,10 +1,9 @@
 /**
  * @file page.tsx
  * @route /tanks-and-sensors
- * @description Página robusta para la gestión de Tanques y Sensores.
- * CORRECCIÓN: Se arregla la visibilidad del selector de usuarios para admin y se mejora la disposición de los filtros.
+ * @description Página optimizada para la gestión de Tanques y Sensores con 3 tipos de sensores.
  * @author Kevin Mariano
- * @version 8.1.0
+ * @version 9.0.0
  * @since 1.0.0
  */
 'use client';
@@ -21,16 +20,16 @@ import { SensorDetailModal } from '@/components/devices/SensorDetailModal';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import {
   MapPin, Cpu, AlertCircle, Plus, Edit, Trash2, ChevronDown, User as UserIcon,
-  Thermometer, Droplets, Wind, Zap, BarChartHorizontal, Settings, Eye,
+  Thermometer, Droplets, Wind, Settings, FileText,
   Search, CheckCircle2, AlertTriangle as WarningIcon, SlidersHorizontal,
-  LayoutGrid
+  LayoutGrid, Users
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { clsx } from 'clsx';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-const MAX_SENSORS_PER_TANK = 5;
+const MAX_SENSORS_PER_TYPE_PER_TANK = 1;
 
 const getStatusChip = (status: Tank['status'] | Sensor['status']) => {
     const styles: Record<string, string> = {
@@ -54,10 +53,7 @@ const getSensorInfo = (type: SensorType) => ({
     TEMPERATURE: { Icon: Thermometer, unit: '°C', name: 'Temperatura', color: 'text-orange-500' },
     PH: { Icon: Droplets, unit: '', name: 'pH', color: 'text-green-500' },
     OXYGEN: { Icon: Wind, unit: 'mg/L', name: 'Oxígeno', color: 'text-blue-500' },
-    LEVEL: { Icon: BarChartHorizontal, unit: '%', name: 'Nivel', color: 'text-purple-500' },
-    FLOW: { Icon: Zap, unit: 'L/min', name: 'Flujo', color: 'text-yellow-500' }
 }[type] || { Icon: Settings, unit: '', name: 'Desconocido', color: 'text-gray-500' });
-
 
 export default function DevicesPage() {
     const { user: currentUser } = useAuth();
@@ -117,6 +113,39 @@ export default function DevicesPage() {
         return map;
     }, [sensors, tanks]);
 
+    // Calcular sensores por tipo por tanque (solo 3 tipos: TEMPERATURE, PH, OXYGEN)
+    const sensorCountsByTankAndType = useMemo(() => {
+        const countMap = new Map<string, Record<SensorType, number>>();
+        
+        tanks.forEach(tank => {
+            countMap.set(tank.id, {
+                TEMPERATURE: 0,
+                PH: 0,
+                OXYGEN: 0,
+            } as Record<SensorType, number>);
+        });
+
+        sensors.forEach(sensor => {
+            const tankCounts = countMap.get(sensor.tankId);
+            if (tankCounts && ['TEMPERATURE', 'PH', 'OXYGEN'].includes(sensor.type)) {
+                tankCounts[sensor.type]++;
+            }
+        });
+
+        return countMap;
+    }, [sensors, tanks]);
+
+    // Obtener tipos de sensores que pueden ser añadidos a un tanque (solo los 3 tipos permitidos)
+    const getAvailableSensorTypes = useCallback((tankId: string): SensorType[] => {
+        const counts = sensorCountsByTankAndType.get(tankId);
+        if (!counts) return [];
+
+        const allowedTypes: SensorType[] = ['TEMPERATURE', 'PH', 'OXYGEN'];
+        return allowedTypes.filter(
+            type => counts[type] < MAX_SENSORS_PER_TYPE_PER_TANK
+        );
+    }, [sensorCountsByTankAndType]);
+
     const handleOpenModal = useCallback((view: string, data: any = {}) => setModal({ view, data }), []);
     const handleCloseModal = useCallback(() => setModal({ view: null }), []);
 
@@ -148,7 +177,13 @@ export default function DevicesPage() {
             const action = type === 'tanque' ? tankService.deleteTank : deleteSensor;
             try {
                 await action(item.id);
-                await Swal.fire({ title: '¡Eliminado!', icon: 'success', timer: 1500, showConfirmButton: false });
+                await Swal.fire({ 
+                    title: '¡Eliminado!', 
+                    text: `${type.charAt(0).toUpperCase() + type.slice(1)} eliminado correctamente.`,
+                    icon: 'success', 
+                    timer: 1500, 
+                    showConfirmButton: false 
+                });
                 handleActionCompletion();
             } catch (err: any) {
                 await Swal.fire('Error', err.response?.data?.message || `No se pudo eliminar el ${type}.`, 'error');
@@ -162,11 +197,16 @@ export default function DevicesPage() {
 
     return (
         <div className="container mx-auto p-4 md:p-6 lg:p-8">
-            <header className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestión de Tanques y Sensores</h1>
+            <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestión de Tanques y Sensores</h1>
+                    <p className="text-gray-600 dark:text-gray-400 mt-1">
+                        Administra tu infraestructura de monitoreo acuapónico
+                    </p>
+                </div>
                 <button
                     onClick={() => handleOpenModal('create-tank', { userId: selectedUserId })}
-                    className="flex items-center px-4 py-2 bg-[#39A900] text-white rounded-lg hover:bg-[#2F8B00] transition-colors shadow-md disabled:bg-gray-400"
+                    className="flex items-center px-6 py-3 bg-[#39A900] text-white rounded-lg hover:bg-[#2F8B00] transition-all duration-200 shadow-md hover:shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed transform hover:scale-105"
                     disabled={!selectedUserId}
                 >
                     <MapPin className="w-5 h-5 mr-2" />
@@ -174,6 +214,7 @@ export default function DevicesPage() {
                 </button>
             </header>
             
+            {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 <StatCard icon={LayoutGrid} title="Total Tanques" value={stats.totalTanks} color="text-blue-500" />
                 <StatCard icon={Cpu} title="Total Sensores" value={stats.totalSensors} color="text-indigo-500" />
@@ -181,72 +222,102 @@ export default function DevicesPage() {
                 <StatCard icon={WarningIcon} title="En Mantenimiento" value={stats.maintenanceTanks} color="text-yellow-500" />
             </div>
 
+            {/* Filters */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="relative lg:col-span-2">
+                <div className={clsx(
+                    "grid gap-4",
+                    isAdmin ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2"
+                )}>
+                    {/* Search */}
+                    <div className="relative">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                         <input
                             type="text"
                             placeholder="Buscar por nombre o ubicación..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900]"
+                            className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] transition-colors"
                         />
                     </div>
                     
+                    {/* User Filter - Only for ADMIN */}
                     {isAdmin && users.length > 0 && (
                         <div className="relative">
-                            <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                            <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                             <select
                                 value={selectedUserId || ''}
                                 onChange={(e) => handleUserChange(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900]"
+                                className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] transition-colors appearance-none cursor-pointer"
                             >
                                 {users.map(user => (
-                                    <option key={user.id} value={user.id}>{user.name}</option>
+                                    <option key={user.id} value={user.id}>
+                                        {user.name}
+                                    </option>
                                 ))}
                             </select>
                         </div>
                     )}
 
+                    {/* Status Filter */}
                     <div className="relative">
                         <SlidersHorizontal className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                         <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value as any)}
-                            className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900]"
+                            className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] transition-colors appearance-none cursor-pointer"
                         >
                             <option value="all">Todos los estados</option>
-                            <option value="ACTIVE">Activo</option>
+                            <option value="ACTIVE">Activos</option>
                             <option value="MAINTENANCE">Mantenimiento</option>
-                            <option value="INACTIVE">Inactivo</option>
+                            <option value="INACTIVE">Inactivos</option>
                         </select>
                     </div>
                 </div>
             </div>
 
+            {/* Error Display */}
             {error && (
-                <div className="text-center text-red-500 p-4 bg-red-50 dark:bg-red-900/20 rounded-md flex items-center justify-center mb-6">
-                    <AlertCircle className="w-6 h-6 mr-2" /> {error}
+                <div className="text-center text-red-500 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg flex items-center justify-center mb-6 border border-red-200 dark:border-red-800">
+                    <AlertCircle className="w-6 h-6 mr-2 flex-shrink-0" />
+                    <span>{error}</span>
                 </div>
             )}
 
-            {loading && <div className="flex justify-center items-center py-8"><LoadingSpinner size="lg" message="Cargando datos..." /></div>}
+            {/* Loading Indicator */}
+            {loading && (
+                <div className="flex justify-center items-center py-12">
+                    <LoadingSpinner size="lg" message="Cargando datos..." />
+                </div>
+            )}
 
+            {/* Content */}
             <div className="space-y-4">
                 {!loading && !selectedUserId && isAdmin && (
-                    <EmptyState icon={UserIcon} title="Selecciona un usuario" message="Elige un usuario de la lista para ver sus tanques y sensores." />
+                    <EmptyState 
+                        icon={Users} 
+                        title="Selecciona un usuario" 
+                        message="Elige un usuario de la lista para ver y gestionar sus tanques y sensores." 
+                    />
                 )}
+                
                 {!loading && selectedUserId && filteredTanks.length === 0 && (
-                     <EmptyState icon={MapPin} title="No se encontraron tanques" message="Prueba a cambiar los filtros o crea un nuevo tanque para este usuario." />
+                    <EmptyState 
+                        icon={MapPin} 
+                        title="No se encontraron tanques" 
+                        message="Prueba a cambiar los filtros o crea un nuevo tanque para comenzar." 
+                    />
                 )}
+
                 {!loading && filteredTanks.map(tank => {
                     const tankSensors = sensorsByTank.get(tank.id) || [];
+                    const availableSensorTypes = getAvailableSensorTypes(tank.id);
                     const isExpanded = expandedTanks.has(tank.id);
+                    const sensorCounts = sensorCountsByTankAndType.get(tank.id);
+                    
                     return (
-                        <div key={tank.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden transition-all duration-300">
+                        <div key={tank.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden transition-all duration-300 hover:shadow-lg border border-gray-200 dark:border-gray-700">
                             <header
-                                className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                                className="flex items-center justify-between p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                                 onClick={() => setExpandedTanks(prev => {
                                     const next = new Set(prev);
                                     next.has(tank.id) ? next.delete(tank.id) : next.add(tank.id);
@@ -254,34 +325,106 @@ export default function DevicesPage() {
                                 })}
                             >
                                 <div className="flex items-center space-x-4">
-                                    <MapPin className="w-8 h-8 text-[#39A900]" />
-                                    <div>
-                                        <h3 className="font-semibold text-lg text-gray-900 dark:text-white">{tank.name}</h3>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">{tank.location}</p>
-                                        <p className="text-xs text-gray-400">
-                                            {tankSensors.length} de {MAX_SENSORS_PER_TANK} sensores instalados
-                                        </p>
+                                    <div className="p-3 bg-[#39A900]/10 rounded-lg">
+                                        <MapPin className="w-8 h-8 text-[#39A900]" />
                                     </div>
-                                    {getStatusChip(tank.status)}
+                                    <div>
+                                        <h3 className="font-semibold text-xl text-gray-900 dark:text-white">
+                                            {tank.name}
+                                        </h3>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                            <MapPin className="w-4 h-4 inline mr-1" />
+                                            {tank.location}
+                                        </p>
+                                        <div className="flex items-center mt-2 space-x-4 text-xs text-gray-500 dark:text-gray-400">
+                                            <span>
+                                                {tankSensors.length} de 3 sensores instalados
+                                            </span>
+                                            {sensorCounts && (
+                                                <div className="flex space-x-2">
+                                                    {Object.entries(sensorCounts).map(([type, count]) => {
+                                                        const { name, color } = getSensorInfo(type as SensorType);
+                                                        return count > 0 ? (
+                                                            <span key={type} className={clsx("px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700", color)}>
+                                                                {name}
+                                                            </span>
+                                                        ) : null;
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="flex items-center space-x-2">
-                                    <ActionButton icon={Edit} title="Editar Tanque" onClick={(e) => { e.stopPropagation(); handleOpenModal('edit-tank', tank); }} />
-                                    <ActionButton icon={Trash2} title="Eliminar Tanque" onClick={(e) => { e.stopPropagation(); handleDelete('tanque', tank); }} />
-                                    <ChevronDown className={`w-5 h-5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                                <div className="flex items-center space-x-3">
+                                    {getStatusChip(tank.status)}
+                                    <div className="flex items-center space-x-1">
+                                        <ActionButton 
+                                            icon={Edit} 
+                                            title="Editar Tanque" 
+                                            onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                handleOpenModal('edit-tank', tank); 
+                                            }} 
+                                        />
+                                        <ActionButton 
+                                            icon={Trash2} 
+                                            title="Eliminar Tanque" 
+                                            onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                handleDelete('tanque', tank); 
+                                            }} 
+                                        />
+                                    </div>
+                                    <ChevronDown 
+                                        className={clsx(
+                                            "w-5 h-5 transition-transform text-gray-400",
+                                            isExpanded ? "rotate-180" : ""
+                                        )} 
+                                    />
                                 </div>
                             </header>
+                            
                             {isExpanded && (
-                                <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                        {tankSensors.map(sensor => (
-                                            <SensorCard key={sensor.id} sensor={sensor} onOpenModal={handleOpenModal} onDelete={handleDelete} />
-                                        ))}
-                                        {tankSensors.length < MAX_SENSORS_PER_TANK && (
-                                            <button onClick={() => handleOpenModal('create-sensor', { tankId: tank.id })} className="flex flex-col items-center justify-center p-4 bg-white dark:bg-gray-900/50 rounded-lg border-2 border-dashed hover:border-[#39A900] text-[#39A900] transition-colors h-full min-h-[150px]">
-                                                <Plus className="w-8 h-8" />
-                                                <span className="text-sm mt-2 font-medium">Añadir Sensor</span>
-                                            </button>
-                                        )}
+                                <div className="px-6 pb-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                                    <div className="pt-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {tankSensors.map(sensor => (
+                                                <SensorCard 
+                                                    key={sensor.id} 
+                                                    sensor={sensor} 
+                                                    onOpenModal={handleOpenModal} 
+                                                    onDelete={handleDelete} 
+                                                />
+                                            ))}
+                                            
+                                            {/* Add Sensor Cards */}
+                                            {availableSensorTypes.map(sensorType => (
+                                                <AddSensorCard
+                                                    key={sensorType}
+                                                    sensorType={sensorType}
+                                                    tankId={tank.id}
+                                                    onClick={() => handleOpenModal('create-sensor', { 
+                                                        tankId: tank.id, 
+                                                        preselectedType: sensorType 
+                                                    })}
+                                                />
+                                            ))}
+                                            
+                                            {availableSensorTypes.length === 0 && tankSensors.length === 0 && (
+                                                <div className="col-span-full text-center py-8 text-gray-500 dark:text-gray-400">
+                                                    <Cpu className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                                                    <p>No hay sensores instalados en este tanque</p>
+                                                    <p className="text-sm mt-1">Todos los sensores han sido instalados</p>
+                                                </div>
+                                            )}
+                                            
+                                            {availableSensorTypes.length === 0 && tankSensors.length > 0 && (
+                                                <div className="col-span-full text-center py-4 text-gray-500 dark:text-gray-400">
+                                                    <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-[#39A900]" />
+                                                    <p className="text-sm">Tanque completamente equipado</p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -290,62 +433,221 @@ export default function DevicesPage() {
                 })}
             </div>
 
-            {(modal.view === 'create-tank' || modal.view === 'edit-tank') && <TankModal isOpen={true} isEditing={modal.view === 'edit-tank'} tankData={modal.data} onClose={handleCloseModal} onSave={handleActionCompletion} />}
-            {(modal.view === 'create-sensor' || modal.view === 'edit-sensor') && <SensorModal isOpen={true} isEditing={modal.view === 'edit-sensor'} sensorData={modal.data} tanks={tanks} sensorsByTank={sensorsByTank} onClose={handleCloseModal} onSave={handleActionCompletion} />}
-            {modal.view === 'view-sensor' && modal.data && <SensorDetailModal isOpen={true} sensor={modal.data} onClose={handleCloseModal} />}
+            {/* Modals */}
+            {(modal.view === 'create-tank' || modal.view === 'edit-tank') && (
+                <TankModal 
+                    isOpen={true} 
+                    isEditing={modal.view === 'edit-tank'} 
+                    tankData={modal.data} 
+                    onClose={handleCloseModal} 
+                    onSave={handleActionCompletion} 
+                />
+            )}
+            
+            {(modal.view === 'create-sensor' || modal.view === 'edit-sensor') && (
+                <SensorModal 
+                    isOpen={true} 
+                    isEditing={modal.view === 'edit-sensor'} 
+                    sensorData={modal.data} 
+                    tanks={tanks} 
+                    sensorsByTank={sensorsByTank}
+                    sensorCountsByTankAndType={sensorCountsByTankAndType}
+                    onClose={handleCloseModal} 
+                    onSave={handleActionCompletion} 
+                />
+            )}
+            
+            {modal.view === 'view-sensor' && modal.data && (
+                <SensorDetailModal 
+                    isOpen={true} 
+                    sensor={modal.data} 
+                    onClose={handleCloseModal} 
+                />
+            )}
         </div>
     );
 }
 
-const StatCard = ({ icon: Icon, title, value, color }: { icon: React.ElementType, title: string, value: number | string, color: string }) => (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 flex items-center">
-        <Icon className={clsx("h-8 w-8", color)} />
+/**
+ * @component StatCard
+ * @description Componente para mostrar estadísticas en forma de tarjeta.
+ */
+const StatCard = ({ 
+    icon: Icon, 
+    title, 
+    value, 
+    color 
+}: { 
+    icon: React.ElementType; 
+    title: string; 
+    value: number | string; 
+    color: string; 
+}) => (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 flex items-center border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
+        <div className={clsx("p-3 rounded-lg", color.replace('text-', 'bg-') + '/10')}>
+            <Icon className={clsx("h-8 w-8", color)} />
+        </div>
         <div className="ml-4">
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">{value}</p>
         </div>
     </div>
 );
 
-const ActionButton = ({ icon: Icon, title, onClick }: { icon: React.ElementType, title: string, onClick: (e: React.MouseEvent) => void }) => (
-    <button onClick={onClick} className="p-2 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full" title={title}><Icon className="w-4 h-4" /></button>
-);
+/**
+ * @component ActionButton
+ * @description Botón de acción reutilizable con icono.
+ */
+const ActionButton = ({ 
+    icon: Icon, 
+    title, 
+    onClick,
+    variant = 'default'
+}: { 
+    icon: React.ElementType; 
+    title: string; 
+    onClick: (e: React.MouseEvent) => void;
+    variant?: 'default' | 'danger';
+}) => {
+    const baseClasses = "p-2 rounded-full transition-colors";
+    const variantClasses = {
+        default: "text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-700 dark:hover:text-gray-300",
+        danger: "text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-700 dark:hover:text-red-400"
+    };
+    
+    return (
+        <button 
+            onClick={onClick} 
+            className={clsx(baseClasses, variantClasses[variant])} 
+            title={title}
+        >
+            <Icon className="w-4 h-4" />
+        </button>
+    );
+};
 
-const EmptyState = ({ icon: Icon, title, message }: { icon: React.ElementType, title: string, message: string }) => (
-    <div className="text-center py-16 text-gray-500 border-2 border-dashed rounded-lg bg-white dark:bg-gray-800">
-        <Icon className="w-12 h-12 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold">{title}</h3>
-        <p className="mt-1 text-sm">{message}</p>
+/**
+ * @component EmptyState
+ * @description Componente para mostrar estados vacíos.
+ */
+const EmptyState = ({ 
+    icon: Icon, 
+    title, 
+    message 
+}: { 
+    icon: React.ElementType; 
+    title: string; 
+    message: string; 
+}) => (
+    <div className="text-center py-16 text-gray-500 border-2 border-dashed rounded-xl bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+        <Icon className="w-16 h-16 mx-auto mb-4 opacity-50" />
+        <h3 className="text-xl font-semibold mb-2">{title}</h3>
+        <p className="text-sm max-w-md mx-auto">{message}</p>
     </div>
 );
 
-const SensorCard = ({ sensor, onOpenModal, onDelete }: { sensor: Sensor; onOpenModal: (view: string, data: any) => void; onDelete: (type: 'sensor', item: Sensor) => void; }) => {
-    const { Icon, unit, name: typeName, color } = getSensorInfo(sensor.type);
+/**
+ * @component AddSensorCard
+ * @description Tarjeta para añadir un nuevo sensor de un tipo específico.
+ */
+const AddSensorCard = ({
+    sensorType,
+    tankId,
+    onClick
+}: {
+    sensorType: SensorType;
+    tankId: string;
+    onClick: () => void;
+}) => {
+    const { Icon, name, color } = getSensorInfo(sensorType);
+    
     return (
-        <div className="flex flex-col justify-between p-4 bg-white dark:bg-gray-900 rounded-lg border dark:border-gray-700 shadow h-full">
+        <button 
+            onClick={onClick} 
+            className="flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-900/50 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-[#39A900] hover:bg-[#39A900]/5 text-[#39A900] transition-all duration-200 h-full min-h-[180px] group"
+        >
+            <div className="p-3 rounded-lg bg-[#39A900]/10 group-hover:bg-[#39A900]/20 transition-colors mb-3">
+                <Icon className="w-8 h-8" />
+            </div>
+            <Plus className="w-6 h-6 mb-2" />
+            <span className="text-sm font-medium">Añadir {name}</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Sensor de {name.toLowerCase()}
+            </span>
+        </button>
+    );
+};
+
+/**
+ * @component SensorCard
+ * @description Tarjeta para mostrar información de un sensor.
+ */
+const SensorCard = ({ 
+    sensor, 
+    onOpenModal, 
+    onDelete 
+}: { 
+    sensor: Sensor; 
+    onOpenModal: (view: string, data: any) => void; 
+    onDelete: (type: 'sensor', item: Sensor) => void; 
+}) => {
+    const { Icon, unit, name: typeName, color } = getSensorInfo(sensor.type);
+    
+    return (
+        <div className="flex flex-col justify-between p-6 bg-white dark:bg-gray-900 rounded-xl border dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-200 h-full group">
             <div>
-                <div className="flex items-start justify-between mb-2">
+                <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center space-x-3">
-                        <Icon className={clsx("w-5 h-5", color)} />
+                        <div className={clsx("p-2 rounded-lg", color.replace('text-', 'bg-') + '/10')}>
+                            <Icon className={clsx("w-5 h-5", color)} />
+                        </div>
                         <div>
-                            <h4 className="font-semibold text-gray-900 dark:text-white">{sensor.name}</h4>
-                            <p className="text-xs text-gray-500">{typeName}</p>
+                            <h4 className="font-semibold text-gray-900 dark:text-white">
+                                {sensor.name}
+                            </h4>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {typeName} • {sensor.hardwareId}
+                            </p>
                         </div>
                     </div>
                     {getStatusChip(sensor.status)}
                 </div>
-                <div className="flex items-baseline justify-center text-center my-4 text-gray-900 dark:text-white">
-                    <span className="text-4xl font-bold">{sensor.lastReading !== null && sensor.lastReading !== undefined ? sensor.lastReading.toFixed(1) : '--'}</span>
+                
+                <div className="flex items-baseline justify-center text-center my-6 text-gray-900 dark:text-white">
+                    <span className="text-4xl font-bold">
+                        {sensor.lastReading !== null && sensor.lastReading !== undefined 
+                            ? sensor.lastReading.toFixed(sensor.type === 'PH' ? 2 : 1) 
+                            : '--'
+                        }
+                    </span>
                     <span className="text-lg text-gray-500 dark:text-gray-400 ml-1">{unit}</span>
                 </div>
+                
                 <div className="text-xs text-center text-gray-500 dark:text-gray-400 h-4">
-                    {sensor.lastUpdate ? `Actualizado: ${format(parseISO(sensor.lastUpdate), 'HH:mm:ss', { locale: es })}` : 'Sin datos'}
+                    {sensor.lastUpdate 
+                        ? `Actualizado: ${format(parseISO(sensor.lastUpdate), 'dd/MM HH:mm', { locale: es })}` 
+                        : 'Sin datos recientes'
+                    }
                 </div>
             </div>
-            <div className="flex justify-center space-x-2 mt-4 pt-3 border-t dark:border-gray-700">
-                <ActionButton icon={Eye} title="Ver Detalles" onClick={() => onOpenModal('view-sensor', sensor)} />
-                <ActionButton icon={Edit} title="Editar Sensor" onClick={() => onOpenModal('edit-sensor', { sensor })} />
-                <ActionButton icon={Trash2} title="Eliminar Sensor" onClick={() => onDelete('sensor', sensor)} />
+            
+            <div className="flex justify-center space-x-2 mt-6 pt-4 border-t dark:border-gray-700">
+                <ActionButton 
+                    icon={FileText} 
+                    title="Ver Detalles" 
+                    onClick={() => onOpenModal('view-sensor', sensor)} 
+                />
+                <ActionButton 
+                    icon={Edit} 
+                    title="Editar Sensor" 
+                    onClick={() => onOpenModal('edit-sensor', { sensor })} 
+                />
+                <ActionButton 
+                    icon={Trash2} 
+                    title="Eliminar Sensor" 
+                    onClick={() => onDelete('sensor', sensor)}
+                    variant="danger"
+                />
             </div>
         </div>
     );
