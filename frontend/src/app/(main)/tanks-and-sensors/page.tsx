@@ -433,12 +433,13 @@ export default function DevicesPage() {
                 })}
             </div>
 
-            {/* Modals */}
+            {/* Modals - AQUÍ ESTÁ LA CORRECCIÓN */}
             {(modal.view === 'create-tank' || modal.view === 'edit-tank') && (
                 <TankModal 
                     isOpen={true} 
                     isEditing={modal.view === 'edit-tank'} 
                     tankData={modal.data} 
+                    allTanks={tanks}
                     onClose={handleCloseModal} 
                     onSave={handleActionCompletion} 
                 />

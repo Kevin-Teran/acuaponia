@@ -1,41 +1,92 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, Query, Req } from '@nestjs/common';
+/**
+ * @file tanks.controller.ts
+ * @description Endpoints para la gestión de tanques.
+ * @author Kevin Mariano
+ * @version 8.0.0
+ * @since 1.0.0
+ */
+ import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { TanksService } from './tanks.service';
 import { CreateTankDto } from './dto/create-tank.dto';
 import { UpdateTankDto } from './dto/update-tank.dto';
-import { Request } from 'express';
-import { User } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 
+@ApiTags('Tanks')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('tanks')
 export class TanksController {
   constructor(private readonly tanksService: TanksService) {}
 
   @Post()
-  create(@Body() createTankDto: CreateTankDto, @Req() req: Request) {
-    const user = req.user as User;
-    return this.tanksService.create(createTankDto, user); 
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Crear un nuevo tanque' })
+  @ApiResponse({
+    status: 201,
+    description: 'El tanque ha sido creado exitosamente.',
+  })
+  @ApiResponse({ status: 409, description: 'Conflicto, el nombre del tanque ya existe.' })
+  create(@Body() createTankDto: CreateTankDto, @Req() req) {
+    return this.tanksService.create(createTankDto, req.user);
   }
 
   @Get()
-  findAll(@Query('userId') userId: string, @Req() req: Request) {
-    const currentUser = req.user as User;
-    return this.tanksService.findAllForUser(currentUser, userId); 
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Obtener una lista de tanques' })
+  @ApiResponse({ status: 200, description: 'Lista de tanques obtenida.' })
+  findAll(@Req() req, @Query('userId') userId?: string) {
+    return this.tanksService.findAllForUser(req.user, userId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: Request) {
-    const user = req.user as User;
-    return this.tanksService.findOne(id, user); 
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Obtener un tanque por su ID' })
+  @ApiResponse({ status: 200, description: 'Tanque encontrado.' })
+  @ApiResponse({ status: 404, description: 'Tanque no encontrado.' })
+  findOne(@Param('id') id: string, @Req() req) {
+    return this.tanksService.findOne(id, req.user);
   }
 
-  @Put(':id')
-  update(@Param('id') id: string, @Body() updateTankDto: UpdateTankDto, @Req() req: Request) {
-    const user = req.user as User;
-    return this.tanksService.update(id, updateTankDto, user); 
+  @Patch(':id')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Actualizar un tanque' })
+  @ApiResponse({ status: 200, description: 'Tanque actualizado.' })
+  @ApiResponse({ status: 404, description: 'Tanque no encontrado.' })
+  update(
+    @Param('id') id: string,
+    @Body() updateTankDto: UpdateTankDto,
+    @Req() req,
+  ) {
+    return this.tanksService.update(id, updateTankDto, req.user);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() req: Request) {
-    const user = req.user as User;
-    return this.tanksService.remove(id, user); 
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Eliminar un tanque' })
+  @ApiResponse({ status: 200, description: 'Tanque eliminado.' })
+  @ApiResponse({ status: 404, description: 'Tanque no encontrado.' })
+  @ApiResponse({ status: 409, description: 'El tanque tiene sensores asociados.' })
+  remove(@Param('id') id: string, @Req() req) {
+    return this.tanksService.remove(id, req.user);
   }
 }

@@ -1,13 +1,16 @@
 /**
  * @file tanks.service.ts
- * @description Lógica de negocio para la gestión de tanques.
- * Se implementan validaciones robustas para nombres duplicados, permisos de administrador
- * y protección contra eliminación de tanques con sensores activos.
+ * @description Lógica de negocio para la gestión de tanques con validación de nombres únicos por usuario.
  * @author Kevin Mariano
- * @version 7.0.0
+ * @version 8.0.0
  * @since 1.0.0
  */
-import { Injectable, ForbiddenException, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTankDto } from './dto/create-tank.dto';
 import { UpdateTankDto } from './dto/update-tank.dto';
@@ -26,21 +29,45 @@ export class TanksService {
    * @throws {ConflictException} Si el usuario ya tiene un tanque con el mismo nombre.
    */
   async create(createTankDto: CreateTankDto, user: User) {
+    const targetUserId =
+      user.role === Role.ADMIN && createTankDto.userId
+        ? createTankDto.userId
+        : user.id;
+
+    // Verificar si ya existe un tanque con el mismo nombre para el usuario
     const existingTank = await this.prisma.tank.findFirst({
       where: {
-        name: createTankDto.name,
-        userId: user.id,
+        name: createTankDto.name.trim(),
+        userId: targetUserId,
       },
     });
 
     if (existingTank) {
-      throw new ConflictException(`Ya tienes un tanque con el nombre "${createTankDto.name}".`);
+      throw new ConflictException(
+        `Ya existe un tanque con el nombre "${createTankDto.name}" para este usuario.`,
+      );
     }
 
     return this.prisma.tank.create({
       data: {
-        ...createTankDto,
-        userId: user.id,
+        name: createTankDto.name.trim(),
+        location: createTankDto.location.trim(),
+        status: createTankDto.status || 'ACTIVE',
+        userId: targetUserId,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        _count: {
+          select: {
+            sensors: true,
+          },
+        },
       },
     });
   }
@@ -54,12 +81,36 @@ export class TanksService {
    * @returns {Promise<Tank[]>} Una lista de tanques.
    */
   async findAllForUser(currentUser: User, targetUserId?: string) {
+    let whereClause: any = {};
+
     if (currentUser.role === Role.ADMIN) {
-      const whereClause = targetUserId ? { userId: targetUserId } : {};
-      return this.prisma.tank.findMany({ where: whereClause });
+      if (targetUserId) {
+        whereClause = { userId: targetUserId };
+      }
+      // Si no se especifica targetUserId, el admin ve todos los tanques
+    } else {
+      // Los usuarios normales solo ven sus propios tanques
+      whereClause = { userId: currentUser.id };
     }
 
-    return this.prisma.tank.findMany({ where: { userId: currentUser.id } });
+    return this.prisma.tank.findMany({
+      where: whereClause,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        _count: {
+          select: {
+            sensors: true,
+          },
+        },
+      },
+      orderBy: [{ name: 'asc' }, { createdAt: 'desc' }],
+    });
   }
 
   /**
@@ -72,13 +123,46 @@ export class TanksService {
    * @throws {ForbiddenException} Si el usuario no tiene permisos.
    */
   async findOne(id: string, user: User) {
-    const tank = await this.prisma.tank.findUnique({ where: { id } });
+    const tank = await this.prisma.tank.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        sensors: {
+          include: {
+            _count: {
+              select: {
+                SensorData: true,
+              },
+            },
+          },
+          orderBy: {
+            type: 'asc',
+          },
+        },
+        _count: {
+          select: {
+            sensors: true,
+          },
+        },
+      },
+    });
+
     if (!tank) {
       throw new NotFoundException(`Tanque con ID "${id}" no encontrado.`);
     }
+
     if (user.role !== Role.ADMIN && tank.userId !== user.id) {
-      throw new ForbiddenException('No tienes permiso para acceder a este tanque.');
+      throw new ForbiddenException(
+        'No tienes permiso para acceder a este tanque.',
+      );
     }
+
     return tank;
   }
 
@@ -92,24 +176,54 @@ export class TanksService {
    * @throws {ConflictException} Si el nuevo nombre ya existe en otro tanque del mismo usuario.
    */
   async update(id: string, updateTankDto: UpdateTankDto, user: User) {
-    const tankToUpdate = await this.findOne(id, user); 
+    const tankToUpdate = await this.findOne(id, user);
 
-    if (updateTankDto.name && updateTankDto.name !== tankToUpdate.name) {
+    // Si se está actualizando el nombre, verificar que no esté duplicado
+    if (updateTankDto.name && updateTankDto.name.trim() !== tankToUpdate.name) {
       const existingTank = await this.prisma.tank.findFirst({
         where: {
-          name: updateTankDto.name,
+          name: updateTankDto.name.trim(),
           userId: tankToUpdate.userId,
-          id: { not: id }, 
+          id: { not: id }, // Excluir el tanque actual
         },
       });
+
       if (existingTank) {
-        throw new ConflictException(`Ya tienes un tanque con el nombre "${updateTankDto.name}".`);
+        throw new ConflictException(
+          `Ya existe un tanque con el nombre "${updateTankDto.name}" para este usuario.`,
+        );
       }
+    }
+
+    // Preparar datos de actualización
+    const updateData: any = {};
+    if (updateTankDto.name) {
+      updateData.name = updateTankDto.name.trim();
+    }
+    if (updateTankDto.location) {
+      updateData.location = updateTankDto.location.trim();
+    }
+    if (updateTankDto.status) {
+      updateData.status = updateTankDto.status;
     }
 
     return this.prisma.tank.update({
       where: { id },
-      data: updateTankDto,
+      data: updateData,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        _count: {
+          select: {
+            sensors: true,
+          },
+        },
+      },
     });
   }
 
@@ -122,16 +236,23 @@ export class TanksService {
    * @throws {ConflictException} Si el tanque tiene sensores asociados.
    */
   async remove(id: string, user: User) {
-    await this.findOne(id, user); 
+    const tank = await this.findOne(id, user);
 
+    // Verificar que no tenga sensores asociados
     const sensorCount = await this.prisma.sensor.count({
-      where: { tankId: id },
+      where: {
+        tankId: id,
+      },
     });
 
     if (sensorCount > 0) {
-      throw new ConflictException(`No se puede eliminar el tanque porque tiene ${sensorCount} sensor(es) asociado(s).`);
+      throw new ConflictException(
+        `No se puede eliminar el tanque porque tiene ${sensorCount} sensor(es) asociado(s).`,
+      );
     }
 
-    return this.prisma.tank.delete({ where: { id } });
+    return this.prisma.tank.delete({
+      where: { id: tank.id },
+    });
   }
 }

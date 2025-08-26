@@ -1,105 +1,295 @@
 /**
  * @file TankModal.tsx
- * @description Modal para crear y editar tanques, con manejo de errores de validación del backend.
- * @author Kevin Mariano
- * @version 7.0.0
+ * @description Modal optimizado para crear y editar tanques, con validación de nombre único por usuario.
+ * @author Kevin Mariano (Refactorizado por Claude)
+ * @version 2.3.0
  * @since 1.0.0
  */
-import React, { useState, useEffect, useCallback } from 'react';
-import { Save } from 'lucide-react';
-import { Modal } from '@/components/common/Modal';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import * as tankService from '@/services/tankService';
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext'; // Importar useAuth para obtener el usuario actual
 import { Tank } from '@/types';
+import { createTank, updateTank } from '@/services/tankService';
+import { 
+  X, 
+  MapPin,
+  FileText,
+  AlertCircle,
+  CheckCircle,
+  Droplets as TankIcon
+} from 'lucide-react';
+import { clsx } from 'clsx';
 import Swal from 'sweetalert2';
 
 interface TankModalProps {
   isOpen: boolean;
   isEditing: boolean;
-  tankData?: any;
+  tankData?: Tank;
+  allTanks?: Tank[];
   onClose: () => void;
   onSave: () => void;
-  userId?: string | null;
 }
 
-export const TankModal: React.FC<TankModalProps> = ({ isOpen, isEditing, tankData, onClose, onSave, userId }) => {
-    const [formData, setFormData] = useState({ name: '', location: '', status: 'ACTIVE' });
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+export const TankModal: React.FC<TankModalProps> = ({
+  isOpen,
+  isEditing,
+  tankData,
+  allTanks = [],
+  onClose,
+  onSave,
+}) => {
+  const { user } = useAuth(); // Obtener el usuario logueado desde el contexto
 
-    useEffect(() => {
-        if (isOpen) {
-            setError(null);
-            if (isEditing && tankData) {
-                setFormData({
-                    name: tankData.name || '',
-                    location: tankData.location || '',
-                    status: tankData.status || 'ACTIVE',
-                });
-            } else {
-                setFormData({ name: '', location: '', status: 'ACTIVE' });
-            }
-        }
-    }, [isOpen, isEditing, tankData]);
+  const [formData, setFormData] = useState({
+    name: '',
+    location: '',
+  });
 
-    const handleSubmit = useCallback(async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-        setError(null);
-        try {
-            const dataToSend = { name: formData.name, location: formData.location, status: formData.status };
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-            if (isEditing) {
-                await tankService.updateTank(tankData!.id, dataToSend);
-            } else {
-                if (!userId) {
-                    throw new Error("No se ha seleccionado un usuario para asignar el tanque.");
-                }
-                await tankService.createTank({ ...dataToSend, userId: userId });
-            }
-            onSave();
-            await Swal.fire({ icon: 'success', title: `Tanque ${isEditing ? 'actualizado' : 'creado'}`, toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
-        } catch (err: any) {
-            const message = err.response?.data?.message || 'Ocurrió un error inesperado.';
-            setError(message);
-        } finally {
-            setIsSubmitting(false);
-        }
-    }, [formData, isEditing, tankData, onSave, userId]);
+  useEffect(() => {
+    if (isOpen) {
+      if (isEditing && tankData) {
+        setFormData({ name: tankData.name, location: tankData.location });
+      } else {
+        setFormData({ name: '', location: '' });
+      }
+      setErrors({});
+    }
+  }, [isOpen, isEditing, tankData]);
 
-    return (
-        <Modal
-            title={isEditing ? "Editar Tanque" : "Nuevo Tanque"}
-            isOpen={isOpen}
-            onClose={onClose}
-            footer={
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    const trimmedName = formData.name.trim();
+
+    // DEBUG: Agregar logs para identificar el problema
+    console.log('🔍 DEBUG - Validación:');
+    console.log('Usuario actual:', user);
+    console.log('Todos los tanques:', allTanks);
+    console.log('Nombre a validar:', trimmedName);
+
+    if (!user) { // Asegurarse de que el usuario esté cargado
+      newErrors.name = 'No se pudo verificar el usuario. Inténtalo de nuevo.';
+      setErrors(newErrors);
+      return false;
+    }
+
+    if (!trimmedName) {
+      newErrors.name = 'El nombre del tanque es obligatorio';
+    } else if (trimmedName.length < 3) {
+      newErrors.name = 'El nombre debe tener al menos 3 caracteres';
+    } else {
+      // **LÓGICA DE VALIDACIÓN MEJORADA CON DEBUGGING**
+      // 1. Filtra los tanques para obtener solo los del usuario actual.
+      const userTanks = allTanks.filter(tank => {
+        // Convertir ambos a string para comparación segura
+        const tankUserId = String(tank.userId);
+        const currentUserId = String(user.id);
+        return tankUserId === currentUserId;
+      });
+
+      console.log('Tanques del usuario actual:', userTanks);
+
+      // 2. Comprueba si el nombre ya existe entre los tanques de ESE usuario.
+      const isNameTaken = userTanks.some(tank => {
+        const nameMatch = tank.name.toLowerCase() === trimmedName.toLowerCase();
+        const isNotCurrentTank = !isEditing || tank.id !== tankData?.id;
+        
+        console.log(`Comparando "${tank.name}" con "${trimmedName}":`, {
+          nameMatch,
+          isNotCurrentTank,
+          tankId: tank.id,
+          currentTankId: tankData?.id
+        });
+        
+        return nameMatch && isNotCurrentTank;
+      });
+
+      console.log('¿Nombre ya existe?:', isNameTaken);
+
+      if (isNameTaken) {
+        newErrors.name = `Ya tienes un tanque con el nombre "${trimmedName}"`;
+      }
+    }
+
+    if (!formData.location.trim()) {
+      newErrors.location = 'La ubicación es obligatoria';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+    setLoading(true);
+
+    try {
+      const payload = {
+        name: formData.name.trim(),
+        location: formData.location.trim(),
+      };
+
+      if (isEditing && tankData) {
+        await updateTank(tankData.id, payload);
+        await Swal.fire({
+          title: '¡Tanque actualizado!',
+          text: 'Los cambios se guardaron correctamente.',
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false,
+          color: '#39A900'
+        });
+      } else {
+        await createTank(payload);
+        await Swal.fire({
+          title: '¡Tanque creado!',
+          text: 'El nuevo tanque se ha añadido al sistema.',
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false,
+          color: '#39A900'
+        });
+      }
+      onSave();
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || `Error al ${isEditing ? 'actualizar' : 'crear'} el tanque`;
+      await Swal.fire({
+        title: 'Error',
+        text: errorMessage,
+        icon: 'error',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-500 bg-opacity-75">
+      <div 
+        className="inline-block w-full max-w-lg p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-2xl rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-[#39A900]/10 rounded-lg">
+              <TankIcon className="w-8 h-8 text-[#39A900]" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                {isEditing ? 'Editar Tanque' : 'Nuevo Tanque'}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {isEditing ? 'Modifica los detalles del tanque' : 'Añade un nuevo tanque a tu sistema'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 rounded-lg transition-colors hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Nombre del Tanque */}
+          <div>
+            <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+              Nombre del Tanque *
+            </label>
+            <div className="relative">
+              <FileText className="absolute w-5 h-5 text-gray-400 transform -translate-y-1/2 left-3 top-1/2" />
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                placeholder="Ej: Tanque de Tilapias A"
+                className={clsx(
+                  "w-full px-10 py-3 pr-4 border rounded-lg focus:ring-[#39A900] focus:border-[#39A900] dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors",
+                  errors.name && "border-red-500"
+                )}
+              />
+            </div>
+            {errors.name && (
+              <p className="flex items-center mt-1 text-sm text-red-600">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                {errors.name}
+              </p>
+            )}
+          </div>
+
+          {/* Ubicación */}
+          <div>
+            <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+              Ubicación *
+            </label>
+            <div className="relative">
+              <MapPin className="absolute w-5 h-5 text-gray-400 transform -translate-y-1/2 left-3 top-1/2" />
+              <input
+                type="text"
+                name="location"
+                value={formData.location}
+                onChange={handleInputChange}
+                placeholder="Ej: Invernadero Principal, Fila 2"
+                className={clsx(
+                  "w-full px-10 py-3 pr-4 border rounded-lg focus:ring-[#39A900] focus:border-[#39A900] dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors",
+                  errors.location && "border-red-500"
+                )}
+              />
+            </div>
+            {errors.location && (
+              <p className="flex items-center mt-1 text-sm text-red-600">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                {errors.location}
+              </p>
+            )}
+          </div>
+
+          {/* Botones de Acción */}
+          <div className="flex justify-end pt-6 space-x-3 border-t border-gray-200 dark:border-gray-600">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-3 font-medium text-gray-700 transition-colors bg-gray-100 rounded-lg dark:text-gray-300 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex items-center px-6 py-3 font-medium text-white bg-[#39A900] rounded-lg hover:bg-[#2F8B00] disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {loading ? (
                 <>
-                    <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
-                    <button type="submit" form="tank-form" disabled={isSubmitting} className="btn-primary min-w-[140px]">
-                        {isSubmitting ? <LoadingSpinner size="sm" /> : <><Save className="w-4 h-4" /><span>{isEditing ? 'Guardar' : 'Crear'}</span></>}
-                    </button>
+                  <div className="w-5 h-5 mr-2 border-b-2 border-white rounded-full animate-spin"></div>
+                  Guardando...
                 </>
-            }
-        >
-            <form id="tank-form" onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <label className="label">Nombre del Tanque*</label>
-                    <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="form-input" required />
-                </div>
-                <div>
-                    <label className="label">Ubicación*</label>
-                    <input type="text" value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} className="form-input" required />
-                </div>
-                <div>
-                    <label className="label">Estado</label>
-                    <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value as any })} className="form-select">
-                        <option value="ACTIVE">Activo</option>
-                        <option value="MAINTENANCE">Mantenimiento</option>
-                        <option value="INACTIVE">Inactivo</option>
-                    </select>
-                </div>
-                {error && <p className="text-red-500 text-sm text-center mt-2">{error}</p>}
-            </form>
-        </Modal>
-    );
+              ) : (
+                <>
+                  <CheckCircle className="w-5 h-5 mr-2" />
+                  {isEditing ? 'Actualizar Tanque' : 'Crear Tanque'}
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 };
