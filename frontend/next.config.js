@@ -1,14 +1,16 @@
 /** @type {import('next').NextConfig} */
 
-const repo = 'acuaponia'; 
+// Escribe el nombre exacto de tu repositorio de GitHub aquí
+const repoName = 'acuaponia';
 
-const assetPrefix = `/${repo}/`;
-const basePath = `/${repo}`;
+const isProd = process.env.NODE_ENV === 'production';
 
 const nextConfig = {
   output: 'export',
-  assetPrefix: assetPrefix,
-  basePath: basePath,
+
+  assetPrefix: isProd ? `/${repoName}/` : undefined,
+  basePath: isProd ? `/${repoName}` : undefined,
+
   images: {
     unoptimized: true,
   },
