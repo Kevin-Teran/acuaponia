@@ -1,3 +1,7 @@
 {
-  "/(main)/tanks-and-sensors/page": "app/(main)/tanks-and-sensors/page.js"
+  "/(auth)/login/page": "app/(auth)/login/page.js",
+  "/(main)/tanks-and-sensors/page": "app/(main)/tanks-and-sensors/page.js",
+  "/(main)/dashboard/page": "app/(main)/dashboard/page.js",
+  "/(main)/users/page": "app/(main)/users/page.js",
+  "/(main)/predictions/page": "app/(main)/predictions/page.js"
 }
