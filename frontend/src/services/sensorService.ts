@@ -3,19 +3,28 @@
  * @description Servicio para gestionar las operaciones CRUD de sensores.
  * Versión corregida para exportar todas las funciones necesarias.
  * @author kevin mariano
- * @version 1.3.0
+ * @version 2.0.0 
  * @since 1.0.0
  */
 import api from '@/config/api';
 import { Sensor, CreateSensorDto, UpdateSensorDto } from '@/types';
 
 /**
- * @description Obtiene todos los sensores de todos los tanques.
+ * @description Obtiene todos los sensores de un usuario específico.
+ * @param {string} userId - ID del usuario.
  * @returns {Promise<Sensor[]>}
  */
-const getSensors = async (): Promise<Sensor[]> => {
-  const response = await api.get('/sensors/all');
-  return response.data;
+export const getSensors = async (userId?: string): Promise<Sensor[]> => {
+  try {
+    console.log(`🔧 Fetching sensors for user: ${userId}`);
+    const params = userId ? { userId } : {};
+    const response = await api.get('/sensors', { params });
+    console.log(`✅ Sensors response:`, response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error fetching sensors:', error);
+    throw error;
+  }
 };
 
 /**
@@ -23,9 +32,14 @@ const getSensors = async (): Promise<Sensor[]> => {
  * @param {string} tankId - ID del tanque.
  * @returns {Promise<Sensor[]>}
  */
-const getSensorsByTank = async (tankId: string): Promise<Sensor[]> => {
+export const getSensorsByTank = async (tankId: string): Promise<Sensor[]> => {
+  try {
     const response = await api.get(`/sensors`, { params: { tankId } });
     return response.data;
+  } catch (error: any) {
+    console.error('❌ Error fetching sensors by tank:', error);
+    throw error;
+  }
 };
 
 /**
@@ -33,9 +47,14 @@ const getSensorsByTank = async (tankId: string): Promise<Sensor[]> => {
  * @param {string} id - ID del sensor.
  * @returns {Promise<Sensor>}
  */
-const getSensorById = async (id: string): Promise<Sensor> => {
+export const getSensorById = async (id: string): Promise<Sensor> => {
+  try {
     const response = await api.get(`/sensors/${id}`);
     return response.data;
+  } catch (error: any) {
+    console.error('❌ Error fetching sensor by ID:', error);
+    throw error;
+  }
 };
 
 /**
@@ -43,9 +62,16 @@ const getSensorById = async (id: string): Promise<Sensor> => {
  * @param {CreateSensorDto} sensorData - Datos para crear el sensor.
  * @returns {Promise<Sensor>}
  */
-const createSensor = async (sensorData: CreateSensorDto): Promise<Sensor> => {
+export const createSensor = async (sensorData: CreateSensorDto): Promise<Sensor> => {
+  try {
+    console.log('🆕 Creating sensor:', sensorData);
     const response = await api.post('/sensors', sensorData);
+    console.log('✅ Sensor created:', response.data);
     return response.data;
+  } catch (error: any) {
+    console.error('❌ Error creating sensor:', error);
+    throw error;
+  }
 };
 
 /**
@@ -54,9 +80,16 @@ const createSensor = async (sensorData: CreateSensorDto): Promise<Sensor> => {
  * @param {UpdateSensorDto} sensorData - Datos para actualizar.
  * @returns {Promise<Sensor>}
  */
-const updateSensor = async (id: string, sensorData: UpdateSensorDto): Promise<Sensor> => {
+export const updateSensor = async (id: string, sensorData: UpdateSensorDto): Promise<Sensor> => {
+  try {
+    console.log('🔄 Updating sensor:', id, sensorData);
     const response = await api.put(`/sensors/${id}`, sensorData);
+    console.log('✅ Sensor updated:', response.data);
     return response.data;
+  } catch (error: any) {
+    console.error('❌ Error updating sensor:', error);
+    throw error;
+  }
 };
 
 /**
@@ -64,10 +97,16 @@ const updateSensor = async (id: string, sensorData: UpdateSensorDto): Promise<Se
  * @param {string} id - ID del sensor a eliminar.
  * @returns {Promise<void>}
  */
-const deleteSensor = async (id: string): Promise<void> => {
+export const deleteSensor = async (id: string): Promise<void> => {
+  try {
+    console.log('🗑️ Deleting sensor:', id);
     await api.delete(`/sensors/${id}`);
+    console.log('✅ Sensor deleted successfully');
+  } catch (error: any) {
+    console.error('❌ Error deleting sensor:', error);
+    throw error;
+  }
 };
-
 
 export const sensorService = {
   getSensors,

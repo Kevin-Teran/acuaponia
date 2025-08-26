@@ -1,11 +1,8 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
-  "/(main)/users/page": "app/(main)/users/page.js",
-  "/(main)/data-entry/page": "app/(main)/data-entry/page.js",
-  "/(main)/tanks-and-sensors/page": "app/(main)/tanks-and-sensors/page.js",
-  "/(main)/ai-assistant/page": "app/(main)/ai-assistant/page.js",
+  "/(auth)/login/page": "app/(auth)/login/page.js",
   "/(main)/analytics/page": "app/(main)/analytics/page.js",
+  "/(main)/tanks-and-sensors/page": "app/(main)/tanks-and-sensors/page.js",
   "/(main)/predictions/page": "app/(main)/predictions/page.js",
-  "/(main)/dashboard/page": "app/(main)/dashboard/page.js",
-  "/(main)/reports/page": "app/(main)/reports/page.js"
+  "/(main)/dashboard/page": "app/(main)/dashboard/page.js"
 }

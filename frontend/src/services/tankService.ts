@@ -2,7 +2,7 @@
  * @file tankService.ts
  * @description Servicio para gestionar las operaciones CRUD de los tanques.
  * @author kevin mariano
- * @version 1.2.0
+ * @version 2.0.0 
  * @since 1.0.0
  */
 
@@ -10,13 +10,22 @@ import api from '@/config/api';
 import { Tank, CreateTankDto, UpdateTankDto } from '@/types';
 
 /**
- * Obtiene una lista de todos los tanques.
+ * Obtiene una lista de tanques para un usuario específico.
+ * @param {string} userId - ID del usuario para filtrar tanques.
  * @returns {Promise<Tank[]>} Una promesa que se resuelve con un array de tanques.
  * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
-export const getTanks = async (): Promise<Tank[]> => {
-  const response = await api.get('/tanks');
-  return response.data;
+export const getTanks = async (userId?: string): Promise<Tank[]> => {
+  try {
+    console.log(`🏗️ Fetching tanks for user: ${userId}`);
+    const params = userId ? { userId } : {};
+    const response = await api.get('/tanks', { params });
+    console.log(`✅ Tanks response:`, response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error fetching tanks:', error);
+    throw error;
+  }
 };
 
 /**
@@ -26,8 +35,13 @@ export const getTanks = async (): Promise<Tank[]> => {
  * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
 export const getTankById = async (id: string): Promise<Tank> => {
+  try {
     const response = await api.get(`/tanks/${id}`);
     return response.data;
+  } catch (error: any) {
+    console.error('❌ Error fetching tank by ID:', error);
+    throw error;
+  }
 };
 
 /**
@@ -37,8 +51,15 @@ export const getTankById = async (id: string): Promise<Tank> => {
  * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
 export const createTank = async (tankData: CreateTankDto): Promise<Tank> => {
-  const response = await api.post('/tanks', tankData);
-  return response.data;
+  try {
+    console.log('🆕 Creating tank:', tankData);
+    const response = await api.post('/tanks', tankData);
+    console.log('✅ Tank created:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error creating tank:', error);
+    throw error;
+  }
 };
 
 /**
@@ -49,8 +70,15 @@ export const createTank = async (tankData: CreateTankDto): Promise<Tank> => {
  * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
 export const updateTank = async (id: string, tankData: UpdateTankDto): Promise<Tank> => {
-  const response = await api.put(`/tanks/${id}`, tankData);
-  return response.data;
+  try {
+    console.log('🔄 Updating tank:', id, tankData);
+    const response = await api.put(`/tanks/${id}`, tankData);
+    console.log('✅ Tank updated:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error updating tank:', error);
+    throw error;
+  }
 };
 
 /**
@@ -60,5 +88,12 @@ export const updateTank = async (id: string, tankData: UpdateTankDto): Promise<T
  * @throws {Error} Si ocurre un error durante la llamada a la API.
  */
 export const deleteTank = async (id: string): Promise<void> => {
-  await api.delete(`/tanks/${id}`);
+  try {
+    console.log('🗑️ Deleting tank:', id);
+    await api.delete(`/tanks/${id}`);
+    console.log('✅ Tank deleted successfully');
+  } catch (error: any) {
+    console.error('❌ Error deleting tank:', error);
+    throw error;
+  }
 };
