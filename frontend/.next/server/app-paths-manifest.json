@@ -3,5 +3,5 @@
   "/(auth)/login/page": "app/(auth)/login/page.js",
   "/(main)/data-entry/page": "app/(main)/data-entry/page.js",
   "/(main)/dashboard/page": "app/(main)/dashboard/page.js",
-  "/(main)/tanks-and-sensors/page": "app/(main)/tanks-and-sensors/page.js"
+  "/(main)/users/page": "app/(main)/users/page.js"
 }

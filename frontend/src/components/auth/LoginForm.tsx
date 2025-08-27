@@ -147,7 +147,7 @@ export const LoginForm: React.FC = () => {
                         width={70}
                         height={70}
                         className="mx-auto mb-3"
-                        style={{ width: 'auto' }}
+                        style={{ height: 'auto' }}
                         priority
                     />
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Sistema de Monitoreo de Acuaponía</h1>
