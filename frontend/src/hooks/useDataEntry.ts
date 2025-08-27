@@ -1,8 +1,8 @@
 /**
  * @file useDataEntry.ts
- * @description Hook para gestionar la lógica de la página de entrada manual de datos.
- * @author Kevin Mariano 
- * @version 3.0.0
+ * @description Hook unificado para Ingreso de Datos, manejando entrada manual y simulación MQTT en el cliente.
+ * @author Kevin Mariano (Reconstruido por Gemini)
+ * @version 5.1.0
  * @since 1.0.0
  */
 import { useState, useEffect, useCallback } from 'react';
@@ -10,9 +10,19 @@ import { Tank, Sensor, UserFromApi as User, SensorType, ManualEntryDto } from '@
 import * as tankService from '@/services/tankService';
 import * as sensorService from '@/services/sensorService';
 import * as userService from '@/services/userService';
-import { addManualEntry } from '@/services/dataService'; 
+import { addManualEntry } from '@/services/dataService';
+import { mqttService } from '@/services/mqttService';
 import { useAuth } from '@/context/AuthContext';
 import Swal from 'sweetalert2';
+
+const generateRealisticValue = (type: SensorType): number => {
+  switch (type) {
+    case 'TEMPERATURE': return parseFloat((Math.random() * 10 + 20).toFixed(2));
+    case 'PH': return parseFloat((Math.random() * 2 + 6).toFixed(2));
+    case 'OXYGEN': return parseFloat((Math.random() * 5 + 5).toFixed(2));
+    default: return 0;
+  }
+};
 
 export const useDataEntry = () => {
   const { user: currentUser } = useAuth();
@@ -25,134 +35,131 @@ export const useDataEntry = () => {
   const [sensors, setSensors] = useState<Sensor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [readings, setReadings] = useState<Record<string, { value: string; sensorId: string }>>({});
+  
+  const [manualReadings, setManualReadings] = useState<Record<string, string>>({});
+  const [activeSimulations, setActiveSimulations] = useState<Record<string, NodeJS.Timeout>>({});
 
+  // Conectar a MQTT al iniciar y desconectar al salir
+  useEffect(() => {
+    mqttService.connect().catch(err => {
+      console.error("Fallo en la conexión inicial a MQTT", err);
+      setError("No se pudo conectar al servicio de simulación (MQTT).");
+    });
+    return () => {
+      // Limpiar todos los intervalos al desmontar el componente
+      Object.values(activeSimulations).forEach(clearInterval);
+      mqttService.disconnect();
+    };
+  }, []); // El array de dependencias vacío asegura que esto solo se ejecute una vez
+
+  // Cargar usuarios (solo si es admin)
   useEffect(() => {
     if (isAdmin) {
-      const fetchUsers = async () => {
-        setLoading(true);
-        try {
-          const usersData = await userService.getUsers();
-          setUsers(usersData);
-          if (usersData.length > 0 && !selectedUserId) {
-            setSelectedUserId(usersData[0].id);
-          }
-        } catch (err) {
-          console.error('Error fetching users:', err);
-          setError('No se pudo cargar la lista de usuarios.');
-        } finally {
-          setLoading(false);
+      setLoading(true);
+      userService.getUsers()
+        .then(setUsers)
+        .catch(() => setError('No se pudo cargar la lista de usuarios.'))
+        .finally(() => setLoading(false));
+    }
+  }, [isAdmin]);
+
+  // Cargar tanques cuando cambia el usuario seleccionado
+  useEffect(() => {
+    if (!selectedUserId) {
+      setTanks([]);
+      setSelectedTankId('');
+      setSensors([]);
+      return;
+    }
+    setLoading(true);
+    tankService.getTanks(selectedUserId)
+      .then(data => {
+        setTanks(data);
+        if (data.length > 0) {
+          setSelectedTankId(data[0].id);
+        } else {
+          setSelectedTankId('');
+          setSensors([]);
         }
-      };
-      fetchUsers();
-    }
-  }, [isAdmin, selectedUserId]);
+      })
+      .catch(() => setError('No se pudieron cargar los tanques.'))
+      .finally(() => setLoading(false));
+  }, [selectedUserId]);
 
+  // Cargar sensores cuando cambia el tanque seleccionado
   useEffect(() => {
-    if (selectedUserId) {
-      setLoading(true);
-      tankService.getTanks(selectedUserId)
-        .then(data => {
-          setTanks(data);
-          if (data.length > 0) {
-            setSelectedTankId(data[0].id);
-          } else {
-            setSelectedTankId('');
-            setSensors([]);
-          }
-        })
-        .catch(err => {
-          console.error('Error fetching tanks:', err);
-          setError('No se pudieron cargar los tanques.');
-        })
-        .finally(() => setLoading(false));
-    } else if (!isAdmin) {
-        setTanks([]);
-        setSelectedTankId('');
-        setSensors([]);
+    if (!selectedTankId) {
+      setSensors([]);
+      return;
     }
-  }, [selectedUserId, isAdmin]);
-
-  useEffect(() => {
-    if (selectedTankId) {
-      setLoading(true);
-      sensorService.getSensorsByTank(selectedTankId)
-        .then(data => {
-          setSensors(data);
-          const initialReadings: Record<string, { value: string; sensorId: string }> = {};
-          data.forEach(sensor => {
-            initialReadings[sensor.type] = { value: '', sensorId: sensor.id };
-          });
-          setReadings(initialReadings);
-        })
-        .catch(err => {
-          console.error('Error fetching sensors:', err);
-          setError('No se pudieron cargar los sensores.');
-        })
-        .finally(() => setLoading(false));
-    }
+    setLoading(true);
+    sensorService.getSensorsByTank(selectedTankId)
+      .then(setSensors)
+      .catch(() => setError('No se pudieron cargar los sensores del tanque.'))
+      .finally(() => setLoading(false));
   }, [selectedTankId]);
 
-  const handleReadingChange = (type: SensorType, value: string) => {
-    setReadings(prev => ({
-      ...prev,
-      [type]: { ...prev[type], value },
-    }));
+
+  const handleManualReadingChange = (sensorId: string, value: string) => {
+    setManualReadings(prev => ({ ...prev, [sensorId]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const entries: ManualEntryDto[] = Object.values(readings)
-      .filter(reading => reading.value !== '' && reading.sensorId)
-      .map(reading => ({
-        sensorId: reading.sensorId,
-        value: parseFloat(reading.value),
+    const entries: ManualEntryDto[] = sensors
+      .filter(sensor => manualReadings[sensor.id]?.trim())
+      .map(sensor => ({
+        sensorId: sensor.id,
+        value: parseFloat(manualReadings[sensor.id]),
         timestamp: new Date(),
       }));
 
     if (entries.length === 0) {
-      Swal.fire('Atención', 'Debe ingresar al menos un valor.', 'warning');
+      Swal.fire('Atención', 'Debe ingresar al menos un valor manual.', 'warning');
       return;
     }
-
     try {
-      for (const entry of entries) {
-        await addManualEntry(entry);
-      }
-      
-      Swal.fire('¡Éxito!', 'Datos guardados correctamente.', 'success');
-      
-      const clearedReadings = { ...readings };
-      Object.keys(clearedReadings).forEach(key => {
-        clearedReadings[key].value = '';
-      });
-      setReadings(clearedReadings);
+      await Promise.all(entries.map(entry => addManualEntry(entry)));
+      Swal.fire('¡Éxito!', 'Datos manuales guardados.', 'success');
+      setManualReadings({});
     } catch (err) {
-      console.error('Error submitting data:', err);
-      Swal.fire('Error', 'No se pudieron guardar los datos.', 'error');
+      Swal.fire('Error', 'No se pudieron guardar los datos manuales.', 'error');
+    }
+  };
+
+  const toggleSimulation = (sensor: Sensor) => {
+    const isSimulating = activeSimulations[sensor.id];
+
+    if (isSimulating) {
+      clearInterval(isSimulating);
+      setActiveSimulations(prev => {
+        const newState = { ...prev };
+        delete newState[sensor.id];
+        return newState;
+      });
+    } else {
+      const intervalId = setInterval(() => {
+        const value = generateRealisticValue(sensor.type);
+        const topic = `acuaponia/sensor/${sensor.hardwareId}`;
+        const payload = JSON.stringify({ value, timestamp: new Date().toISOString() });
+        mqttService.publish(topic, payload);
+      }, 5000);
+      setActiveSimulations(prev => ({ ...prev, [sensor.id]: intervalId }));
     }
   };
   
   const handleUserChange = (userId: string) => {
     setSelectedUserId(userId);
-    setTanks([]);
-    setSelectedTankId('');
-    setSensors([]);
   };
+  
+  const handleTankChange = (tankId: string) => {
+    setSelectedTankId(tankId);
+  }
 
   return {
-    users,
-    selectedUserId,
-    tanks,
-    selectedTankId,
-    sensors,
-    loading,
-    error,
-    readings,
-    isAdmin,
-    handleUserChange,
-    setSelectedTankId,
-    handleReadingChange,
-    handleSubmit,
+    users, selectedUserId, tanks, selectedTankId, sensors, loading, error, isAdmin,
+    handleUserChange, handleTankChange,
+    manualReadings, handleManualReadingChange, handleManualSubmit,
+    activeSimulations, toggleSimulation,
   };
 };

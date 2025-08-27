@@ -2,7 +2,7 @@
  * @file SensorModal.tsx
  * @description Modal optimizado para crear/editar sensores con 3 tipos únicos por tanque.
  * @author Kevin Mariano
- * @version 6.0.0
+ * @version 6.0.1
  * @since 1.0.0
  */
 'use client';
@@ -106,7 +106,6 @@ export const SensorModal: React.FC<SensorModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Inicializar formulario
   useEffect(() => {
     if (isOpen) {
       if (isEditing && sensorData?.sensor) {
@@ -137,12 +136,10 @@ export const SensorModal: React.FC<SensorModalProps> = ({
     }
   }, [isOpen, isEditing, sensorData]);
 
-  // Obtener tanques disponibles para el tipo seleccionado
   const availableTanks = useMemo(() => {
     if (!formData.type || !user) return tanks;
 
     return tanks.filter(tank => {
-      // Los usuarios normales solo ven sus tanques
       if (!isAdmin && tank.userId !== user.id) return false;
 
       const counts = sensorCountsByTankAndType.get(tank.id);
@@ -159,7 +156,6 @@ export const SensorModal: React.FC<SensorModalProps> = ({
     });
   }, [formData.type, tanks, sensorCountsByTankAndType, isEditing, sensorData, user, isAdmin]);
 
-  // Validar formulario
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
@@ -167,24 +163,23 @@ export const SensorModal: React.FC<SensorModalProps> = ({
       newErrors.name = 'El nombre es obligatorio';
     }
 
-    if (!formData.hardwareId.trim()) {
+    if (!isEditing && !formData.hardwareId.trim()) {
       newErrors.hardwareId = 'El ID de hardware es obligatorio';
     }
 
-    if (!formData.type) {
+    if (!isEditing && !formData.type) {
       newErrors.type = 'Debe seleccionar un tipo de sensor';
     }
 
-    if (!formData.tankId) {
-      newErrors.tankId = 'Debe seleccionar un tanque';
+    if (!formData.tankId || formData.tankId.trim() === '') {
+      newErrors.tankId = 'Debe seleccionar un tanque válido';
     }
 
     if (!formData.calibrationDate) {
       newErrors.calibrationDate = 'La fecha de calibración es obligatoria';
     }
 
-    // Validar que el tanque seleccionado esté disponible
-    if (formData.tankId && !availableTanks.some(tank => tank.id === formData.tankId)) {
+    if (formData.tankId && formData.tankId.trim() !== '' && !availableTanks.some(tank => tank.id === formData.tankId)) {
       newErrors.tankId = 'El tanque seleccionado no está disponible para este tipo de sensor';
     }
 
@@ -192,18 +187,20 @@ export const SensorModal: React.FC<SensorModalProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  // Manejar cambios en el formulario
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
     
-    // Limpiar error del campo
+    if (name === 'tankId' && value === '') {
+      setFormData(prev => ({ ...prev, [name]: '' }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+    
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
 
-  // Manejar envío del formulario
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -212,14 +209,27 @@ export const SensorModal: React.FC<SensorModalProps> = ({
     setLoading(true);
 
     try {
-      const sensorPayload = {
-        ...formData,
-        type: formData.type as SensorType,
-        calibrationDate: new Date(formData.calibrationDate).toISOString(),
-      };
-
       if (isEditing && sensorData?.sensor) {
-        await updateSensor(sensorData.sensor.id, sensorPayload);
+        const updatePayload: any = {
+          name: formData.name,
+          calibrationDate: new Date(formData.calibrationDate).toISOString(),
+        };
+
+        const tankChanged = formData.tankId !== sensorData.sensor.tankId;
+        const tankIsValid = formData.tankId && formData.tankId.trim() !== '' && formData.tankId !== 'undefined' && formData.tankId !== 'null';
+        
+        if (tankChanged && tankIsValid) {
+          updatePayload.tankId = formData.tankId;
+          //console.log('✅ Including tankId in payload:', formData.tankId);
+        } else {
+          console.log('❌ Not including tankId in payload');
+          if (!tankChanged) console.log('  - Reason: tankId did not change');
+          if (!tankIsValid) console.log('  - Reason: tankId is not valid');
+        }
+
+        console.log('📦 Final update payload:', updatePayload);
+
+        await updateSensor(sensorData.sensor.id, updatePayload);
         await Swal.fire({
           title: '¡Sensor actualizado!',
           text: 'Los cambios se han guardado correctamente.',
@@ -229,7 +239,15 @@ export const SensorModal: React.FC<SensorModalProps> = ({
           color: '#39A900'
         });
       } else {
-        await createSensor(sensorPayload);
+        const createPayload = {
+          name: formData.name,
+          hardwareId: formData.hardwareId,
+          type: formData.type as SensorType,
+          tankId: formData.tankId,
+          calibrationDate: new Date(formData.calibrationDate).toISOString(),
+        };
+
+        await createSensor(createPayload);
         await Swal.fire({
           title: '¡Sensor creado!',
           text: 'El sensor se ha configurado correctamente.',
@@ -242,8 +260,28 @@ export const SensorModal: React.FC<SensorModalProps> = ({
 
       onSave();
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 
+      console.error('❌ Error completo:', error);
+      console.error('❌ Error response:', error.response?.data);
+      
+      let errorMessage = error.response?.data?.message || 
         `Error al ${isEditing ? 'actualizar' : 'crear'} el sensor`;
+
+      if (Array.isArray(errorMessage)) {
+        errorMessage = errorMessage.map(msg => {
+          if (msg.includes('tankId must be a UUID')) return 'El ID del tanque debe ser válido';
+          if (msg.includes('hardwareId should not exist')) return 'El ID de hardware no se puede modificar';
+          if (msg.includes('type should not exist')) return 'El tipo de sensor no se puede modificar';
+          if (msg.includes('name should not be empty')) return 'El nombre no puede estar vacío';
+          if (msg.includes('calibrationDate must be a valid date')) return 'La fecha de calibración debe ser válida';
+          return msg;
+        }).join(', ');
+      } else if (typeof errorMessage === 'string') {
+        if (errorMessage.includes('tankId must be a UUID')) errorMessage = 'El ID del tanque debe ser válido';
+        if (errorMessage.includes('hardwareId should not exist')) errorMessage = 'El ID de hardware no se puede modificar';
+        if (errorMessage.includes('type should not exist')) errorMessage = 'El tipo de sensor no se puede modificar';
+        if (errorMessage.includes('name should not be empty')) errorMessage = 'El nombre no puede estar vacío';
+        if (errorMessage.includes('calibrationDate must be a valid date')) errorMessage = 'La fecha de calibración debe ser válida';
+      }
       
       await Swal.fire({
         title: 'Error',
@@ -328,7 +366,7 @@ export const SensorModal: React.FC<SensorModalProps> = ({
                 name="type"
                 value={formData.type}
                 onChange={handleInputChange}
-                disabled={isEditing || !!sensorData?.preselectedType} // Tipo fijo en edición o preseleccionado
+                disabled={isEditing || !!sensorData?.preselectedType}
                 className={clsx(
                   "w-full px-4 py-3 border rounded-lg focus:ring-[#39A900] focus:border-[#39A900] dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors",
                   (isEditing || !!sensorData?.preselectedType) && "bg-gray-100 dark:bg-gray-600 cursor-not-allowed",
@@ -346,6 +384,11 @@ export const SensorModal: React.FC<SensorModalProps> = ({
                 <p className="mt-1 text-sm text-red-600 flex items-center">
                   <AlertCircle className="w-4 h-4 mr-1" />
                   {errors.type}
+                </p>
+              )}
+              {isEditing && (
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  El tipo de sensor no se puede modificar después de la creación
                 </p>
               )}
             </div>
@@ -386,9 +429,11 @@ export const SensorModal: React.FC<SensorModalProps> = ({
                   name="hardwareId"
                   value={formData.hardwareId}
                   onChange={handleInputChange}
+                  disabled={isEditing}
                   placeholder="Ej: temp-001-tank-a"
                   className={clsx(
                     "w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-[#39A900] focus:border-[#39A900] dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors",
+                    isEditing && "bg-gray-100 dark:bg-gray-600 cursor-not-allowed",
                     errors.hardwareId && "border-red-500"
                   )}
                 />
@@ -397,6 +442,11 @@ export const SensorModal: React.FC<SensorModalProps> = ({
                 <p className="mt-1 text-sm text-red-600 flex items-center">
                   <AlertCircle className="w-4 h-4 mr-1" />
                   {errors.hardwareId}
+                </p>
+              )}
+              {isEditing && (
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  El ID de hardware no se puede modificar después de la creación
                 </p>
               )}
             </div>
@@ -476,7 +526,7 @@ export const SensorModal: React.FC<SensorModalProps> = ({
               </button>
               <button
                 type="submit"
-                disabled={loading || availableTanks.length === 0}
+                disabled={loading || (!isEditing && availableTanks.length === 0)}
                 className="px-6 py-3 bg-[#39A900] text-white rounded-lg hover:bg-[#2F8B00] disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center"
               >
                 {loading ? (
@@ -506,6 +556,11 @@ export const SensorModal: React.FC<SensorModalProps> = ({
                 <p>• Máximo por tanque: 1 sensor por tipo</p>
                 {selectedTank && (
                   <p>• Ubicación: {selectedTank.location}</p>
+                )}
+                {isEditing && (
+                  <p className="text-amber-600 dark:text-amber-400">
+                    • Nota: El tipo de sensor y ID de hardware no se pueden modificar
+                  </p>
                 )}
               </div>
             </div>

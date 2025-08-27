@@ -1,80 +1,96 @@
+/**
+ * @file mqttService.ts
+ * @description Servicio Singleton para gestionar la conexión y comunicación con el broker MQTT.
+ * @author Kevin Mariano (Refactorizado por Gemini)
+ * @version 2.1.0
+ * @since 1.0.0
+ */
 import mqtt, { MqttClient, IClientOptions } from 'mqtt';
 
 class MqttService {
   private client: MqttClient | null = null;
-  private connectionStatus: 'disconnected' | 'connecting' | 'connected' | 'error' = 'disconnected';
+  private connectionPromise: Promise<void> | null = null;
 
-  connect(): Promise<void> {
-    if (this.client && (this.client.connected || this.client.reconnecting)) {
+  private connectInternal(): Promise<void> {
+    if (this.client?.connected) {
       return Promise.resolve();
     }
-
-    const brokerUrl = process.env.NEXT_PUBLIC_MQTT_URL; 
-    const username = process.env.NEXT_PUBLIC_MQTT_USERNAME; 
-    const password = process.env.NEXT_PUBLIC_MQTT_PASSWORD;
-
-    if (!brokerUrl) {
-      console.error("Error: La URL del broker MQTT no está definida en las variables de entorno (NEXT_PUBLIC_MQTT_URL).");
-      this.connectionStatus = 'error';
-      return Promise.reject(new Error("MQTT Broker URL no definida."));
+    
+    // Si ya estamos intentando conectar, devolvemos la promesa existente
+    if (this.connectionPromise) {
+      return this.connectionPromise;
     }
 
-    const options: IClientOptions = {
-      username,
-      password,
-      clientId: `sena_acuaponia_frontend_${Math.random().toString(16).substring(2, 8)}`,
-      reconnectPeriod: 5000,
-    };
+    this.connectionPromise = new Promise((resolve, reject) => {
+      const brokerUrl = process.env.NEXT_PUBLIC_MQTT_URL;
+      const username = process.env.NEXT_PUBLIC_MQTT_USERNAME;
+      const password = process.env.NEXT_PUBLIC_MQTT_PASSWORD;
 
-    this.connectionStatus = 'connecting';
-    this.client = mqtt.connect(brokerUrl, options);
+      if (!brokerUrl) {
+        console.error("Error: NEXT_PUBLIC_MQTT_URL no está definida.");
+        return reject(new Error("MQTT Broker URL no definida."));
+      }
 
-    return new Promise((resolve, reject) => {
-      this.client?.on('connect', () => {
+      const options: IClientOptions = {
+        username,
+        password,
+        clientId: `sena_acuaponia_frontend_${Math.random().toString(16).substring(2, 8)}`,
+        reconnectPeriod: 5000,
+        // --- ESTA ES LA CORRECCIÓN CLAVE ---
+        // Mantiene la conexión viva enviando pings cada 30 segundos.
+        keepalive: 30,
+        // Tiempo máximo de espera para conectar.
+        connectTimeout: 10000, 
+      };
+
+      this.client = mqtt.connect(brokerUrl, options);
+
+      this.client.on('connect', () => {
         console.log('✅ Conectado exitosamente al broker MQTT.');
-        this.connectionStatus = 'connected';
+        this.connectionPromise = null; // Limpiamos la promesa al conectar
         resolve();
       });
 
-      this.client?.on('error', (err) => {
+      this.client.on('error', (err) => {
         console.error('❌ Error de conexión MQTT:', err);
-        this.connectionStatus = 'error';
         this.client?.end();
+        this.connectionPromise = null;
         reject(err);
       });
 
-      this.client?.on('close', () => {
-        if (this.connectionStatus !== 'error') {
-            this.connectionStatus = 'disconnected';
-            console.log('🔌 Desconectado del broker MQTT.');
-        }
+      this.client.on('close', () => {
+        console.log('🔌 Desconectado del broker MQTT.');
       });
     });
+
+    return this.connectionPromise;
   }
 
-  publish(topic: string, message: string): void {
-    if (this.client && this.client.connected) {
-      this.client.publish(topic, message);
-    } else {
-      console.error('No se puede publicar. El cliente MQTT no está conectado.');
+  // --- MÉTODOS PÚBLICOS MEJORADOS ---
+
+  public async connect(): Promise<void> {
+    try {
+      await this.connectInternal();
+    } catch (error) {
+      console.error("Fallo final en la conexión a MQTT", error);
     }
   }
 
-  subscribe(topic: string, onMessageCallback: (topic: string, message: string) => void): void {
-    if (this.client && this.client.connected) {
-        this.client.subscribe(topic, (err) => {
-            if (!err) {
-                this.client?.on('message', onMessageCallback);
-            } else {
-                console.error(`Error al suscribirse al tópico ${topic}:`, err);
-            }
-        });
-    } else {
-        console.error('No se puede suscribir. El cliente MQTT no está conectado.');
+  public async publish(topic: string, message: string): Promise<void> {
+    try {
+      // Intentamos conectar (no hará nada si ya está conectado)
+      await this.connectInternal();
+      if (this.client && this.client.connected) {
+        this.client.publish(topic, message);
+      } else {
+        throw new Error("No se pudo establecer la conexión para publicar.");
+      }
+    } catch (error) {
+      console.error(`No se puede publicar en "${topic}".`, error);
     }
   }
 
-  disconnect(): void {
+  public disconnect(): void {
     if (this.client) {
       this.client.end();
       this.client = null;

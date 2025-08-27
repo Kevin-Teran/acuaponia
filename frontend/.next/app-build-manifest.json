@@ -1,9 +1,9 @@
 {
   "pages": {
-    "/(main)/tanks-and-sensors/page": [
+    "/(main)/data-entry/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/(main)/tanks-and-sensors/page.js"
+      "static/chunks/app/(main)/data-entry/page.js"
     ],
     "/(main)/layout": [
       "static/chunks/webpack.js",
@@ -26,25 +26,10 @@
       "static/chunks/main-app.js",
       "static/chunks/app/(main)/dashboard/page.js"
     ],
-    "/(main)/users/page": [
+    "/(main)/tanks-and-sensors/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/(main)/users/page.js"
-    ],
-    "/(main)/settings/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(main)/settings/page.js"
-    ],
-    "/(main)/ai-assistant/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(main)/ai-assistant/page.js"
-    ],
-    "/(main)/data-entry/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(main)/data-entry/page.js"
+      "static/chunks/app/(main)/tanks-and-sensors/page.js"
     ],
     "/_not-found/page": [
       "static/chunks/webpack.js",

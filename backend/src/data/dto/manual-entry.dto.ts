@@ -1,27 +1,44 @@
-import { IsNotEmpty, IsString, IsNumber, IsArray, ValidateNested } from 'class-validator';
+/**
+ * @file manual-entry.dto.ts
+ * @description DTO para el registro manual de datos de un sensor.
+ * @author Kevin Mariano (Corregido y optimizado por Gemini)
+ * @version 2.0.0
+ * @since 1.0.0
+ */
+
+import { IsString, IsNotEmpty, IsNumber, IsOptional, IsDate } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 /**
- * @class SensorEntry
- * @description Define la estructura de una única entrada de datos de sensor.
+ * @class ManualEntryDto
+ * @description Define la estructura para una única entrada de datos manual.
+ * El endpoint de la API esperará un array de este tipo: ManualEntryDto[]
  */
-class SensorEntry {
+export class ManualEntryDto {
+  @ApiProperty({ 
+    description: 'ID del sensor al que pertenece el dato', 
+    example: 'clwz3q0x40000_fake_id_12345' 
+  })
   @IsString()
   @IsNotEmpty()
   sensorId: string;
 
+  @ApiProperty({ 
+    description: 'Valor numérico de la lectura del sensor', 
+    example: 25.5 
+  })
   @IsNumber()
+  @IsNotEmpty()
   value: number;
-}
 
-/**
- * @class ManualEntryDto
- * @description DTO para validar el cuerpo de la petición de envío manual de datos.
- * Debe contener un array de objetos SensorEntry.
- */
-export class ManualEntryDto {
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => SensorEntry)
-  entries: SensorEntry[];
+  @ApiProperty({ 
+    description: 'Fecha y hora de la lectura (opcional, si no se provee se usa la actual)', 
+    example: '2025-08-28T10:00:00.000Z', 
+    required: false 
+  })
+  @IsDate()
+  @Type(() => Date)
+  @IsOptional()
+  timestamp?: Date;
 }

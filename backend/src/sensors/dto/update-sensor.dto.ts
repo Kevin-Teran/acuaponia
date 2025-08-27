@@ -2,12 +2,12 @@
  * @file update-sensor.dto.ts
  * @description Data Transfer Object (DTO) para la actualización parcial de un sensor.
  * Define la estructura y las validaciones para los datos que se pueden modificar.
- * @author Kevin Mariano (Documentado por Gemini)
- * @version 3.0.0
+ * @author Kevin Mariano
+ * @version 3.1.0
  * @since 1.0.0
  */
 
-import { IsString, IsOptional, IsDateString, IsEnum, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsDateString, IsEnum } from 'class-validator';
 import { SensorStatus } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -20,9 +20,6 @@ export class UpdateSensorDto {
   /**
    * @property name
    * @description El nuevo nombre del sensor. Debe ser una cadena de texto.
-   * @type {string}
-   * @optional
-   * @example "Sensor de pH Piscina Principal"
    */
   @ApiProperty({
     description: 'El nuevo nombre del sensor.',
@@ -35,10 +32,7 @@ export class UpdateSensorDto {
 
   /**
    * @property status
-   * @description El nuevo estado del sensor. Debe ser uno de los valores definidos en el enum SensorStatus.
-   * @type {SensorStatus}
-   * @optional
-   * @example SensorStatus.MAINTENANCE
+   * @description El nuevo estado del sensor.
    */
   @ApiProperty({
     description: 'El nuevo estado del sensor.',
@@ -52,10 +46,7 @@ export class UpdateSensorDto {
 
   /**
    * @property calibrationDate
-   * @description La nueva fecha de la última calibración del sensor. Debe ser una fecha en formato ISO 8601.
-   * @type {Date}
-   * @optional
-   * @example "2025-08-27T10:00:00.000Z"
+   * @description La nueva fecha de la última calibración del sensor.
    */
   @ApiProperty({
     description: 'La nueva fecha de la última calibración (formato ISO 8601).',
@@ -68,17 +59,14 @@ export class UpdateSensorDto {
 
   /**
    * @property tankId
-   * @description El ID del nuevo tanque al que se asignará el sensor. Debe ser un UUID.
-   * @type {string}
-   * @optional
-   * @example "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+   * @description El ID del nuevo tanque al que se asignará el sensor.
    */
   @ApiProperty({
     description: 'El ID del nuevo tanque al que se reasignará el sensor.',
-    example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
+    example: 'cly3s7o4p0000_fake_id_12345',
     required: false,
   })
-  @IsUUID()
+  @IsString()
   @IsOptional()
   tankId?: string;
 }
