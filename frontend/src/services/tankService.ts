@@ -2,7 +2,7 @@
  * @file tankService.ts
  * @description Servicio para gestionar las operaciones CRUD de los tanques.
  * @author kevin mariano
- * @version 2.0.0 
+ * @version 2.1.0 
  * @since 1.0.0
  */
 
@@ -17,10 +17,10 @@ import { Tank, CreateTankDto, UpdateTankDto } from '@/types';
  */
 export const getTanks = async (userId?: string): Promise<Tank[]> => {
   try {
-    console.log(`🏗️ Fetching tanks for user: ${userId}`);
+    //console.log(`🏗️ Fetching tanks for user: ${userId}`);
     const params = userId ? { userId } : {};
     const response = await api.get('/tanks', { params });
-    console.log(`✅ Tanks response:`, response.data);
+    //console.log(`✅ Tanks response:`, response.data);
     return response.data;
   } catch (error: any) {
     console.error('❌ Error fetching tanks:', error);
@@ -52,9 +52,9 @@ export const getTankById = async (id: string): Promise<Tank> => {
  */
 export const createTank = async (tankData: CreateTankDto): Promise<Tank> => {
   try {
-    console.log('🆕 Creating tank:', tankData);
+    //console.log('🆕 Creating tank:', tankData);
     const response = await api.post('/tanks', tankData);
-    console.log('✅ Tank created:', response.data);
+    //console.log('✅ Tank created:', response.data);
     return response.data;
   } catch (error: any) {
     console.error('❌ Error creating tank:', error);
@@ -71,9 +71,9 @@ export const createTank = async (tankData: CreateTankDto): Promise<Tank> => {
  */
 export const updateTank = async (id: string, tankData: UpdateTankDto): Promise<Tank> => {
   try {
-    console.log('🔄 Updating tank:', id, tankData);
-    const response = await api.put(`/tanks/${id}`, tankData);
-    console.log('✅ Tank updated:', response.data);
+    //console.log('🔄 Updating tank:', id, tankData);
+    const response = await api.patch(`/tanks/${id}`, tankData);
+    //console.log('✅ Tank updated:', response.data);
     return response.data;
   } catch (error: any) {
     console.error('❌ Error updating tank:', error);
@@ -89,9 +89,9 @@ export const updateTank = async (id: string, tankData: UpdateTankDto): Promise<T
  */
 export const deleteTank = async (id: string): Promise<void> => {
   try {
-    console.log('🗑️ Deleting tank:', id);
+    //console.log('🗑️ Deleting tank:', id);
     await api.delete(`/tanks/${id}`);
-    console.log('✅ Tank deleted successfully');
+    //console.log('✅ Tank deleted successfully');
   } catch (error: any) {
     console.error('❌ Error deleting tank:', error);
     throw error;

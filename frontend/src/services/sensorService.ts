@@ -3,7 +3,7 @@
  * @description Servicio para gestionar las operaciones CRUD de sensores.
  * Versión corregida para exportar todas las funciones necesarias.
  * @author kevin mariano
- * @version 2.0.0 
+ * @version 2.1.0
  * @since 1.0.0
  */
 import api from '@/config/api';
@@ -16,10 +16,10 @@ import { Sensor, CreateSensorDto, UpdateSensorDto } from '@/types';
  */
 export const getSensors = async (userId?: string): Promise<Sensor[]> => {
   try {
-    console.log(`🔧 Fetching sensors for user: ${userId}`);
+    //console.log(`🔧 Fetching sensors for user: ${userId}`);
     const params = userId ? { userId } : {};
     const response = await api.get('/sensors', { params });
-    console.log(`✅ Sensors response:`, response.data);
+    //console.log(`✅ Sensors response:`, response.data);
     return response.data;
   } catch (error: any) {
     console.error('❌ Error fetching sensors:', error);
@@ -64,9 +64,9 @@ export const getSensorById = async (id: string): Promise<Sensor> => {
  */
 export const createSensor = async (sensorData: CreateSensorDto): Promise<Sensor> => {
   try {
-    console.log('🆕 Creating sensor:', sensorData);
+    //console.log('🆕 Creating sensor:', sensorData);
     const response = await api.post('/sensors', sensorData);
-    console.log('✅ Sensor created:', response.data);
+    //console.log('✅ Sensor created:', response.data);
     return response.data;
   } catch (error: any) {
     console.error('❌ Error creating sensor:', error);
@@ -82,9 +82,9 @@ export const createSensor = async (sensorData: CreateSensorDto): Promise<Sensor>
  */
 export const updateSensor = async (id: string, sensorData: UpdateSensorDto): Promise<Sensor> => {
   try {
-    console.log('🔄 Updating sensor:', id, sensorData);
-    const response = await api.put(`/sensors/${id}`, sensorData);
-    console.log('✅ Sensor updated:', response.data);
+    //console.log('🔄 Updating sensor:', id, sensorData);
+    const response = await api.patch(`/sensors/${id}`, sensorData);
+    //console.log('✅ Sensor updated:', response.data);
     return response.data;
   } catch (error: any) {
     console.error('❌ Error updating sensor:', error);
@@ -99,9 +99,9 @@ export const updateSensor = async (id: string, sensorData: UpdateSensorDto): Pro
  */
 export const deleteSensor = async (id: string): Promise<void> => {
   try {
-    console.log('🗑️ Deleting sensor:', id);
+    //console.log('🗑️ Deleting sensor:', id);
     await api.delete(`/sensors/${id}`);
-    console.log('✅ Sensor deleted successfully');
+    //console.log('✅ Sensor deleted successfully');
   } catch (error: any) {
     console.error('❌ Error deleting sensor:', error);
     throw error;

@@ -18,8 +18,6 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { authService } from '../services/authService';
-// --- CORRECCIÓN CLAVE ---
-// Importamos la función `updateUser` directamente, ya que `userService` como objeto ya no se exporta.
 import { updateUser as updateUserService } from '../services/userService'; 
 import { User, LoginCredentials } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
@@ -43,21 +41,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isAuthenticated = !!user;
 
   const checkUserSession = useCallback(async () => {
-    console.log('🔍 [AuthContext] Verificando sesión existente...');
+    //console.log('🔍 [AuthContext] Verificando sesión existente...');
     const token = localStorage.getItem('accessToken');
     if (token) {
       try {
-        console.log('📡 [AuthContext] Obteniendo datos del usuario...');
+        //console.log('📡 [AuthContext] Obteniendo datos del usuario...');
         const userData = await authService.getMe();
-        console.log('✅ [AuthContext] Usuario obtenido:', userData.email);
+        //console.log('✅ [AuthContext] Usuario obtenido:', userData.email);
         setUser(userData);
       } catch (error) {
-        console.error('❌ [AuthContext] Error al obtener usuario:', error);
+        //console.error('❌ [AuthContext] Error al obtener usuario:', error);
         localStorage.removeItem('accessToken');
         setUser(null);
       }
     } else {
-      console.log('⚠️ [AuthContext] No hay token, usuario no autenticado');
+      //console.log('⚠️ [AuthContext] No hay token, usuario no autenticado');
     }
     setLoading(false);
   }, []);
@@ -67,7 +65,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [checkUserSession]);
 
   const login = async (credentials: LoginCredentials) => {
-    console.log('🚀 [AuthContext] Iniciando proceso de login...');
+    //console.log('🚀 [AuthContext] Iniciando proceso de login...');
     try {
       const response = await authService.login(credentials);
       if (response && response.accessToken && response.user) {
@@ -76,7 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           localStorage.setItem('refreshToken', response.refreshToken);
         }
         setUser(response.user);
-        console.log('✅ [AuthContext] Usuario establecido y token guardado');
+        //console.log('✅ [AuthContext] Usuario establecido y token guardado');
         router.push('/dashboard');
       } else {
         throw new Error('Respuesta de login inválida desde el servidor.');
@@ -91,7 +89,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
-    console.log('🚪 [AuthContext] Cerrando sesión...');
+    //console.log('🚪 [AuthContext] Cerrando sesión...');
     setUser(null);
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
@@ -102,12 +100,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (!user) {
       throw new Error("No se puede actualizar el perfil: no hay usuario autenticado.");
     }
-    console.log(`🚀 [AuthContext] Iniciando actualización de perfil para ${user.email}...`);
+    //console.log(`🚀 [AuthContext] Iniciando actualización de perfil para ${user.email}...`);
     try {
-      // Se llama a la función importada directamente.
       const updatedUser = await updateUserService(user.id, dataToUpdate);
       setUser(updatedUser); 
-      console.log('✅ [AuthContext] Perfil actualizado y estado sincronizado.');
+      //console.log('✅ [AuthContext] Perfil actualizado y estado sincronizado.');
     } catch (error) {
       console.error('💥 [AuthContext] Falló la actualización del perfil:', error);
       throw error;

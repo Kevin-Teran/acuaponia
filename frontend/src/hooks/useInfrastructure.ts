@@ -33,8 +33,7 @@ export const useInfrastructure = (isAdmin: boolean = false): UseInfrastructureRe
   const fetchAllUsers = useCallback(async () => {
     if (!isAdmin) return;
     try {
-      console.log('👥 Fetching users list...');
-      // CORRECCIÓN: Ahora se llama a `getUsers` directamente.
+      // console.log('👥 Fetching users list...');
       const usersData = await userService.getUsers();
       setUsers(usersData);
     } catch (err: any) {
@@ -52,8 +51,7 @@ export const useInfrastructure = (isAdmin: boolean = false): UseInfrastructureRe
     setLoading(true);
     setError(null);
     try {
-      console.log(`🔄 Fetching infrastructure for user: ${userId}`);
-       // CORRECCIÓN: Se usa `getTanks` y `getSensors` según lo exportado en los servicios.
+      // console.log(`🔄 Fetching infrastructure for user: ${userId}`);
       const [tanksData, sensorsData] = await Promise.all([
         tankService.getTanks(userId),
         sensorService.getSensors(userId),

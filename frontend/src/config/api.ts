@@ -29,21 +29,23 @@ const api = axios.create({
  */
 api.interceptors.request.use(
   (config) => {
-    console.log(`🌐 [API Request] -> Petición ${config.method?.toUpperCase()} a: ${config.url}`);
+    //console.log(`🌐 [API Request] -> Petición ${config.method?.toUpperCase()} a: ${config.url}`);
 
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('accessToken');
       
       if (token) {
-        console.log('🔑 [API Request] -> Token encontrado. Longitud:', token.length);
-        console.log('🔑 [API Request] -> Primeros 20 caracteres:', token.substring(0, 20) + '...');
+        //console.log('🔑 [API Request] -> Token encontrado. Longitud:', token.length);
+        //console.log('🔑 [API Request] -> Primeros 20 caracteres:', token.substring(0, 20) + '...');
         config.headers.Authorization = `Bearer ${token}`;
-        console.log('✅ [API Request] -> Token adjuntado a cabecera Authorization');
+        //console.log('✅ [API Request] -> Token adjuntado a cabecera Authorization');
       } else {
-        console.warn(`⚠️ [API Request] -> No se encontró 'accessToken' en localStorage.`);
-        console.log('📝 [API Request] -> Contenido actual de localStorage:', 
-          Object.keys(localStorage).map(key => `${key}: ${localStorage.getItem(key)?.substring(0, 20)}...`)
+        /**
+        * console.warn(`⚠️ [API Request] -> No se encontró 'accessToken' en localStorage.`);
+        * console.log('📝 [API Request] -> Contenido actual de localStorage:', 
+        *   Object.keys(localStorage).map(key => `${key}: ${localStorage.getItem(key)?.substring(0, 20)}...`)
         );
+        */
       }
     } else {
       console.log('🪟 [API Request] -> Ejecutándose en servidor (window undefined)');
@@ -64,7 +66,7 @@ api.interceptors.request.use(
  */
 api.interceptors.response.use(
   (response) => {
-    console.log(`✅ [API Response] -> ${response.config.method?.toUpperCase()} ${response.config.url} - Status: ${response.status}`);
+    //console.log(`✅ [API Response] -> ${response.config.method?.toUpperCase()} ${response.config.url} - Status: ${response.status}`);
     return response;
   },
   (error) => {

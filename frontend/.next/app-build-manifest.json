@@ -16,25 +16,25 @@
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
-    "/(main)/users/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(main)/users/page.js"
-    ],
     "/(auth)/login/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/(auth)/login/page.js"
     ],
-    "/(auth)/forgot-password/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(auth)/forgot-password/page.js"
-    ],
     "/(main)/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/(main)/dashboard/page.js"
+    ],
+    "/(main)/users/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(main)/users/page.js"
+    ],
+    "/(main)/settings/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(main)/settings/page.js"
     ],
     "/(main)/ai-assistant/page": [
       "static/chunks/webpack.js",
