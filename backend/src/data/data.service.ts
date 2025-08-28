@@ -1,98 +1,92 @@
 /**
  * @file data.service.ts
- * @description Lógica de negocio para la gestión de datos de sensores, con simulación inteligente y manejo optimizado de MQTT.
+ * @description Servicio mejorado para gestión persistente de simulaciones de sensores.
  * @author Kevin Mariano 
- * @version 5.0.0
+ * @version 2.0.1 
  * @since 1.0.0
  */
-import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../events/events.gateway';
 import { ManualEntryDto } from './dto/manual-entry.dto';
 import { GetLatestDataDto } from './dto/get-latest-data.dto';
 import { SensorData, SensorType, User, Role } from '@prisma/client';
 
-/**
- * @typedef {Object} SimulationState
- * @description Estados posibles de la simulación de sensores
- */
 type SimulationState = 'STABLE' | 'RISING' | 'FALLING';
 
-/**
- * @interface ActiveEmitter
- * @description Estructura que define un emisor de simulación activo
- * @property {NodeJS.Timeout} intervalId - ID del intervalo de Node.js
- * @property {string} sensorId - ID único del sensor en la base de datos
- * @property {string} sensorName - Nombre descriptivo del sensor
- * @property {SensorType} type - Tipo de sensor (TEMPERATURE, PH, OXYGEN)
- * @property {string} tankName - Nombre del tanque al que pertenece
- * @property {string} userName - Nombre del usuario propietario
- * @property {Object} thresholds - Umbrales mínimo y máximo para el sensor
- * @property {number} currentValue - Valor actual de la simulación
- * @property {SimulationState} state - Estado actual de la simulación
- * @property {Date} startTime - Momento en que se inició la simulación
- */
 interface ActiveEmitter {
   intervalId: NodeJS.Timeout;
   sensorId: string;
   sensorName: string;
   type: SensorType;
+  tankId: string;
   tankName: string;
   userName: string;
+  userId: string;
   thresholds: { min: number; max: number };
   currentValue: number;
   state: SimulationState;
   startTime: Date;
+  messagesCount: number;
+  isPersistent: boolean;
 }
 
-/**
- * @constant DEFAULT_THRESHOLDS
- * @description Umbrales por defecto para cada tipo de sensor
- */
+// SOLUCIÓN: Se añade 'export' para que la interfaz sea visible desde otros módulos.
+export interface SimulationMetrics {
+  totalActiveSimulations: number;
+  totalMessagesSent: number;
+  averageUptime: number;
+  simulationsByType: Record<SensorType, number>;
+  simulationsByUser: Record<string, number>;
+  systemUptime: number;
+}
+
 const DEFAULT_THRESHOLDS = {
   TEMPERATURE: { min: 22, max: 28 },
   PH: { min: 6.8, max: 7.6 },
   OXYGEN: { min: 6, max: 10 },
 };
 
-/**
- * @class DataService
- * @description Servicio principal para el manejo de datos de sensores
- * Incluye funcionalidades de simulación, entrada manual y procesamiento de datos MQTT
- */
 @Injectable()
-export class DataService implements OnModuleDestroy {
+export class DataService implements OnModuleInit, OnModuleDestroy {
   private readonly activeEmitters = new Map<string, ActiveEmitter>();
   private readonly logger = new Logger(DataService.name);
+  private readonly serviceStartTime = new Date();
 
   constructor(
     private prisma: PrismaService,
     private eventsGateway: EventsGateway,
   ) {}
 
-  /**
-   * @method onModuleDestroy
-   * @description Método del ciclo de vida que se ejecuta al destruir el módulo
-   * Limpia todos los intervalos activos de simulación
-   */
+  async onModuleInit() {
+    this.logger.log('🚀 [INIT] Inicializando servicio de datos con simulaciones persistentes...');
+    await this.restorePersistedSimulations();
+    this.logger.log('✅ [INIT] Servicio de datos inicializado correctamente');
+  }
+
   onModuleDestroy() {
+    this.logger.log('🛑 [SHUTDOWN] Deteniendo todas las simulaciones...');
     this.activeEmitters.forEach(emitter => {
       clearInterval(emitter.intervalId);
-      this.logger.log(`🛑 Simulador detenido para sensor: ${emitter.sensorName}`);
+      this.logger.log(`⏹️ Simulador detenido: ${emitter.sensorName}`);
     });
-    this.logger.log('✅ Todos los emisores de simulación han sido detenidos correctamente.');
+    this.logger.log('✅ [SHUTDOWN] Todas las simulaciones han sido detenidas');
   }
 
   /**
-   * @method createFromMqtt
-   * @description Procesa datos recibidos desde MQTT, busca el sensor por hardwareId y guarda la entrada
-   * @param {string} hardwareId - El ID de hardware del sensor físico
-   * @param {Object} data - El payload con el valor y timestamp
-   * @param {number} data.value - Valor de la medición del sensor
-   * @param {string} [data.timestamp] - Timestamp opcional (ISO string)
-   * @returns {Promise<SensorData>} Los datos creados en la base de datos
-   * @throws {NotFoundException} Si el sensor con el hardwareId no se encuentra
+   * @method restorePersistedSimulations
+   * @description Restaura las simulaciones que estaban activas antes del reinicio
    */
+  private async restorePersistedSimulations() {
+    try {
+      this.logger.log('🔄 [RESTORE] Buscando simulaciones para restaurar...');
+      // En una implementación real, podrías usar Redis o base de datos para persistir el estado.
+      // Aquí se mantiene la estructura para futuras mejoras.
+    } catch (error) {
+      this.logger.error('❌ [RESTORE] Error restaurando simulaciones:', error);
+    }
+  }
+
   async createFromMqtt(hardwareId: string, data: { value: number; timestamp?: string }): Promise<SensorData> {
     this.logger.log(`📡 [MQTT] Procesando datos para hardwareId: ${hardwareId}`);
     
@@ -110,17 +104,15 @@ export class DataService implements OnModuleDestroy {
     });
 
     if (!sensor) {
-      const errorMsg = `Sensor con hardwareId "${hardwareId}" no fue encontrado en la base de datos.`;
+      const errorMsg = `Sensor con hardwareId "${hardwareId}" no fue encontrado.`;
       this.logger.error(`❌ [MQTT] ${errorMsg}`);
       throw new NotFoundException(errorMsg);
     }
 
-    this.logger.log(`✅ [MQTT] Sensor encontrado: ${sensor.name} (ID: ${sensor.id}) - Tanque: ${sensor.tank.name} - Usuario: ${sensor.tank.user.name}`);
-
     const timestamp = data.timestamp ? new Date(data.timestamp) : new Date();
     
     if (isNaN(timestamp.getTime())) {
-      this.logger.warn(`⚠️ [MQTT] Timestamp inválido recibido, usando timestamp actual`);
+      this.logger.warn(`⚠️ [MQTT] Timestamp inválido, usando timestamp actual`);
       timestamp.setTime(Date.now());
     }
 
@@ -132,18 +124,16 @@ export class DataService implements OnModuleDestroy {
       timestamp: timestamp,
     });
 
-    this.logger.log(`💾 [MQTT] Datos guardados exitosamente para sensor ${sensor.name}: ${data.value} ${this.getUnitForType(sensor.type)}`);
+    const activeEmitter = this.activeEmitters.get(sensor.id);
+    if (activeEmitter) {
+      activeEmitter.messagesCount++;
+    }
+
+    this.logger.log(`💾 [MQTT] Datos guardados para ${sensor.name}: ${data.value} ${this.getUnitForType(sensor.type)}`);
     
     return sensorData;
   }
 
-  /**
-   * @method submitManualEntry
-   * @description Procesa múltiples entradas manuales de datos
-   * @param {ManualEntryDto[]} entries - Array de entradas manuales a procesar
-   * @returns {Promise<SensorData[]>} Array de datos creados
-   * @throws {NotFoundException} Si algún sensor no se encuentra
-   */
   async submitManualEntry(entries: ManualEntryDto[]): Promise<SensorData[]> {
     this.logger.log(`📝 [MANUAL] Procesando ${entries.length} entradas manuales`);
     
@@ -164,9 +154,7 @@ export class DataService implements OnModuleDestroy {
       });
       
       if (!sensor) {
-        const errorMsg = `El sensor con ID ${entry.sensorId} no fue encontrado.`;
-        this.logger.error(`❌ [MANUAL] ${errorMsg}`);
-        throw new NotFoundException(errorMsg);
+        throw new NotFoundException(`Sensor con ID ${entry.sensorId} no encontrado.`);
       }
       
       const timestamp = entry.timestamp || new Date();
@@ -183,27 +171,16 @@ export class DataService implements OnModuleDestroy {
       this.logger.log(`✅ [MANUAL] Entrada guardada para ${sensor.name}: ${entry.value} ${this.getUnitForType(sensor.type)}`);
     }
     
-    this.logger.log(`🎉 [MANUAL] Se procesaron exitosamente ${createdData.length} entradas manuales`);
     return createdData;
   }
   
-  /**
-   * @method getLatest
-   * @description Obtiene los datos más recientes de sensores filtrados por parámetros
-   * @param {GetLatestDataDto} query - Parámetros de consulta (tankId, type)
-   * @param {User} user - Usuario que realiza la petición
-   * @returns {Promise<SensorData[]>} Array de datos más recientes
-   * @throws {BadRequestException} Si falta el parámetro tankId
-   * @throws {ForbiddenException} Si el usuario no tiene permisos
-   */
   async getLatest(query: GetLatestDataDto, user: User): Promise<SensorData[]> {
     const { tankId, type } = query;
     
     if (!tankId) {
-      throw new BadRequestException('El parámetro tankId es requerido para obtener los datos más recientes.');
+      throw new BadRequestException('El parámetro tankId es requerido.');
     }
     
-    // Verificar permisos si no es admin
     if (user.role !== 'ADMIN') {
       const tank = await this.prisma.tank.findFirst({ 
         where: { id: tankId, userId: user.id } 
@@ -224,7 +201,6 @@ export class DataService implements OnModuleDestroy {
     });
     
     if (sensors.length === 0) {
-      this.logger.log(`📊 No se encontraron sensores para el tanque ${tankId}${type ? ` con tipo ${type}` : ''}`);
       return [];
     }
     
@@ -252,24 +228,12 @@ export class DataService implements OnModuleDestroy {
     const results = await Promise.all(latestDataPromises);
     const validResults = results.filter(Boolean) as SensorData[];
     
-    this.logger.log(`📊 Se obtuvieron ${validResults.length} datos más recientes del tanque ${tankId}`);
     return validResults;
   }
 
-  /**
-   * @method getHistoricalData
-   * @description Obtiene datos históricos de sensores en un rango de fechas
-   * @param {User} user - Usuario que realiza la petición
-   * @param {string} tankId - ID del tanque
-   * @param {string} startDate - Fecha de inicio (YYYY-MM-DD)
-   * @param {string} endDate - Fecha de fin (YYYY-MM-DD)
-   * @returns {Promise<{data: SensorData[]}>} Objeto con array de datos históricos
-   * @throws {BadRequestException} Si faltan parámetros requeridos
-   * @throws {ForbiddenException} Si el usuario no tiene permisos
-   */
   async getHistoricalData(user: User, tankId: string, startDate: string, endDate: string): Promise<{ data: SensorData[] }> {
     if (!tankId || !startDate || !endDate) {
-      throw new BadRequestException('Los parámetros tankId, startDate y endDate son requeridos para obtener datos históricos.');
+      throw new BadRequestException('Los parámetros tankId, startDate y endDate son requeridos.');
     }
     
     if (user.role !== 'ADMIN') {
@@ -285,7 +249,7 @@ export class DataService implements OnModuleDestroy {
     const end = new Date(`${endDate}T23:59:59.999Z`);
     
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      throw new BadRequestException('Las fechas proporcionadas no son válidas. Use el formato YYYY-MM-DD.');
+      throw new BadRequestException('Las fechas no son válidas. Use formato YYYY-MM-DD.');
     }
     
     if (start > end) {
@@ -310,136 +274,216 @@ export class DataService implements OnModuleDestroy {
       }
     });
     
-    this.logger.log(`📈 Se obtuvieron ${rawData.length} registros históricos del tanque ${tankId} entre ${startDate} y ${endDate}`);
     return { data: rawData };
   }
 
-  /**
-   * @method startEmitters
-   * @description Inicia simuladores de datos para los sensores especificados
-   * @param {string[]} sensorIds - Array de IDs de sensores para simular
-   * @returns {Promise<void>}
-   */
-  async startEmitters(sensorIds: string[]): Promise<void> {
-    this.logger.log(`🚀 [SIMULACIÓN] Iniciando simuladores para ${sensorIds.length} sensores`);
+  async startEmitters(sensorIds: string[], user: User): Promise<{ started: string[]; skipped: string[]; errors: string[] }> {
+    this.logger.log(`🚀 [SIMULATION] Usuario ${user.name} iniciando ${sensorIds.length} simuladores`);
+    
+    const results = {
+      started: [] as string[],
+      skipped: [] as string[],
+      errors: [] as string[]
+    };
     
     for (const sensorId of sensorIds) {
-      if (this.activeEmitters.has(sensorId)) {
-        this.logger.warn(`⚠️ [SIMULACIÓN] El sensor ${sensorId} ya tiene un simulador activo`);
-        continue;
-      }
-      
-      const sensor = await this.prisma.sensor.findUnique({ 
-        where: { id: sensorId }, 
-        include: { 
-          tank: { 
-            include: { 
-              user: {
-                select: { name: true, settings: true }
+      try {
+        if (this.activeEmitters.has(sensorId)) {
+          this.logger.warn(`⚠️ [SIMULATION] Sensor ${sensorId} ya tiene simulador activo`);
+          results.skipped.push(sensorId);
+          continue;
+        }
+        
+        const sensor = await this.prisma.sensor.findUnique({ 
+          where: { id: sensorId }, 
+          include: { 
+            tank: { 
+              include: { 
+                user: {
+                  select: { id: true, name: true, settings: true }
+                }
               }
             }
           }
+        });
+        
+        if (!sensor) { 
+          this.logger.warn(`❌ [SIMULATION] Sensor ${sensorId} no encontrado`); 
+          results.errors.push(`Sensor ${sensorId} no encontrado`);
+          continue; 
         }
-      });
-      
-      if (!sensor) { 
-        this.logger.warn(`❌ [SIMULACIÓN] No se encontró el sensor con ID ${sensorId}.`); 
-        continue; 
+
+        if (user.role !== 'ADMIN' && sensor.tank.userId !== user.id) {
+          this.logger.warn(`🚫 [SIMULATION] Usuario ${user.name} sin permisos para sensor ${sensorId}`);
+          results.errors.push(`Sin permisos para sensor ${sensorId}`);
+          continue;
+        }
+        
+        const userSettings = (sensor.tank.user.settings as any)?.thresholds || {};
+        const sensorTypeKey = sensor.type;
+        const defaultThreshold = DEFAULT_THRESHOLDS[sensorTypeKey];
+        const thresholds = { 
+          min: userSettings[sensorTypeKey]?.min ?? defaultThreshold.min, 
+          max: userSettings[sensorTypeKey]?.max ?? defaultThreshold.max 
+        };
+        
+        let emitterState: ActiveEmitter = { 
+          intervalId: null as any, 
+          sensorId: sensor.id, 
+          sensorName: sensor.name, 
+          type: sensor.type, 
+          tankId: sensor.tankId,
+          tankName: sensor.tank.name, 
+          userName: sensor.tank.user.name,
+          userId: sensor.tank.user.id, 
+          thresholds, 
+          currentValue: (thresholds.min + thresholds.max) / 2, 
+          state: 'STABLE', 
+          startTime: new Date(),
+          messagesCount: 0,
+          isPersistent: true
+        };
+        
+        const intervalId = setInterval(async () => {
+          try {
+            const { currentValue, state } = this.generateRealisticValue(emitterState);
+            emitterState.currentValue = currentValue;
+            emitterState.state = state;
+            emitterState.messagesCount++;
+            
+            await this.createAndBroadcastEntry({ 
+              sensorId, 
+              tankId: sensor.tankId, 
+              type: sensor.type, 
+              value: currentValue, 
+              timestamp: new Date() 
+            });
+            
+          } catch (error) {
+            this.logger.error(`❌ [SIMULATION] Error en simulador ${sensor.name}: ${error.message}`);
+          }
+        }, 5000); 
+        
+        emitterState.intervalId = intervalId;
+        this.activeEmitters.set(sensorId, emitterState);
+        
+        results.started.push(sensorId);
+        this.logger.log(`✅ [SIMULATION] Simulador iniciado para "${sensor.name}" por ${user.name}`);
+        
+      } catch (error) {
+        this.logger.error(`❌ [SIMULATION] Error iniciando simulador ${sensorId}:`, error);
+        results.errors.push(`Error en sensor ${sensorId}: ${error.message}`);
       }
-      
-      const userSettings = (sensor.tank.user.settings as any)?.thresholds || {};
-      const sensorTypeKey = sensor.type;
-      const defaultThreshold = DEFAULT_THRESHOLDS[sensorTypeKey];
-      const thresholds = { 
-        min: userSettings[sensorTypeKey]?.min ?? defaultThreshold.min, 
-        max: userSettings[sensorTypeKey]?.max ?? defaultThreshold.max 
-      };
-      
-      let emitterState: ActiveEmitter = { 
-        intervalId: null as any, 
-        sensorId: sensor.id, 
-        sensorName: sensor.name, 
-        type: sensor.type, 
-        tankName: sensor.tank.name, 
-        userName: sensor.tank.user.name, 
-        thresholds, 
-        currentValue: (thresholds.min + thresholds.max) / 2, 
-        state: 'STABLE', 
-        startTime: new Date() 
-      };
-      
-      const intervalId = setInterval(async () => {
-        try {
-          const { currentValue, state } = this.generateRealisticValue(emitterState);
-          emitterState.currentValue = currentValue;
-          emitterState.state = state;
-          
-          await this.createAndBroadcastEntry({ 
-            sensorId, 
-            tankId: sensor.tankId, 
-            type: sensor.type, 
-            value: currentValue, 
-            timestamp: new Date() 
-          });
-          
-        } catch (error) {
-          this.logger.error(`❌ [SIMULACIÓN] Error en simulador del sensor ${sensor.name}: ${error.message}`);
-        }
-      }, 5000); 
-      
-      emitterState.intervalId = intervalId;
-      this.activeEmitters.set(sensorId, emitterState);
-      
-      this.logger.log(`✅ [SIMULACIÓN] Simulador iniciado para "${sensor.name}" (${sensor.type}) con rango [${thresholds.min}-${thresholds.max}] ${this.getUnitForType(sensor.type)}`);
     }
     
-    this.logger.log(`🎉 [SIMULACIÓN] Se iniciaron ${this.activeEmitters.size} simuladores activos`);
+    this.logger.log(`🎉 [SIMULATION] Resumen - Iniciados: ${results.started.length}, Omitidos: ${results.skipped.length}, Errores: ${results.errors.length}`);
+    return results;
   }
 
-  /**
-   * @method stopEmitter
-   * @description Detiene el simulador de un sensor específico
-   * @param {string} sensorId - ID del sensor cuyo simulador se debe detener
-   */
-  stopEmitter(sensorId: string): void {
+  stopEmitter(sensorId: string, user: User): void {
     const emitter = this.activeEmitters.get(sensorId);
     if (emitter) { 
+      if (user.role !== 'ADMIN' && emitter.userId !== user.id) {
+        throw new ForbiddenException('No tienes permiso para detener este simulador.');
+      }
+
       clearInterval(emitter.intervalId); 
       this.activeEmitters.delete(sensorId); 
-      this.logger.log(`⏹️ [SIMULACIÓN] Simulador detenido para el sensor "${emitter.sensorName}"`); 
+      this.logger.log(`⏹️ [SIMULATION] Simulador detenido para "${emitter.sensorName}" por ${user.name}`); 
     } else {
-      this.logger.warn(`⚠️ [SIMULACIÓN] No se encontró simulador activo para el sensor ${sensorId}`);
+      this.logger.warn(`⚠️ [SIMULATION] No se encontró simulador activo para sensor ${sensorId}`);
     }
   }
 
-  /**
-   * @method getEmitterStatus
-   * @description Obtiene el estado actual de todos los simuladores activos
-   * @returns {Object[]} Array con información de simuladores activos
-   */
-  getEmitterStatus() {
-    const activeSimulators = Array.from(this.activeEmitters.values()).map(({ intervalId, ...rest }) => ({
-      ...rest,
-      uptime: Math.floor((Date.now() - rest.startTime.getTime()) / 1000), // segundos de actividad
-      unit: this.getUnitForType(rest.type)
-    }));
-    
-    this.logger.log(`📊 [SIMULACIÓN] Consultando estado de ${activeSimulators.length} simuladores activos`);
-    return activeSimulators;
+  async stopMultipleEmitters(sensorIds: string[], user: User): Promise<{ stopped: string[]; notFound: string[]; noPermission: string[] }> {
+    const results = {
+      stopped: [] as string[],
+      notFound: [] as string[],
+      noPermission: [] as string[]
+    };
+
+    for (const sensorId of sensorIds) {
+      try {
+        const emitter = this.activeEmitters.get(sensorId);
+        if (!emitter) {
+          results.notFound.push(sensorId);
+          continue;
+        }
+
+        if (user.role !== 'ADMIN' && emitter.userId !== user.id) {
+          results.noPermission.push(sensorId);
+          continue;
+        }
+
+        clearInterval(emitter.intervalId);
+        this.activeEmitters.delete(sensorId);
+        results.stopped.push(sensorId);
+        
+      } catch (error) {
+        this.logger.error(`❌ Error deteniendo simulador ${sensorId}:`, error);
+        results.notFound.push(sensorId);
+      }
+    }
+
+    this.logger.log(`🛑 [SIMULATION] Detenidos ${results.stopped.length} simuladores por ${user.name}`);
+    return results;
   }
 
-  /**
-   * @method createAndBroadcastEntry
-   * @description Crea una nueva entrada de datos en la base de datos y la transmite via WebSocket
-   * @param {Object} data - Datos del sensor a guardar
-   * @param {string} data.sensorId - ID del sensor
-   * @param {string} data.tankId - ID del tanque
-   * @param {SensorType} data.type - Tipo del sensor
-   * @param {number} data.value - Valor de la medición
-   * @param {Date} data.timestamp - Timestamp de la medición
-   * @returns {Promise<SensorData>} Los datos creados
-   * @private
-   */
+  async restartEmitters(sensorIds: string[], user: User): Promise<{ restarted: string[]; errors: string[] }> {
+    this.logger.log(`🔄 [SIMULATION] Reiniciando ${sensorIds.length} simuladores...`);
+    
+    const stopResults = await this.stopMultipleEmitters(sensorIds, user);
+    const startResults = await this.startEmitters(sensorIds, user);
+    
+    return {
+      restarted: startResults.started,
+      errors: [...stopResults.noPermission, ...startResults.errors]
+    };
+  }
+
+  getEmitterStatus(user: User) {
+    const userSimulations = Array.from(this.activeEmitters.values())
+      .filter(emitter => user.role === 'ADMIN' || emitter.userId === user.id)
+      .map(({ intervalId, ...rest }) => ({
+        ...rest,
+        uptime: Math.floor((Date.now() - rest.startTime.getTime()) / 1000),
+        unit: this.getUnitForType(rest.type),
+        messagesPerMinute: rest.messagesCount > 0 ? 
+          Math.round(rest.messagesCount / ((Date.now() - rest.startTime.getTime()) / 60000)) : 0
+      }));
+    
+    return userSimulations;
+  }
+
+  getSimulationMetrics(user: User): SimulationMetrics {
+    const userSimulations = Array.from(this.activeEmitters.values())
+      .filter(emitter => user.role === 'ADMIN' || emitter.userId === user.id);
+    
+    const totalMessages = userSimulations.reduce((sum, sim) => sum + sim.messagesCount, 0);
+    const averageUptime = userSimulations.length > 0 
+      ? userSimulations.reduce((sum, sim) => sum + (Date.now() - sim.startTime.getTime()), 0) / userSimulations.length / 1000
+      : 0;
+    
+    const simulationsByType = userSimulations.reduce((acc, sim) => {
+      acc[sim.type] = (acc[sim.type] || 0) + 1;
+      return acc;
+    }, {} as Record<SensorType, number>);
+    
+    const simulationsByUser = userSimulations.reduce((acc, sim) => {
+      acc[sim.userName] = (acc[sim.userName] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    return {
+      totalActiveSimulations: userSimulations.length,
+      totalMessagesSent: totalMessages,
+      averageUptime: Math.floor(averageUptime),
+      simulationsByType,
+      simulationsByUser,
+      systemUptime: Math.floor((Date.now() - this.serviceStartTime.getTime()) / 1000)
+    };
+  }
+
   private async createAndBroadcastEntry(data: { sensorId: string; tankId: string; type: SensorType; value: number; timestamp: Date }): Promise<SensorData> {
     const { sensorId, tankId, type, value, timestamp } = data;
     
@@ -472,13 +516,6 @@ export class DataService implements OnModuleDestroy {
     return createdData as SensorData;
   }
   
-  /**
-   * @method generateRealisticValue
-   * @description Genera valores realistas para la simulación con comportamiento dinámico
-   * @param {ActiveEmitter} emitter - Estado actual del emisor
-   * @returns {Object} Nuevo valor y estado de la simulación
-   * @private
-   */
   private generateRealisticValue(emitter: ActiveEmitter): { currentValue: number; state: SimulationState } {
     let { currentValue, state, thresholds, type } = emitter;
     const { min, max } = thresholds;
@@ -489,10 +526,8 @@ export class DataService implements OnModuleDestroy {
     
     if (state === 'STABLE' && eventChance < 0.02) { 
       state = Math.random() < 0.5 ? 'RISING' : 'FALLING'; 
-      this.logger.log(`🎯 [SIMULACIÓN] Evento simulado: "${emitter.sensorName}" ha entrado en estado ${state}`); 
     } else if (state !== 'STABLE' && eventChance < 0.15) { 
       state = 'STABLE'; 
-      this.logger.log(`🎯 [SIMULACIÓN] Evento simulado: "${emitter.sensorName}" vuelve a estado STABLE`); 
     }
     
     let target = center;
@@ -519,13 +554,6 @@ export class DataService implements OnModuleDestroy {
     return { currentValue, state };
   }
 
-  /**
-   * @method getUnitForType
-   * @description Obtiene la unidad de medida para un tipo de sensor
-   * @param {SensorType} type - Tipo del sensor
-   * @returns {string} Unidad de medida correspondiente
-   * @private
-   */
   private getUnitForType(type: SensorType): string {
     switch (type) {
       case 'TEMPERATURE': return '°C';

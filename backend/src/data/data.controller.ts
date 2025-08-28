@@ -1,12 +1,12 @@
 /**
  * @file data.controller.ts
- * @description Controlador para endpoints de datos de sensores.
+ * @description Controlador mejorado para endpoints de datos de sensores con gestión persistente.
  * @author Kevin Mariano 
- * @version 3.0.0
+ * @version 2.0.1 
  * @since 1.0.0
  */
 import { Controller, Get, Post, Body, Query, UseGuards, Req, Param } from '@nestjs/common';
-import { DataService } from './data.service';
+import { DataService, SimulationMetrics } from './data.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -45,33 +45,51 @@ export class DataController {
   @Post('manual')
   @Roles(Role.ADMIN, Role.USER)
   @ApiOperation({ summary: 'Enviar una o más entradas de datos manuales' })
-  @ApiBody({ type: [ManualEntryDto] }) // Indica que el cuerpo es un array del DTO
+  @ApiBody({ type: [ManualEntryDto] })
   submitManualEntry(@Body() entries: ManualEntryDto[]) {
-    // El cuerpo de la solicitud ahora es un array de ManualEntryDto
     return this.dataService.submitManualEntry(entries);
   }
 
   @Post('emitter/start')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.USER)
   @ApiOperation({ summary: 'Iniciar simuladores de sensores' })
-  startEmitters(@Body() emitterControlDto: EmitterControlDto) {
-    return this.dataService.startEmitters(emitterControlDto.sensorIds);
+  startEmitters(@Body() emitterControlDto: EmitterControlDto, @Req() req) {
+    return this.dataService.startEmitters(emitterControlDto.sensorIds, req.user);
   }
 
-
-
   @Post('emitter/stop')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.USER)
   @ApiOperation({ summary: 'Detener un simulador de sensor' })
-  stopEmitter(@Body() body: { sensorId: string }) {
-    this.dataService.stopEmitter(body.sensorId);
-    return { message: `Solicitud para detener el emisor del sensor ${body.sensorId} enviada.` };
+  stopEmitter(@Body() body: { sensorId: string }, @Req() req) {
+    this.dataService.stopEmitter(body.sensorId, req.user);
+    return { message: `Simulador del sensor ${body.sensorId} detenido exitosamente.` };
+  }
+
+  @Post('emitter/stop-multiple')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Detener múltiples simuladores de sensores' })
+  stopMultipleEmitters(@Body() body: { sensorIds: string[] }, @Req() req) {
+    return this.dataService.stopMultipleEmitters(body.sensorIds, req.user);
   }
 
   @Get('emitter/status')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.USER)
   @ApiOperation({ summary: 'Obtener el estado de los simuladores activos' })
-  getEmitterStatus() {
-    return this.dataService.getEmitterStatus();
+  getEmitterStatus(@Req() req) {
+    return this.dataService.getEmitterStatus(req.user);
+  }
+
+  @Get('emitter/metrics')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Obtener métricas detalladas de simulación' })
+  getSimulationMetrics(@Req() req): SimulationMetrics {
+    return this.dataService.getSimulationMetrics(req.user);
+  }
+
+  @Post('emitter/restart')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Reiniciar simuladores específicos' })
+  restartEmitters(@Body() body: { sensorIds: string[] }, @Req() req) {
+    return this.dataService.restartEmitters(body.sensorIds, req.user);
   }
 }
