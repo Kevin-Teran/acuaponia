@@ -1,230 +1,185 @@
 /**
- * @file useDataEntry.ts
- * @description Hook unificado para el ingreso de datos, ahora con control de simulación persistente en backend.
- * Sincroniza el estado de la UI con los emisores activos en el servidor.
+ * @file dataService.ts
+ * @description Servicio frontend mejorado para gestión de datos y simulaciones (sin cambios en BD).
  * @author Kevin Mariano 
- * @version 9.1.0 
+ * @version 3.0.0
  * @since 1.0.0
  */
-import { useState, useEffect, useCallback } from 'react';
-import { Tank, Sensor, UserFromApi as User, ManualEntryDto } from '@/types';
-import * as tankService from '@/services/tankService';
-import * as sensorService from '@/services/sensorService';
-import * as userService from '@/services/userService';
-import * as dataService from '@/services/dataService';
-import { mqttService } from '@/services/mqttService';
-import { useAuth } from '@/context/AuthContext';
-import Swal from 'sweetalert2';
+import api from '@/config/api';
+import { ManualEntryDto } from '@/types';
 
-export const useDataEntry = () => {
-  const { user: currentUser } = useAuth();
-  const isAdmin = currentUser?.role === 'ADMIN';
+export interface EmitterStatus {
+  sensorId: string;
+  sensorName: string;
+  type: string;
+  tankId: string;
+  tankName: string;
+  userName: string;
+  userId: string;
+  thresholds: { min: number; max: number };
+  currentValue: number;
+  state: string;
+  startTime: string;
+  messagesCount: number;
+  uptime: number;
+  unit: string;
+  messagesPerMinute: number;
+  isPersistent: boolean;
+}
 
-  // Estados de UI y datos
-  const [users, setUsers] = useState<User[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(currentUser?.id || null);
-  const [tanks, setTanks] = useState<Tank[]>([]);
-  const [selectedTankId, setSelectedTankId] = useState<string>('');
-  const [sensors, setSensors] = useState<Sensor[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Estado de entrada manual
-  const [manualReadings, setManualReadings] = useState<Record<string, string>>({});
-  const [isSubmittingManual, setIsSubmittingManual] = useState(false);
-  
-  // Estado de simulación y conexión
-  const [activeSimulations, setActiveSimulations] = useState<Set<string>>(new Set());
-  const [isTogglingSimulation, setIsTogglingSimulation] = useState<Set<string>>(new Set());
-  const [mqttConnectionStatus, setMqttConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
+export interface SimulationMetrics {
+  totalActiveSimulations: number;
+  totalMessagesSent: number;
+  averageUptime: number;
+  simulationsByType: Record<string, number>;
+  simulationsByUser: Record<string, number>;
+  systemUptime: number;
+}
 
-  // --- SINCRONIZACIÓN CON BACKEND Y MQTT ---
+export interface StartEmittersResponse {
+  started: string[];
+  skipped: string[];
+  errors: string[];
+}
 
-  /**
-   * @effect
-   * @description Se suscribe a los cambios de estado de MQTT y sincroniza los emisores activos.
-   * Este es el núcleo de la lógica reactiva y persistente.
-   */
-  useEffect(() => {
-    // 1. Intentar conectar al cargar el componente
-    mqttService.connect().catch(err => {
-        console.error("Fallo en el intento de conexión inicial de MQTT:", err);
-        // El listener de abajo se encargará de actualizar el estado a 'disconnected'
-    });
+export interface StopEmittersResponse {
+  stopped: string[];
+  notFound: string[];
+  noPermission: string[];
+}
 
-    // 2. Suscribirse a los cambios de estado del servicio MQTT
-    const unsubscribeStatus = mqttService.onStatusChange(status => {
-        if (status.connected) {
-            setMqttConnectionStatus('connected');
-        } else if (status.connecting) {
-            setMqttConnectionStatus('connecting');
-        } else {
-            setMqttConnectionStatus('disconnected');
-            if(status.error) {
-                console.error("Error de conexión MQTT reportado por el servicio:", status.error);
-                setError('No se pudo conectar al servicio de simulación.');
-            }
-        }
-    });
+/**
+ * @description Envía una entrada manual de datos
+ */
+export const addManualEntry = async (entry: ManualEntryDto) => {
+  try {
+    const response = await api.post('/data/manual', [entry]);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error enviando entrada manual:', error);
+    throw error;
+  }
+};
 
-    // 3. Sincronizar el estado de los emisores con el backend
-    const syncEmittersStatus = async () => {
-        try {
-            const status = await dataService.getEmitterStatus();
-            const activeIds = new Set(status.map(emitter => emitter.sensorId));
-            setActiveSimulations(activeIds);
-        } catch (err) {
-            console.error('❌ [SYNC] Error al sincronizar el estado de los simuladores:', err);
-        }
-    };
+/**
+ * @description Envía múltiples entradas manuales de datos
+ */
+export const addManualEntries = async (entries: ManualEntryDto[]) => {
+  try {
+    const response = await api.post('/data/manual', entries);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error enviando entradas manuales:', error);
+    throw error;
+  }
+};
 
-    syncEmittersStatus(); // Sincronización inicial
-    const syncInterval = setInterval(syncEmittersStatus, 15000); // Sincroniza periódicamente
+/**
+ * @description Inicia simuladores para los sensores especificados
+ */
+export const startEmitters = async (sensorIds: string[]): Promise<StartEmittersResponse> => {
+  try {
+    const response = await api.post('/data/emitter/start', { sensorIds });
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error iniciando simuladores:', error);
+    throw error;
+  }
+};
 
-    // 4. Limpiar suscripciones e intervalos al desmontar el componente
-    return () => {
-        unsubscribeStatus();
-        clearInterval(syncInterval);
-    };
-  }, []); // Se ejecuta solo una vez al montar
+/**
+ * @description Detiene un simulador específico
+ */
+export const stopEmitter = async (sensorId: string) => {
+  try {
+    const response = await api.post('/data/emitter/stop', { sensorId });
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error deteniendo simulador:', error);
+    throw error;
+  }
+};
 
+/**
+ * @description Detiene múltiples simuladores
+ */
+export const stopMultipleEmitters = async (sensorIds: string[]): Promise<StopEmittersResponse> => {
+  try {
+    const response = await api.post('/data/emitter/stop-multiple', { sensorIds });
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error deteniendo múltiples simuladores:', error);
+    throw error;
+  }
+};
 
-  // --- CARGA DE DATOS (Usuarios, Tanques, Sensores) ---
+/**
+ * @description Reinicia simuladores específicos
+ */
+export const restartEmitters = async (sensorIds: string[]) => {
+  try {
+    const response = await api.post('/data/emitter/restart', { sensorIds });
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error reiniciando simuladores:', error);
+    throw error;
+  }
+};
 
-  useEffect(() => {
-    const loadInitialData = async () => {
-        setLoading(true);
-        try {
-            if (isAdmin) {
-                const usersData = await userService.getUsers();
-                setUsers(usersData);
-                if (!selectedUserId && usersData.length > 0) {
-                    setSelectedUserId(usersData[0].id);
-                }
-            } else if (currentUser) {
-                setUsers([currentUser as User]);
-                setSelectedUserId(currentUser.id);
-            }
-        } catch (err) {
-            setError('No se pudo cargar la lista de usuarios.');
-        } finally {
-            setLoading(false);
-        }
-    };
-    loadInitialData();
-  }, [isAdmin, currentUser]);
+/**
+ * @description Obtiene el estado de todos los simuladores activos
+ */
+export const getEmitterStatus = async (): Promise<EmitterStatus[]> => {
+  try {
+    const response = await api.get('/data/emitter/status');
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error obteniendo estado de simuladores:', error);
+    throw error;
+  }
+};
 
-  useEffect(() => {
-    if (!selectedUserId) {
-        setTanks([]);
-        setSensors([]);
-        setSelectedTankId('');
-        return;
-    };
-    const loadTanks = async () => {
-        setLoading(true);
-        try {
-            const tanksData = await tankService.getTanks(selectedUserId);
-            setTanks(tanksData);
-            const newSelectedTankId = tanksData[0]?.id || '';
-            setSelectedTankId(newSelectedTankId);
-            if (!newSelectedTankId) setSensors([]);
-        } catch (err) {
-            setError('No se pudieron cargar los tanques.');
-        } finally {
-            setLoading(false);
-        }
-    };
-    loadTanks();
-  }, [selectedUserId]);
+/**
+ * @description Obtiene métricas detalladas de simulación
+ */
+export const getSimulationMetrics = async (): Promise<SimulationMetrics> => {
+  try {
+    const response = await api.get('/data/emitter/metrics');
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error obteniendo métricas de simulación:', error);
+    throw error;
+  }
+};
 
-  useEffect(() => {
-    if (!selectedTankId) {
-        setSensors([]);
-        return;
-    };
-    const loadSensors = async () => {
-        setLoading(true);
-        try {
-            const sensorsData = await sensorService.getSensorsByTank(selectedTankId);
-            setSensors(sensorsData);
-        } catch (err) {
-            setError('No se pudieron cargar los sensores.');
-        } finally {
-            setLoading(false);
-        }
-    };
-    loadSensors();
-  }, [selectedTankId]);
-
-  // --- MANEJADORES DE EVENTOS ---
-
-  const handleUserChange = (userId: string) => {
-    setSelectedUserId(userId);
-  };
-
-  const handleTankChange = (tankId: string) => {
-    setSelectedTankId(tankId);
-  };
-  
-  const handleManualReadingChange = (sensorId: string, value: string) => {
-    setManualReadings(prev => ({ ...prev, [sensorId]: value }));
-  };
-
-  const handleManualSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const entries: ManualEntryDto[] = Object.entries(manualReadings)
-      .map(([sensorId, value]) => ({ sensorId, value: parseFloat(value) }))
-      .filter(entry => !isNaN(entry.value));
-
-    if (entries.length === 0) {
-      Swal.fire('Atención', 'Debe ingresar al menos un valor numérico válido.', 'warning');
-      return;
-    }
+/**
+ * @description Obtiene datos más recientes de sensores
+ */
+export const getLatestData = async (tankId?: string, type?: string) => {
+  try {
+    const params: any = {};
+    if (tankId) params.tankId = tankId;
+    if (type) params.type = type;
     
-    setIsSubmittingManual(true);
-    try {
-      await dataService.addManualEntries(entries);
-      setManualReadings({});
-      Swal.fire('¡Éxito!', `Se guardaron ${entries.length} lecturas.`, 'success');
-    } catch (err) {
-      Swal.fire('Error', 'No se pudieron guardar los datos.', 'error');
-    } finally {
-      setIsSubmittingManual(false);
-    }
-  };
-  
-  const toggleSimulation = async (sensorId: string) => {
-    setIsTogglingSimulation(prev => new Set(prev).add(sensorId));
-    try {
-      const isCurrentlyActive = activeSimulations.has(sensorId);
-      if (isCurrentlyActive) {
-        await dataService.stopEmitter(sensorId);
-      } else {
-        await dataService.startEmitters([sensorId]);
-      }
-      await syncEmittersStatus(); // Forzar una sincronización inmediata tras la acción
-    } catch (error) {
-      console.error(`❌ Error al cambiar estado de simulación para ${sensorId}:`, error);
-      Swal.fire('Error', 'No se pudo completar la operación.', 'error');
-    } finally {
-      setIsTogglingSimulation(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(sensorId);
-        return newSet;
-      });
-    }
-  };
-  
-  const getSimulationsForTank = (tankId: string) => {
-    const tankSensorIds = sensors.filter(s => s.tankId === tankId).map(s => s.id);
-    return Array.from(activeSimulations).filter(id => tankSensorIds.includes(id));
-  };
+    const response = await api.get('/data/latest', { params });
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error obteniendo datos más recientes:', error);
+    throw error;
+  }
+};
 
-  return {
-    users, selectedUserId, tanks, selectedTankId, sensors, loading, error, isAdmin,
-    handleUserChange, handleTankChange,
-    manualReadings, handleManualReadingChange, handleManualSubmit, isSubmittingManual,
-    activeSimulations, isTogglingSimulation, toggleSimulation, getSimulationsForTank, mqttConnectionStatus
-  };
+/**
+ * @description Obtiene datos históricos de sensores
+ */
+export const getHistoricalData = async (tankId: string, startDate: string, endDate: string) => {
+  try {
+    const response = await api.get('/data/historical', {
+      params: { tankId, startDate, endDate }
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error obteniendo datos históricos:', error);
+    throw error;
+  }
 };

@@ -1,8 +1,8 @@
 /**
  * @file data.service.ts
- * @description Servicio mejorado para gestión persistente de simulaciones de sensores.
+ * @description Servicio mejorado para gestión persistente de simulaciones de sensores (sin cambios en BD).
  * @author Kevin Mariano 
- * @version 2.0.1 
+ * @version 6.0.0
  * @since 1.0.0
  */
 import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
@@ -31,7 +31,7 @@ interface ActiveEmitter {
   isPersistent: boolean;
 }
 
-// SOLUCIÓN: Se añade 'export' para que la interfaz sea visible desde otros módulos.
+// Exportar la interfaz para evitar el error de TypeScript
 export interface SimulationMetrics {
   totalActiveSimulations: number;
   totalMessagesSent: number;
@@ -39,6 +39,17 @@ export interface SimulationMetrics {
   simulationsByType: Record<SensorType, number>;
   simulationsByUser: Record<string, number>;
   systemUptime: number;
+}
+
+// Simulación de persistencia en memoria (sin BD)
+interface InMemorySimulationCache {
+  [sensorId: string]: {
+    isActive: boolean;
+    startTime: Date;
+    messagesCount: number;
+    currentValue: number;
+    state: SimulationState;
+  };
 }
 
 const DEFAULT_THRESHOLDS = {
@@ -52,6 +63,9 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
   private readonly activeEmitters = new Map<string, ActiveEmitter>();
   private readonly logger = new Logger(DataService.name);
   private readonly serviceStartTime = new Date();
+  
+  // Cache en memoria para simular persistencia
+  private readonly simulationCache: InMemorySimulationCache = {};
 
   constructor(
     private prisma: PrismaService,
@@ -59,32 +73,28 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit() {
-    this.logger.log('🚀 [INIT] Inicializando servicio de datos con simulaciones persistentes...');
-    await this.restorePersistedSimulations();
+    this.logger.log('🚀 [INIT] Inicializando servicio de datos con simulaciones en memoria...');
+    // No restauramos simulaciones automáticamente para evitar conflictos
     this.logger.log('✅ [INIT] Servicio de datos inicializado correctamente');
   }
 
   onModuleDestroy() {
-    this.logger.log('🛑 [SHUTDOWN] Deteniendo todas las simulaciones...');
-    this.activeEmitters.forEach(emitter => {
+    this.logger.log('🛑 [SHUTDOWN] Guardando estado y deteniendo simulaciones...');
+    
+    // Guardar estado en cache antes de detener
+    this.activeEmitters.forEach((emitter, sensorId) => {
+      this.simulationCache[sensorId] = {
+        isActive: true,
+        startTime: emitter.startTime,
+        messagesCount: emitter.messagesCount,
+        currentValue: emitter.currentValue,
+        state: emitter.state
+      };
       clearInterval(emitter.intervalId);
-      this.logger.log(`⏹️ Simulador detenido: ${emitter.sensorName}`);
+      this.logger.log(`⏹️ Estado guardado para: ${emitter.sensorName}`);
     });
-    this.logger.log('✅ [SHUTDOWN] Todas las simulaciones han sido detenidas');
-  }
-
-  /**
-   * @method restorePersistedSimulations
-   * @description Restaura las simulaciones que estaban activas antes del reinicio
-   */
-  private async restorePersistedSimulations() {
-    try {
-      this.logger.log('🔄 [RESTORE] Buscando simulaciones para restaurar...');
-      // En una implementación real, podrías usar Redis o base de datos para persistir el estado.
-      // Aquí se mantiene la estructura para futuras mejoras.
-    } catch (error) {
-      this.logger.error('❌ [RESTORE] Error restaurando simulaciones:', error);
-    }
+    
+    this.logger.log('✅ [SHUTDOWN] Estados guardados y simulaciones detenidas');
   }
 
   async createFromMqtt(hardwareId: string, data: { value: number; timestamp?: string }): Promise<SensorData> {
@@ -124,6 +134,7 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
       timestamp: timestamp,
     });
 
+    // Actualizar contador si es una simulación activa
     const activeEmitter = this.activeEmitters.get(sensor.id);
     if (activeEmitter) {
       activeEmitter.messagesCount++;
@@ -313,6 +324,7 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
           continue; 
         }
 
+        // Verificar permisos
         if (user.role !== 'ADMIN' && sensor.tank.userId !== user.id) {
           this.logger.warn(`🚫 [SIMULATION] Usuario ${user.name} sin permisos para sensor ${sensorId}`);
           results.errors.push(`Sin permisos para sensor ${sensorId}`);
@@ -327,6 +339,10 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
           max: userSettings[sensorTypeKey]?.max ?? defaultThreshold.max 
         };
         
+        // Verificar si hay estado previo en cache
+        const cachedState = this.simulationCache[sensorId];
+        const initialValue = cachedState?.currentValue || (thresholds.min + thresholds.max) / 2;
+        
         let emitterState: ActiveEmitter = { 
           intervalId: null as any, 
           sensorId: sensor.id, 
@@ -337,10 +353,10 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
           userName: sensor.tank.user.name,
           userId: sensor.tank.user.id, 
           thresholds, 
-          currentValue: (thresholds.min + thresholds.max) / 2, 
-          state: 'STABLE', 
+          currentValue: initialValue, 
+          state: cachedState?.state || 'STABLE', 
           startTime: new Date(),
-          messagesCount: 0,
+          messagesCount: cachedState?.messagesCount || 0,
           isPersistent: true
         };
         
@@ -383,9 +399,19 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
   stopEmitter(sensorId: string, user: User): void {
     const emitter = this.activeEmitters.get(sensorId);
     if (emitter) { 
+      // Verificar permisos
       if (user.role !== 'ADMIN' && emitter.userId !== user.id) {
         throw new ForbiddenException('No tienes permiso para detener este simulador.');
       }
+
+      // Guardar estado en cache antes de detener
+      this.simulationCache[sensorId] = {
+        isActive: false,
+        startTime: emitter.startTime,
+        messagesCount: emitter.messagesCount,
+        currentValue: emitter.currentValue,
+        state: emitter.state
+      };
 
       clearInterval(emitter.intervalId); 
       this.activeEmitters.delete(sensorId); 
@@ -415,6 +441,15 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
           continue;
         }
 
+        // Guardar estado en cache
+        this.simulationCache[sensorId] = {
+          isActive: false,
+          startTime: emitter.startTime,
+          messagesCount: emitter.messagesCount,
+          currentValue: emitter.currentValue,
+          state: emitter.state
+        };
+
         clearInterval(emitter.intervalId);
         this.activeEmitters.delete(sensorId);
         results.stopped.push(sensorId);
@@ -432,7 +467,10 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
   async restartEmitters(sensorIds: string[], user: User): Promise<{ restarted: string[]; errors: string[] }> {
     this.logger.log(`🔄 [SIMULATION] Reiniciando ${sensorIds.length} simuladores...`);
     
+    // Primero detener los existentes
     const stopResults = await this.stopMultipleEmitters(sensorIds, user);
+    
+    // Luego iniciar los nuevos
     const startResults = await this.startEmitters(sensorIds, user);
     
     return {

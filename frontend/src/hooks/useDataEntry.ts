@@ -1,9 +1,8 @@
 /**
  * @file useDataEntry.ts
- * @description Hook unificado y optimizado para el ingreso de datos de sensores.
- * Maneja entrada manual y simulación MQTT con payload simplificado y agrupación por tanques.
+ * @description Hook mejorado y optimizado para el ingreso de datos con simulaciones persistentes.
  * @author Kevin Mariano 
- * @version 8.0.0 (Optimización MQTT)
+ * @version 10.0.0
  * @since 1.0.0
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -11,88 +10,20 @@ import { Tank, Sensor, UserFromApi as User, SensorType, ManualEntryDto } from '@
 import * as tankService from '@/services/tankService';
 import * as sensorService from '@/services/sensorService';
 import * as userService from '@/services/userService';
-import { addManualEntry } from '@/services/dataService';
+import * as dataService from '@/services/dataService';
+import { EmitterStatus, SimulationMetrics } from '@/services/dataService';
 import { mqttService } from '@/services/mqttService';
 import { useAuth } from '@/context/AuthContext';
 import Swal from 'sweetalert2';
 
-/**
- * @interface SimulationState
- * @description Estado de una simulación activa con información del tanque
- */
-interface SimulationState {
-  intervalId: NodeJS.Timeout;
-  isActive: boolean;
-  startTime: Date;
-  messagesCount: number;
-  tankId: string;
-  tankName: string;
-  sensorName: string;
-  sensorType: SensorType;
-}
-
-/**
- * @interface TankSimulationGroup
- * @description Agrupación de simulaciones por tanque
- */
-interface TankSimulationGroup {
-  tankId: string;
-  tankName: string;
-  activeSimulations: string[]; // sensorIds
+interface ActiveSimulationsSummary {
+  totalActive: number;
+  byTank: Record<string, { count: number; tankName: string; simulations: EmitterStatus[] }>;
+  byType: Record<SensorType, number>;
   totalMessages: number;
-  startTime: Date;
+  systemUptime: number;
 }
 
-/**
- * @function generateRealisticValue
- * @description Genera valores realistas para la simulación de sensores
- * @param {SensorType} type - Tipo de sensor
- * @param {number} [previousValue] - Valor anterior para continuidad
- * @returns {number} Valor generado
- */
-const generateRealisticValue = (type: SensorType, previousValue?: number): number => {
-  let baseValue: number, variation: number;
-  
-  switch (type) {
-    case 'TEMPERATURE':
-      baseValue = previousValue || 25;
-      variation = (Math.random() - 0.5) * 2;
-      return parseFloat(Math.max(18, Math.min(32, baseValue + variation)).toFixed(1));
-    
-    case 'PH':
-      baseValue = previousValue || 7.2;
-      variation = (Math.random() - 0.5) * 0.4;
-      return parseFloat(Math.max(6.0, Math.min(8.5, baseValue + variation)).toFixed(2));
-    
-    case 'OXYGEN':
-      baseValue = previousValue || 7.5;
-      variation = (Math.random() - 0.5) * 1.0;
-      return parseFloat(Math.max(4.0, Math.min(12.0, baseValue + variation)).toFixed(1));
-    
-    default:
-      return parseFloat((Math.random() * 100).toFixed(2));
-  }
-};
-
-/**
- * @function getUnitForSensorType
- * @description Obtiene la unidad de medida para un tipo de sensor
- * @param {SensorType} type - Tipo de sensor
- * @returns {string} Unidad de medida
- */
-const getUnitForSensorType = (type: SensorType): string => {
-  switch (type) {
-    case 'TEMPERATURE': return '°C';
-    case 'PH': return 'pH';
-    case 'OXYGEN': return 'mg/L';
-    default: return '';
-  }
-};
-
-/**
- * @hook useDataEntry
- * @description Hook principal para el manejo de datos de sensores con optimizaciones MQTT
- */
 export const useDataEntry = () => {
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'ADMIN';
@@ -110,88 +41,139 @@ export const useDataEntry = () => {
   const [manualReadings, setManualReadings] = useState<Record<string, string>>({});
   const [isSubmittingManual, setIsSubmittingManual] = useState(false);
   
-  // Estados de simulación optimizados
-  const [activeSimulations, setActiveSimulations] = useState<Record<string, SimulationState>>({});
-  const [tankSimulationGroups, setTankSimulationGroups] = useState<Record<string, TankSimulationGroup>>({});
+  // Estados de simulación mejorados
+  const [activeSimulations, setActiveSimulations] = useState<EmitterStatus[]>([]);
+  const [simulationMetrics, setSimulationMetrics] = useState<SimulationMetrics | null>(null);
   const [mqttConnectionStatus, setMqttConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
+  const [isTogglingSimulation, setIsTogglingSimulation] = useState<Set<string>>(new Set());
   
-  // Referencias para valores previos y control de simulaciones
-  const previousValues = useRef<Record<string, number>>({});
-  const simulationIntervals = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  // Referencias y control
+  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSyncTime = useRef<Date>(new Date());
 
   /**
-   * @effect Inicialización de MQTT
-   * @description Conecta a MQTT al montar y se desconecta de forma segura al desmontar
+   * @effect Inicialización de MQTT y sincronización
    */
   useEffect(() => {
     let isMounted = true;
 
-    const initializeMqtt = async () => {
-      if (mqttService.isConnected() || mqttConnectionStatus === 'connecting') {
-        setMqttConnectionStatus('connected');
-        return;
-      }
-      
+    const initializeServices = async () => {
       try {
+        // Conectar MQTT
         setMqttConnectionStatus('connecting');
-        await mqttService.connect();
+        if (!mqttService.isConnected()) {
+          await mqttService.connect();
+        }
+        
         if (isMounted) {
           setMqttConnectionStatus('connected');
-          setError(null);
-          console.log('✅ [MQTT] Conexión establecida exitosamente');
+          console.log('✅ [MQTT] Conexión establecida');
         }
       } catch (err) {
-        console.error('❌ [MQTT] Error en la conexión inicial:', err);
+        console.error('❌ [MQTT] Error en conexión:', err);
         if (isMounted) {
           setMqttConnectionStatus('disconnected');
-          setError('No se pudo conectar al servicio de simulación MQTT.');
+          setError('Error de conexión MQTT. Las simulaciones podrían no funcionar correctamente.');
         }
       }
     };
 
-    initializeMqtt();
+    // Función de sincronización mejorada
+    const syncSimulationStatus = async () => {
+      if (!isMounted) return;
+      
+      try {
+        const [statusData, metricsData] = await Promise.all([
+          dataService.getEmitterStatus(),
+          dataService.getSimulationMetrics()
+        ]);
+        
+        if (isMounted) {
+          setActiveSimulations(statusData);
+          setSimulationMetrics(metricsData);
+          lastSyncTime.current = new Date();
+          
+          // Log cada 30 segundos para no saturar
+          const now = Date.now();
+          if (now % 30000 < 5000) {
+            console.log(`🔄 [SYNC] Estado actualizado: ${statusData.length} simulaciones activas`);
+          }
+        }
+      } catch (error) {
+        console.error('❌ [SYNC] Error sincronizando estado:', error);
+        if (isMounted && error instanceof Error && error.message.includes('403')) {
+          setError('Sin permisos para acceder a las simulaciones');
+        }
+      }
+    };
+
+    // Inicializar servicios y configurar sincronización
+    initializeServices();
+    syncSimulationStatus(); // Sincronización inicial
+    
+    // Configurar sincronización periódica más inteligente
+    syncIntervalRef.current = setInterval(syncSimulationStatus, 10000); // Cada 10 segundos
 
     return () => {
       isMounted = false;
-      console.log('🧹 [CLEANUP] Limpiando hook useDataEntry...');
-      
-      // Detener todas las simulaciones activas
-      simulationIntervals.current.forEach((intervalId, sensorId) => {
-        console.log(`⏹️ [CLEANUP] Deteniendo simulación para sensor: ${sensorId}`);
-        clearInterval(intervalId);
-      });
-      simulationIntervals.current.clear();
-      
-      // Limpiar valores previos
-      previousValues.current = {};
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current);
+        syncIntervalRef.current = null;
+      }
+      console.log('🧹 [CLEANUP] Limpiando hook useDataEntry');
     };
   }, []);
 
   /**
-   * @effect Carga de usuarios (solo para administradores)
+   * @effect Suscriptor a cambios de estado MQTT
    */
   useEffect(() => {
-    if (isAdmin) {
-      const loadUsers = async () => {
-        try {
-          setLoading(true);
-          const usersData = await userService.getUsers();
-          setUsers(usersData);
-          if (!selectedUserId && usersData.length > 0) {
-            setSelectedUserId(usersData[0].id);
-          }
-        } catch (err) {
-          console.error('❌ [USERS] Error cargando usuarios:', err);
-          setError('No se pudo cargar la lista de usuarios.');
-        } finally {
-          setLoading(false);
+    const unsubscribe = mqttService.onStatusChange(status => {
+      if (status.connected) {
+        setMqttConnectionStatus('connected');
+        setError(null);
+      } else if (status.connecting) {
+        setMqttConnectionStatus('connecting');
+      } else {
+        setMqttConnectionStatus('disconnected');
+        if (status.error) {
+          setError(`Error MQTT: ${status.error}`);
         }
-      };
-      loadUsers();
-    } else {
-      setUsers([currentUser as User]);
-      setSelectedUserId(currentUser?.id || null);
-    }
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  /**
+   * @effect Carga de usuarios
+   */
+  useEffect(() => {
+    const loadUsers = async () => {
+      if (!isAdmin) {
+        if (currentUser) {
+          setUsers([currentUser as User]);
+          setSelectedUserId(currentUser.id);
+        }
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const usersData = await userService.getUsers();
+        setUsers(usersData);
+        if (!selectedUserId && usersData.length > 0) {
+          setSelectedUserId(usersData[0].id);
+        }
+      } catch (err) {
+        console.error('❌ [USERS] Error cargando usuarios:', err);
+        setError('No se pudo cargar la lista de usuarios.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUsers();
   }, [isAdmin, currentUser, selectedUserId]);
 
   /**
@@ -267,118 +249,25 @@ export const useDataEntry = () => {
   }, [selectedTankId]);
 
   /**
-   * @function updateTankSimulationGroups
-   * @description Actualiza la agrupación de simulaciones por tanque
-   */
-  const updateTankSimulationGroups = useCallback(() => {
-    const groups: Record<string, TankSimulationGroup> = {};
-    
-    Object.values(activeSimulations).forEach(simulation => {
-      const { tankId, tankName } = simulation;
-      
-      if (!groups[tankId]) {
-        groups[tankId] = {
-          tankId,
-          tankName,
-          activeSimulations: [],
-          totalMessages: 0,
-          startTime: simulation.startTime
-        };
-      }
-      
-      groups[tankId].activeSimulations.push(simulation.intervalId.toString());
-      groups[tankId].totalMessages += simulation.messagesCount;
-      
-      // Actualizar fecha de inicio si esta simulación es más antigua
-      if (simulation.startTime < groups[tankId].startTime) {
-        groups[tankId].startTime = simulation.startTime;
-      }
-    });
-    
-    setTankSimulationGroups(groups);
-  }, [activeSimulations]);
-
-  /**
-   * @effect Actualizar agrupaciones cuando cambien las simulaciones activas
-   */
-  useEffect(() => {
-    updateTankSimulationGroups();
-  }, [updateTankSimulationGroups]);
-
-  /**
-   * @function stopSimulation
-   * @description Detiene una simulación específica
-   */
-  const stopSimulation = useCallback((sensorId: string) => {
-    const simulation = activeSimulations[sensorId];
-    if (!simulation) return;
-
-    // Limpiar intervalo
-    clearInterval(simulation.intervalId);
-    simulationIntervals.current.delete(sensorId);
-    
-    // Limpiar valor previo
-    delete previousValues.current[sensorId];
-    
-    // Actualizar estado
-    setActiveSimulations(prev => {
-      const newState = { ...prev };
-      delete newState[sensorId];
-      return newState;
-    });
-
-    const sensor = sensors.find(s => s.id === sensorId);
-    console.log(`⏹️ [SIMULATION] Simulación detenida para sensor "${sensor?.name || sensorId}"`);
-  }, [activeSimulations, sensors]);
-
-  /**
-   * @function stopTankSimulations
-   * @description Detiene todas las simulaciones de un tanque
-   */
-  const stopTankSimulations = useCallback((tankId: string) => {
-    const simulationsToStop = Object.keys(activeSimulations).filter(
-      sensorId => activeSimulations[sensorId].tankId === tankId
-    );
-    
-    simulationsToStop.forEach(stopSimulation);
-    
-    const tankGroup = tankSimulationGroups[tankId];
-    if (tankGroup) {
-      console.log(`⏹️ [TANK-SIMULATION] Detenidas ${simulationsToStop.length} simulaciones del tanque "${tankGroup.tankName}"`);
-    }
-  }, [activeSimulations, tankSimulationGroups, stopSimulation]);
-
-  /**
    * @function handleUserChange
-   * @description Maneja el cambio de usuario
    */
   const handleUserChange = useCallback((userId: string) => {
-    // Detener todas las simulaciones activas
-    Object.keys(activeSimulations).forEach(stopSimulation);
-    
     setSelectedUserId(userId);
     setManualReadings({});
     setError(null);
-  }, [activeSimulations, stopSimulation]);
+  }, []);
 
   /**
    * @function handleTankChange
-   * @description Maneja el cambio de tanque
    */
   const handleTankChange = useCallback((tankId: string) => {
-    // Detener simulaciones del tanque anterior si es diferente
-    if (selectedTankId && selectedTankId !== tankId) {
-      stopTankSimulations(selectedTankId);
-    }
-    
     setSelectedTankId(tankId);
     setManualReadings({});
     setError(null);
-  }, [selectedTankId, stopTankSimulations]);
+  }, []);
 
   /**
    * @function handleManualReadingChange
-   * @description Maneja el cambio en las lecturas manuales
    */
   const handleManualReadingChange = useCallback((sensorId: string, value: string) => {
     setManualReadings(prev => ({ ...prev, [sensorId]: value }));
@@ -386,7 +275,6 @@ export const useDataEntry = () => {
 
   /**
    * @function handleManualSubmit
-   * @description Maneja el envío de datos manuales
    */
   const handleManualSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -417,7 +305,7 @@ export const useDataEntry = () => {
       setIsSubmittingManual(true);
       console.log(`📝 [MANUAL] Enviando ${entries.length} entradas manuales`);
       
-      await Promise.all(entries.map(addManualEntry));
+      await dataService.addManualEntries(entries);
       setManualReadings({});
       
       await Swal.fire({
@@ -439,143 +327,291 @@ export const useDataEntry = () => {
       setIsSubmittingManual(false);
     }
   }, [sensors, manualReadings, isSubmittingManual]);
-  
+
   /**
-   * @function startSimulation
-   * @description Inicia una simulación de sensor con payload optimizado
+   * @function toggleSimulation - Mejorada para manejar simulaciones persistentes
    */
-  const startSimulation = useCallback((sensor: Sensor) => {
-    if (mqttConnectionStatus !== 'connected') {
-      Swal.fire({
-        title: 'Conexión MQTT no disponible',
-        text: 'No se puede iniciar la simulación sin conexión MQTT.',
+  const toggleSimulation = useCallback(async (sensor: Sensor) => {
+    if (isTogglingSimulation.has(sensor.id)) return;
+
+    const isActive = activeSimulations.some(sim => sim.sensorId === sensor.id);
+    
+    setIsTogglingSimulation(prev => new Set(prev).add(sensor.id));
+
+    try {
+      if (isActive) {
+        const result = await dataService.stopEmitter(sensor.id);
+        console.log(`⏹️ [SIMULATION] Simulación detenida para ${sensor.name}:`, result);
+        
+        await Swal.fire({
+          title: 'Simulación detenida',
+          text: `La simulación del sensor "${sensor.name}" ha sido detenida.`,
+          icon: 'info',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } else {
+        if (mqttConnectionStatus !== 'connected') {
+          await Swal.fire({
+            title: 'Conexión MQTT requerida',
+            text: 'No se puede iniciar la simulación sin conexión MQTT activa.',
+            icon: 'warning',
+            confirmButtonText: 'Entendido'
+          });
+          return;
+        }
+
+        const result = await dataService.startEmitters([sensor.id]);
+        console.log(`🚀 [SIMULATION] Resultado inicio simulación:`, result);
+        
+        if (result.started.length > 0) {
+          await Swal.fire({
+            title: 'Simulación iniciada',
+            text: `La simulación del sensor "${sensor.name}" ha sido iniciada exitosamente.`,
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false
+          });
+        } else if (result.errors.length > 0) {
+          await Swal.fire({
+            title: 'Error al iniciar simulación',
+            text: result.errors[0],
+            icon: 'error',
+            confirmButtonText: 'Entendido'
+          });
+        }
+      }
+      
+      // Forzar sincronización inmediata
+      setTimeout(async () => {
+        try {
+          const [statusData, metricsData] = await Promise.all([
+            dataService.getEmitterStatus(),
+            dataService.getSimulationMetrics()
+          ]);
+          setActiveSimulations(statusData);
+          setSimulationMetrics(metricsData);
+        } catch (error) {
+          console.error('❌ [SYNC] Error en sincronización forzada:', error);
+        }
+      }, 1000);
+
+    } catch (error) {
+      console.error(`❌ [SIMULATION] Error alternando simulación para ${sensor.name}:`, error);
+      await Swal.fire({
+        title: 'Error',
+        text: 'No se pudo cambiar el estado de la simulación.',
         icon: 'error',
+        confirmButtonText: 'Entendido'
+      });
+    } finally {
+      setIsTogglingSimulation(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(sensor.id);
+        return newSet;
+      });
+    }
+  }, [activeSimulations, mqttConnectionStatus, isTogglingSimulation]);
+
+  /**
+   * @function startMultipleSimulations
+   */
+  const startMultipleSimulations = useCallback(async (sensorIds: string[]) => {
+    if (mqttConnectionStatus !== 'connected') {
+      await Swal.fire({
+        title: 'Conexión MQTT requerida',
+        text: 'No se pueden iniciar simulaciones sin conexión MQTT.',
+        icon: 'warning',
         confirmButtonText: 'Entendido'
       });
       return;
     }
 
-    if (activeSimulations[sensor.id]) {
-      console.warn(`⚠️ [SIMULATION] El sensor ${sensor.id} ya tiene una simulación activa`);
-      return;
+    try {
+      const result = await dataService.startEmitters(sensorIds);
+      
+      if (result.started.length > 0 || result.skipped.length > 0) {
+        let message = `Se iniciaron ${result.started.length} simulaciones`;
+        if (result.skipped.length > 0) {
+          message += ` (${result.skipped.length} ya estaban activas)`;
+        }
+        if (result.errors.length > 0) {
+          message += `. ${result.errors.length} tuvieron errores`;
+        }
+        
+        await Swal.fire({
+          title: 'Simulaciones iniciadas',
+          text: message,
+          icon: 'success',
+          timer: 3000,
+          showConfirmButton: false
+        });
+      } else {
+        await Swal.fire({
+          title: 'No se pudieron iniciar simulaciones',
+          text: result.errors.join('. '),
+          icon: 'error',
+          confirmButtonText: 'Entendido'
+        });
+      }
+      
+      // Sincronización forzada
+      setTimeout(async () => {
+        try {
+          const [statusData, metricsData] = await Promise.all([
+            dataService.getEmitterStatus(),
+            dataService.getSimulationMetrics()
+          ]);
+          setActiveSimulations(statusData);
+          setSimulationMetrics(metricsData);
+        } catch (error) {
+          console.error('❌ Error en sincronización:', error);
+        }
+      }, 1000);
+      
+    } catch (error) {
+      console.error('❌ Error iniciando múltiples simulaciones:', error);
+      await Swal.fire({
+        title: 'Error',
+        text: 'No se pudieron iniciar las simulaciones.',
+        icon: 'error',
+        confirmButtonText: 'Entendido'
+      });
     }
+  }, [mqttConnectionStatus]);
 
-    const startTime = new Date();
-    let messagesCount = 0;
-    let currentValue = generateRealisticValue(sensor.type);
-    previousValues.current[sensor.id] = currentValue;
-
-    // Obtener información del tanque
-    const tank = tanks.find(t => t.id === sensor.tankId);
-    const tankName = tank?.name || 'Tanque desconocido';
-
-    console.log(`🚀 [SIMULATION] Iniciando simulación para sensor "${sensor.name}" (${sensor.type}) - Tanque: ${tankName}`);
-
-    const intervalId = setInterval(async () => {
-      try {
-        // Generar nuevo valor realista
-        currentValue = generateRealisticValue(sensor.type, currentValue);
-        previousValues.current[sensor.id] = currentValue;
-
-        // 🎯 PAYLOAD OPTIMIZADO: Solo enviar el valor
-        const optimizedPayload = currentValue;
-        
-        // Publicar con payload simplificado
-        await mqttService.publish(sensor.hardwareId, optimizedPayload.toString());
-        
-        messagesCount++;
-        
-        // Actualizar contador de mensajes
-        setActiveSimulations(prev => ({
-          ...prev,
-          [sensor.id]: {
-            ...prev[sensor.id],
-            messagesCount
-          }
-        }));
-        
-        // Log cada 10 mensajes para no saturar la consola
-        if (messagesCount % 10 === 0) {
-          console.log(`📊 [SIMULATION] Sensor "${sensor.name}": ${messagesCount} mensajes enviados (Último: ${currentValue})`);
-        }
-
-      } catch (error) {
-        console.error(`❌ [SIMULATION] Error en simulación del sensor ${sensor.name}:`, error);
-        
-        // Si hay muchos errores consecutivos, detener la simulación
-        const errorCount = (error as any).consecutiveErrors || 0;
-        if (errorCount > 5) {
-          console.error(`🚨 [SIMULATION] Demasiados errores, deteniendo simulación para ${sensor.name}`);
-          stopSimulation(sensor.id);
-        } else {
-          (error as any).consecutiveErrors = errorCount + 1;
-        }
-      }
-    }, 5000); // Enviar cada 5 segundos
-
-    // Registrar intervalo
-    simulationIntervals.current.set(sensor.id, intervalId);
-
-    // Actualizar estado de simulaciones activas
-    setActiveSimulations(prev => ({
-      ...prev,
-      [sensor.id]: {
-        intervalId,
-        isActive: true,
-        startTime,
-        messagesCount: 0,
-        tankId: sensor.tankId,
-        tankName,
-        sensorName: sensor.name,
-        sensorType: sensor.type
-      }
-    }));
-
-    console.log(`✅ [SIMULATION] Simulación iniciada para "${sensor.name}" con payload optimizado`);
-  }, [mqttConnectionStatus, activeSimulations, tanks, mqttService, stopSimulation]);
-  
   /**
-   * @function toggleSimulation
-   * @description Alterna el estado de simulación de un sensor
+   * @function stopMultipleSimulations
    */
-  const toggleSimulation = useCallback((sensor: Sensor) => {
-    if (activeSimulations[sensor.id]) {
-      stopSimulation(sensor.id);
-    } else {
-      startSimulation(sensor);
+  const stopMultipleSimulations = useCallback(async (sensorIds: string[]) => {
+    try {
+      const result = await dataService.stopMultipleEmitters(sensorIds);
+      
+      let message = `Se detuvieron ${result.stopped.length} simulaciones`;
+      if (result.notFound.length > 0) {
+        message += `. ${result.notFound.length} no estaban activas`;
+      }
+      if (result.noPermission.length > 0) {
+        message += `. Sin permisos para ${result.noPermission.length}`;
+      }
+      
+      await Swal.fire({
+        title: 'Simulaciones detenidas',
+        text: message,
+        icon: 'info',
+        timer: 3000,
+        showConfirmButton: false
+      });
+      
+      // Sincronización forzada
+      setTimeout(async () => {
+        try {
+          const [statusData, metricsData] = await Promise.all([
+            dataService.getEmitterStatus(),
+            dataService.getSimulationMetrics()
+          ]);
+          setActiveSimulations(statusData);
+          setSimulationMetrics(metricsData);
+        } catch (error) {
+          console.error('❌ Error en sincronización:', error);
+        }
+      }, 1000);
+      
+    } catch (error) {
+      console.error('❌ Error deteniendo múltiples simulaciones:', error);
+      await Swal.fire({
+        title: 'Error',
+        text: 'No se pudieron detener las simulaciones.',
+        icon: 'error',
+        confirmButtonText: 'Entendido'
+      });
     }
-  }, [activeSimulations, startSimulation, stopSimulation]);
+  }, []);
+
+  /**
+   * @function getActiveSimulationsSummary
+   */
+  const getActiveSimulationsSummary = useCallback((): ActiveSimulationsSummary => {
+    const byTank: Record<string, { count: number; tankName: string; simulations: EmitterStatus[] }> = {};
+    const byType: Record<SensorType, number> = {
+      TEMPERATURE: 0,
+      PH: 0,
+      OXYGEN: 0
+    };
+    let totalMessages = 0;
+
+    activeSimulations.forEach(sim => {
+      // Agrupar por tanque
+      if (!byTank[sim.tankId]) {
+        byTank[sim.tankId] = {
+          count: 0,
+          tankName: sim.tankName,
+          simulations: []
+        };
+      }
+      byTank[sim.tankId].count++;
+      byTank[sim.tankId].simulations.push(sim);
+
+      // Contar por tipo
+      byType[sim.type as SensorType]++;
+      
+      // Sumar mensajes
+      totalMessages += sim.messagesCount;
+    });
+
+    return {
+      totalActive: activeSimulations.length,
+      byTank,
+      byType,
+      totalMessages,
+      systemUptime: simulationMetrics?.systemUptime || 0
+    };
+  }, [activeSimulations, simulationMetrics]);
 
   /**
    * @function getSimulationStatus
-   * @description Obtiene el estado de una simulación específica
    */
   const getSimulationStatus = useCallback((sensorId: string) => {
-    const simulation = activeSimulations[sensorId];
-    if (!simulation) return null;
-
-    const uptime = Math.floor((Date.now() - simulation.startTime.getTime()) / 1000);
-    return {
-      isActive: simulation.isActive,
-      uptime,
-      messagesCount: simulation.messagesCount,
-      startTime: simulation.startTime,
-      tankName: simulation.tankName,
-      currentValue: previousValues.current[sensorId] || 0
-    };
+    return activeSimulations.find(sim => sim.sensorId === sensorId) || null;
   }, [activeSimulations]);
 
   /**
-   * @function getTankSimulationsSummary
-   * @description Obtiene resumen de simulaciones agrupadas por tanque
+   * @function isSimulationActive
    */
-  const getTankSimulationsSummary = useCallback(() => {
-    return Object.values(tankSimulationGroups).map(group => ({
-      ...group,
-      uptime: Math.floor((Date.now() - group.startTime.getTime()) / 1000),
-      averageMessages: Math.floor(group.totalMessages / group.activeSimulations.length) || 0
-    }));
-  }, [tankSimulationGroups]);
+  const isSimulationActive = useCallback((sensorId: string) => {
+    return activeSimulations.some(sim => sim.sensorId === sensorId);
+  }, [activeSimulations]);
+
+  /**
+   * @function getUnitForSensorType
+   */
+  const getUnitForSensorType = useCallback((type: SensorType): string => {
+    switch (type) {
+      case 'TEMPERATURE': return '°C';
+      case 'PH': return 'pH';
+      case 'OXYGEN': return 'mg/L';
+      default: return '';
+    }
+  }, []);
+
+  /**
+   * @function forceSyncSimulations - Función para sincronizar manualmente
+   */
+  const forceSyncSimulations = useCallback(async () => {
+    try {
+      const [statusData, metricsData] = await Promise.all([
+        dataService.getEmitterStatus(),
+        dataService.getSimulationMetrics()
+      ]);
+      setActiveSimulations(statusData);
+      setSimulationMetrics(metricsData);
+      lastSyncTime.current = new Date();
+      console.log('🔄 [SYNC] Sincronización manual completada');
+    } catch (error) {
+      console.error('❌ [SYNC] Error en sincronización manual:', error);
+      throw error;
+    }
+  }, []);
 
   return {
     // Estados básicos
@@ -592,26 +628,29 @@ export const useDataEntry = () => {
     manualReadings,
     isSubmittingManual,
     
-    // Estados de simulación
+    // Estados de simulación mejorados
     activeSimulations,
-    tankSimulationGroups,
+    simulationMetrics,
     mqttConnectionStatus,
+    isTogglingSimulation,
     
-    // Funciones de manejo
+    // Funciones de manejo básico
     handleUserChange,
     handleTankChange,
     handleManualReadingChange,
     handleManualSubmit,
     
-    // Funciones de simulación
+    // Funciones de simulación mejoradas
     toggleSimulation,
-    startSimulation,
-    stopSimulation,
-    stopTankSimulations,
+    startMultipleSimulations,
+    stopMultipleSimulations,
     getSimulationStatus,
-    getTankSimulationsSummary,
+    isSimulationActive,
+    getActiveSimulationsSummary,
+    forceSyncSimulations,
     
     // Utilidades
-    getUnitForSensorType: (type: SensorType) => getUnitForSensorType(type),
+    getUnitForSensorType,
+    lastSyncTime: lastSyncTime.current,
   };
 };

@@ -2,11 +2,11 @@
  * @file data.controller.ts
  * @description Controlador mejorado para endpoints de datos de sensores con gestión persistente.
  * @author Kevin Mariano 
- * @version 2.0.1 
+ * @version 4.0.0
  * @since 1.0.0
  */
 import { Controller, Get, Post, Body, Query, UseGuards, Req, Param } from '@nestjs/common';
-import { DataService, SimulationMetrics } from './data.service';
+import { DataService } from './data.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -82,7 +82,7 @@ export class DataController {
   @Get('emitter/metrics')
   @Roles(Role.ADMIN, Role.USER)
   @ApiOperation({ summary: 'Obtener métricas detalladas de simulación' })
-  getSimulationMetrics(@Req() req): SimulationMetrics {
+  async getSimulationMetrics(@Req() req): Promise<any> {
     return this.dataService.getSimulationMetrics(req.user);
   }
 
