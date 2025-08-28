@@ -1,7 +1,7 @@
 /**
  * @file data.service.ts
  * @description Lógica de negocio para la gestión de datos de sensores, con simulación inteligente y manejo optimizado de MQTT.
- * @author Kevin Mariano (Reconstruido y optimizado por Gemini)
+ * @author Kevin Mariano 
  * @version 5.0.0
  * @since 1.0.0
  */

@@ -2,8 +2,8 @@
  * @file mqttService.ts
  * @description Servicio optimizado para gestionar la conexión y comunicación MQTT en el frontend.
  * Implementa payload simplificado y manejo eficiente de conexiones.
- * @author Kevin Mariano (Optimizado por Gemini)
- * @version 4.0.0 (Optimización de Payload)
+ * @author Kevin Mariano 
+ * @version 4.0.0 
  * @since 1.0.0
  */
 import mqtt, { MqttClient, IClientOptions } from 'mqtt';

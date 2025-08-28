@@ -2,7 +2,7 @@
  * @file useDataEntry.ts
  * @description Hook unificado y optimizado para el ingreso de datos de sensores.
  * Maneja entrada manual y simulación MQTT con payload simplificado y agrupación por tanques.
- * @author Kevin Mariano (Optimizado por Gemini)
+ * @author Kevin Mariano 
  * @version 8.0.0 (Optimización MQTT)
  * @since 1.0.0
  */

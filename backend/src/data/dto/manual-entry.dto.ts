@@ -1,7 +1,7 @@
 /**
  * @file manual-entry.dto.ts
  * @description DTO para el registro manual de datos de un sensor.
- * @author Kevin Mariano (Corregido y optimizado por Gemini)
+ * @author Kevin Mariano
  * @version 2.0.0
  * @since 1.0.0
  */

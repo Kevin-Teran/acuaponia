@@ -2,8 +2,8 @@
  * @file useDataEntry.ts
  * @description Hook unificado para el ingreso de datos, ahora con control de simulación persistente en backend.
  * Sincroniza el estado de la UI con los emisores activos en el servidor.
- * @author Kevin Mariano (Refactorizado por Gemini para persistencia y estado reactivo)
- * @version 9.1.0 (Estado de Conexión Reactivo)
+ * @author Kevin Mariano 
+ * @version 9.1.0 
  * @since 1.0.0
  */
 import { useState, useEffect, useCallback } from 'react';

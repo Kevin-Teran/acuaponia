@@ -1,7 +1,7 @@
 /**
  * @file data.controller.ts
  * @description Controlador para endpoints de datos de sensores.
- * @author Kevin Mariano (Corregido por Gemini)
+ * @author Kevin Mariano 
  * @version 3.0.0
  * @since 1.0.0
  */
