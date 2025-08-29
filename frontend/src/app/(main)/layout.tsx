@@ -11,6 +11,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/sidebar/Sidebar';
 import { modules } from '@/components/layout/sidebar/constants';
 import { useAuth } from '@/context/AuthContext';
+// La importación de '../globals.css' se ha eliminado para corregir el error de compilación.
 
 /**
  * @component MainLayout
@@ -56,7 +57,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   }, [logout]);
 
   if (isLoading || !user) {
-    return null; 
+    return null;
   }
   
   return (
