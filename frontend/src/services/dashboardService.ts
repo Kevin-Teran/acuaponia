@@ -1,73 +1,63 @@
 /**
- * @file dashboardService.ts  
- * @description Servicio específico para obtener datos del Dashboard desde la API.
- * @author Kevin Mariano
+ * @file dashboardService.ts
  * @version 1.0.0
+ * @description Servicio para manejar la comunicación con el backend del Dashboard.
+ *              Incluye fetch de datos y manejo de filtros.
  */
-import api from '@/config/api';
+
+import axios from "axios";
 
 export interface DashboardFilters {
-  userId?: number;
-  tankId?: string;
-  startDate?: string;
-  endDate?: string;
+  tankId: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
+}
+
+export interface SensorDataPoint {
+  timestamp: string;
+  value: number;
+  type: string;
+}
+
+export interface LatestData {
+  temperature?: number;
+  ph?: number;
+  oxygen?: number;
+}
+
+export interface DashboardSummary {
+  totalAlerts: number;
+  activeSensors: number;
 }
 
 export interface DashboardData {
-  latestData: {
-    temperature?: number | null;
-    ph?: number | null;
-    oxygen?: number | null;
-  } | null;
-  summary: {
-    avg: {
-      temperature?: number | null;
-      ph?: number | null;
-      oxygen?: number | null;
-    };
-    max: {
-      temperature?: number | null;
-      ph?: number | null;
-      oxygen?: number | null;
-    };
-    min: {
-      temperature?: number | null;
-      ph?: number | null;
-      oxygen?: number | null;
-    };
-  };
-  timeSeries: Array<{
-    timestamp: string;
-    temperature?: number | null;
-    ph?: number | null;
-    oxygen?: number | null;
-  }>;
+  latestData: LatestData;
+  summary: DashboardSummary;
+  timeSeries: SensorDataPoint[];
 }
 
 /**
- * @function getDashboardData
- * @description Obtiene todos los datos necesarios para el dashboard aplicando filtros
- * @param filters Filtros para la consulta
- * @returns Promise con los datos del dashboard
+ * Obtiene los datos del dashboard desde el backend
+ * @param filters filtros aplicados (tankId, startDate, endDate)
+ * @returns Promise<DashboardData>
  */
-export const getDashboardData = async (filters: DashboardFilters): Promise<DashboardData> => {
+export const fetchDashboardData = async (filters: DashboardFilters): Promise<DashboardData> => {
   try {
-    const params: any = {};
-    
-    if (filters.userId) params.userId = filters.userId;
-    if (filters.tankId) params.tankId = filters.tankId;
-    if (filters.startDate) params.startDate = filters.startDate;
-    if (filters.endDate) params.endDate = filters.endDate;
+    console.log("🔍 Fetching dashboard data with filters:", filters);
+    const response = await axios.get<DashboardData>("/api/dashboard", { params: filters });
+    const data = response.data;
 
-    console.log('🔍 Fetching dashboard data with filters:', params);
-    
-    const response = await api.get('/dashboard', { params });
-    
-    console.log('✅ Dashboard data received:', response.data);
-    
-    return response.data;
-  } catch (error: any) {
-    console.error('❌ Error fetching dashboard data:', error);
-    throw error;
+    // Asegurar que timeSeries siempre sea un array
+    if (!data.timeSeries) data.timeSeries = [];
+
+    console.log("✅ Dashboard data received:", data);
+    return data;
+  } catch (error) {
+    console.error("❌ Error fetching dashboard data:", error);
+    return {
+      latestData: {},
+      summary: { totalAlerts: 0, activeSensors: 0 },
+      timeSeries: [],
+    };
   }
 };
