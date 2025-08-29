@@ -1,7 +1,7 @@
 /**
  * @file SimulationControlPanel.tsx
  * @description Panel para gestionar simulaciones MQTT, incluyendo acciones en lote.
- * @author Kevin Mariano (Refactor by Gemini)
+ * @author Kevin Mariano 
  * @version 5.0.0
  */
 'use client';

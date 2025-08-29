@@ -1,6 +1,6 @@
 /**
  * @file data.controller.ts
- * @description Controlador mejorado para endpoints de datos de sensores con gestión persistente.
+ * @description Controlador para endpoints de datos de sensores.
  * @author Kevin Mariano 
  * @version 4.0.0
  * @since 1.0.0
@@ -62,7 +62,7 @@ export class DataController {
   @ApiOperation({ summary: 'Detener un simulador de sensor' })
   stopEmitter(@Body() body: { sensorId: string }, @Req() req) {
     this.dataService.stopEmitter(body.sensorId, req.user);
-    return { message: `Simulador del sensor ${body.sensorId} detenido exitosamente.` };
+    return { message: `Simulador del sensor ${body.sensorId} detenido.` };
   }
 
   @Post('emitter/stop-multiple')

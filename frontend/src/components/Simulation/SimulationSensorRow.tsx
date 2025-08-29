@@ -159,4 +159,4 @@ export const SimulationSensorRow: React.FC<SimulationSensorRowProps> = ({
   );
 };
 
-export default SimulationSensorRow;x
+export default SimulationSensorRow;
