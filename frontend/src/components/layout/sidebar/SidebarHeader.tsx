@@ -12,7 +12,16 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = React.memo(({ collaps
   <div className="flex items-center p-4 h-16 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
     {!collapsed && (
       <div className={clsx("flex items-center space-x-3")}>
-        <Image src="/logo-sena.png" alt="Logo SENA" width={32} height={32} priority />
+        {/* Contenedor con position: relative - ES NECESARIO para fill */}
+        <div className="relative w-9 h-9"> 
+          <Image
+            src="/logo-sena.png"
+            alt="Logo del SENA, Servicio Nacional de Aprendizaje de Colombia"
+            fill
+            className="object-contain"
+            priority
+          />
+        </div>
         <h1 className="text-lg font-bold text-gray-900 dark:text-white whitespace-nowrap">Acuaponia</h1>
       </div>
     )}

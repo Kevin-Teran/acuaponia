@@ -3,7 +3,7 @@
  * @description Componente de UI para el formulario de inicio de sesión.
  * Incluye un diseño visual atractivo con soporte para temas claro/oscuro.
  * @author Kevin Mariano
- * @version 12.0.0
+ * @version 5.0.0
  */
 'use client';
 
@@ -58,11 +58,8 @@ export const LoginForm: React.FC = () => {
             document.documentElement.classList.add('dark');
         } else {
             document.documentElement.classList.remove('dark');
-        }
-        
-        // La lógica del AuthProvider ya se encarga del estado de React
-        // Aquí solo nos aseguramos de que la clase del DOM esté sincronizada
-    }, [theme]); // Dependencia en 'theme' del AuthContext
+        } 
+    }, [theme]);
 
     /**
      * @description Cuentas de demostración para facilitar el testing.
@@ -140,16 +137,15 @@ export const LoginForm: React.FC = () => {
 
             <main className="w-full max-w-sm sm:max-w-md animate-in fade-in slide-in-from-bottom-5 duration-500 px-4 sm:px-0">
                 <header className="text-center mb-6">
-                    {/* ===== SOLUCIÓN PARA LA ADVERTENCIA DE IMAGEN ===== */}
-                    <Image
-                        src="/logo-sena.png"
-                        alt="Logo del SENA, Servicio Nacional de Aprendizaje de Colombia"
-                        width={70}
-                        height={70}
-                        className="mx-auto mb-3"
-                        style={{ height: 'auto' }}
-                        priority
-                    />
+                    <div className="relative w-16 h-16 mx-auto mb-3">
+                        <Image
+                            src="/logo-sena.png"
+                            alt="Logo del SENA, Servicio Nacional de Aprendizaje de Colombia"
+                            fill
+                            className="object-contain"
+                            priority
+                        />
+                    </div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Sistema de Monitoreo de Acuaponía</h1>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Servicio Nacional de Aprendizaje (SENA)</p>
                 </header>

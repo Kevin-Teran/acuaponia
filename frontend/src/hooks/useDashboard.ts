@@ -2,7 +2,7 @@
  * @file useDashboard.ts
  * @description Hook centralizado para la lógica y datos del Dashboard.
  * @author Kevin Mariano
- * @version 3.0.0
+ * @version 3.1.0
  */
 'use client';
 
@@ -11,7 +11,11 @@ import { useAuth } from '@/context/AuthContext';
 import { User, Tank, UserFromApi, ProcessedDataPoint } from '@/types';
 import { getUsers } from '@/services/userService';
 import { getTanks } from '@/services/tankService';
-import { getHistoricalData, getLatestData } from '@/services/dataService';
+import { getDashboardData } from '@/services/dashboardService';
+// CORRECCIÓN 1: Importar getSettings desde settingsService
+import { getSettings } from '@/services/settingsService';
+// CORRECCIÓN 2: Importar socketService correctamente
+import { socketService } from '@/services/socketService';
 
 const getFormattedDate = (date: Date) => date.toISOString().split('T')[0];
 
@@ -38,25 +42,63 @@ export const useDashboard = () => {
     const loadBaseData = async () => {
       if (!currentUser) return;
       setLoading(prev => ({ ...prev, base: true }));
-      let userList: UserFromApi[] = currentUser.role === 'ADMIN' ? await getUsers() : [{ ...currentUser, _count: { tanks: 0 } } as UserFromApi];
-      setUsers(userList);
       
-      const initialUserId = String(currentUser.id);
-      const userTanks = await getTanks(initialUserId);
-      setTanks(userTanks);
+      try {
+        let userList: UserFromApi[] = currentUser.role === 'ADMIN' ? await getUsers() : [{ ...currentUser, _count: { tanks: 0 } } as UserFromApi];
+        setUsers(userList);
+        
+        const initialUserId = String(currentUser.id);
+        const userTanks = await getTanks(initialUserId);
+        setTanks(userTanks);
 
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      
-      setFilters({
-        userId: initialUserId,
-        tankId: userTanks.length > 0 ? userTanks[0].id : '',
-        startDate: getFormattedDate(oneWeekAgo),
-        endDate: getFormattedDate(new Date()),
-      });
-      setLoading(prev => ({ ...prev, base: false }));
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        
+        setFilters({
+          userId: initialUserId,
+          tankId: userTanks.length > 0 ? userTanks[0].id : '',
+          startDate: getFormattedDate(oneWeekAgo),
+          endDate: getFormattedDate(new Date()),
+        });
+      } catch (error) {
+        console.error('Error en carga base:', error);
+      } finally {
+        setLoading(prev => ({ ...prev, base: false }));
+      }
     };
     loadBaseData();
+  }, [currentUser]);
+
+  // CORRECCIÓN 3: Función para cargar datos de usuario con thresholds
+  const loadDataForUser = useCallback(async (userId: string) => {
+    try {
+      // Cargar configuraciones del usuario (incluyendo thresholds)
+      const userSettings = await getSettings(userId);
+      
+      // Cargar tanques del usuario
+      const userTanks = await getTanks(userId);
+      setTanks(userTanks);
+      
+      // Aquí puedes usar userSettings.thresholds si es necesario
+      console.log('User settings loaded:', userSettings);
+      
+      return { settings: userSettings, tanks: userTanks };
+    } catch (error) {
+      console.error('Error al cargar datos para el usuario:', error);
+      throw error;
+    }
+  }, []);
+
+  // CORRECCIÓN 4: Conectar socket cuando se monta el componente
+  useEffect(() => {
+    if (currentUser) {
+      socketService.connect();
+      
+      // Cleanup al desmontarse
+      return () => {
+        socketService.disconnect();
+      };
+    }
   }, [currentUser]);
 
   // Carga de datos del dashboard (automático)
@@ -66,35 +108,33 @@ export const useDashboard = () => {
       
       setLoading(prev => ({ ...prev, data: true }));
       try {
-        const [latest, historical] = await Promise.all([
-          getLatestData(filters.tankId),
-          getHistoricalData(filters.tankId, filters.startDate, filters.endDate),
-        ]);
+        // CORRECCIÓN: Usar el endpoint específico del dashboard
+        const dashboardData = await getDashboardData({
+          userId: filters.userId ? Number(filters.userId) : undefined,
+          tankId: filters.tankId,
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+        });
         
-        setLatestData(latest);
-        setHistoricalData(historical);
-
-        // Calcular resumen a partir de datos históricos
-        if (historical.length > 0) {
-            const tempValues = historical.map(d => d.temperature).filter(v => v !== null) as number[];
-            const phValues = historical.map(d => d.ph).filter(v => v !== null) as number[];
-            const oxygenValues = historical.map(d => d.oxygen).filter(v => v !== null) as number[];
-            
-            setSummary({
-                temperature: {
-                    min: Math.min(...tempValues), max: Math.max(...tempValues),
-                    avg: tempValues.reduce((a, b) => a + b, 0) / tempValues.length,
-                },
-                ph: {
-                    min: Math.min(...phValues), max: Math.max(...phValues),
-                    avg: phValues.reduce((a, b) => a + b, 0) / phValues.length,
-                },
-                oxygen: {
-                    min: Math.min(...oxygenValues), max: Math.max(...oxygenValues),
-                    avg: oxygenValues.reduce((a, b) => a + b, 0) / oxygenValues.length,
-                },
-            });
-        }
+        setLatestData(dashboardData.latestData);
+        setHistoricalData(dashboardData.timeSeries);
+        setSummary({
+          temperature: {
+            min: dashboardData.summary.min.temperature || 0,
+            max: dashboardData.summary.max.temperature || 0,
+            avg: dashboardData.summary.avg.temperature || 0,
+          },
+          ph: {
+            min: dashboardData.summary.min.ph || 0,
+            max: dashboardData.summary.max.ph || 0,
+            avg: dashboardData.summary.avg.ph || 0,
+          },
+          oxygen: {
+            min: dashboardData.summary.min.oxygen || 0,
+            max: dashboardData.summary.max.oxygen || 0,
+            avg: dashboardData.summary.avg.oxygen || 0,
+          },
+        });
 
       } catch (error) {
         console.error("Error al obtener datos del dashboard:", error);
@@ -105,9 +145,35 @@ export const useDashboard = () => {
     fetchAllDashboardData();
   }, [filters]);
 
-  const handleFilterChange = useCallback((field: string, value: string) => {
-    setFilters(prev => ({ ...prev, [field]: value }));
-  }, []);
+  // CORRECCIÓN 5: Manejar cambio de usuario y recargar sus datos
+  const handleFilterChange = useCallback(async (field: string, value: string) => {
+    if (field === 'userId' && value !== filters.userId) {
+      // Si cambia el usuario, cargar sus datos específicos
+      try {
+        await loadDataForUser(value);
+        setFilters(prev => ({ 
+          ...prev, 
+          [field]: value,
+          tankId: '' // Reset tankId when user changes
+        }));
+      } catch (error) {
+        console.error('Error al cambiar usuario:', error);
+      }
+    } else {
+      setFilters(prev => ({ ...prev, [field]: value }));
+    }
+  }, [filters.userId, loadDataForUser]);
 
-  return { loading, users, tanks, filters, handleFilterChange, latestData, historicalData, summary, currentUser };
+  return { 
+    loading, 
+    users, 
+    tanks, 
+    filters, 
+    handleFilterChange, 
+    latestData, 
+    historicalData, 
+    summary, 
+    currentUser,
+    loadDataForUser // Exportar por si se necesita externamente
+  };
 };
