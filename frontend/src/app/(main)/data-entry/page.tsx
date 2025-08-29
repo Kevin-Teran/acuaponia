@@ -3,7 +3,7 @@
  * @route /data-entry
  * @description Página optimizada para la Recolección de Datos, con un diseño
  * profesional adaptado y panel de simulaciones activas en tiempo real.
- * @author Kevin Mariano (Actualizado por Gemini)
+ * @author Kevin Mariano
  * @version 15.0.0
  * @since 1.0.0
  */

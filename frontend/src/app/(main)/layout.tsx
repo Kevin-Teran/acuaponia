@@ -1,10 +1,8 @@
 /**
  * @file layout.tsx
  * @description Layout principal para las rutas protegidas de la aplicación.
- * Versión minimalista que elimina el spinner de carga global para permitir
- * la implementación de indicadores de carga sectorizados por página.
  * @author Kevin Mariano
- * @version 3.0.0
+ * @version 3.1.0
  */
 'use client';
 
@@ -17,8 +15,6 @@ import { useAuth } from '@/context/AuthContext';
 /**
  * @component MainLayout
  * @description Provee la estructura principal (Sidebar y contenido) para las páginas autenticadas.
- * Protege las rutas y renderiza un estado nulo (pantalla en blanco) durante la
- * verificación de sesión para dar paso a spinners de carga a nivel de componente.
  * @param {object} props - Propiedades del componente.
  * @param {React.ReactNode} props.children - Los componentes de la página actual a renderizar.
  * @returns {React.ReactElement | null} El layout de la aplicación o null durante la verificación.
@@ -60,7 +56,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   }, [logout]);
 
   if (isLoading || !user) {
-    return null;
+    return null; 
   }
   
   return (

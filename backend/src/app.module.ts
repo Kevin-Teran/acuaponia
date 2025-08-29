@@ -1,3 +1,9 @@
+/**
+ * @file app.module.ts
+ * @description Módulo raíz de la aplicación NestJS.
+ * @author kevin mariano
+ * @version 1.1.0
+ */
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
@@ -12,6 +18,7 @@ import { DataModule } from './data/data.module';
 import { MqttModule } from './mqtt/mqtt.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -28,6 +35,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
     EventsModule,
     SettingsModule,
     MqttModule,
+    DashboardModule,
   ],
   providers: [
     {

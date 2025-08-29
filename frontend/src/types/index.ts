@@ -15,7 +15,7 @@
  * @example
  * // Uso en componentes
  * if (user.role === Role.ADMIN) {
- *   return <AdminPanel />;
+ * return <AdminPanel />;
  * }
  */
 export enum Role {
@@ -31,9 +31,9 @@ export enum Role {
  * Cada tipo tiene características específicas de medición y rangos de operación.
  * @example
  * const temperatureSensor = {
- *   type: SensorType.TEMPERATURE,
- *   unit: '°C',
- *   range: { min: 0, max: 50 }
+ * type: SensorType.TEMPERATURE,
+ * unit: '°C',
+ * range: { min: 0, max: 50 }
  * };
  */
 export enum SensorType {
@@ -102,13 +102,13 @@ export enum UserStatus {
  * @property {object} [settings] - Configuraciones personalizadas del usuario (opcional)
  * @example
  * const user: User = {
- *   id: 'clx5e2r9s0000a1b2c3d4e5f6',
- *   email: 'admin@acuaponia.com',
- *   name: 'Juan Administrador',
- *   role: Role.ADMIN,
- *   status: UserStatus.ACTIVE,
- *   createdAt: '2025-01-15T10:30:00.000Z',
- *   lastLogin: '2025-01-15T12:45:00.000Z'
+ * id: 'clx5e2r9s0000a1b2c3d4e5f6',
+ * email: 'admin@acuaponia.com',
+ * name: 'Juan Administrador',
+ * role: Role.ADMIN,
+ * status: UserStatus.ACTIVE,
+ * createdAt: '2025-01-15T10:30:00.000Z',
+ * lastLogin: '2025-01-15T12:45:00.000Z'
  * };
  */
 export interface User {
@@ -132,14 +132,14 @@ export interface User {
  * @property {string} createdAt - Fecha de creación de la cuenta
  * @example
  * const apiUser: UserFromApi = {
- *   id: 'clx5e2r9s0000a1b2c3d4e5f6',
- *   name: 'María Técnico',
- *   email: 'maria@acuaponia.com',
- *   role: Role.USER,
- *   status: UserStatus.ACTIVE,
- *   _count: { tanks: 3 },
- *   createdAt: '2025-01-10T08:00:00.000Z',
- *   lastLogin: '2025-01-15T09:30:00.000Z'
+ * id: 'clx5e2r9s0000a1b2c3d4e5f6',
+ * name: 'María Técnico',
+ * email: 'maria@acuaponia.com',
+ * role: Role.USER,
+ * status: UserStatus.ACTIVE,
+ * _count: { tanks: 3 },
+ * createdAt: '2025-01-10T08:00:00.000Z',
+ * lastLogin: '2025-01-15T09:30:00.000Z'
  * };
  */
 export type UserFromApi = Pick<User, 'id' | 'name' | 'email' | 'role' | 'status'> & {
@@ -156,9 +156,9 @@ export type UserFromApi = Pick<User, 'id' | 'name' | 'email' | 'role' | 'status'
  * @property {boolean} [rememberMe] - Opción para mantener la sesión activa (opcional)
  * @example
  * const credentials: LoginCredentials = {
- *   email: 'usuario@acuaponia.com',
- *   password: 'miPassword123',
- *   rememberMe: true
+ * email: 'usuario@acuaponia.com',
+ * password: 'miPassword123',
+ * rememberMe: true
  * };
  */
 export interface LoginCredentials {
@@ -178,11 +178,11 @@ export interface LoginCredentials {
  * @property {UserStatus} [status] - Estado inicial (por defecto ACTIVE)
  * @example
  * const newUser: CreateUserDto = {
- *   name: 'Carlos Rodríguez',
- *   email: 'carlos@acuaponia.com',
- *   password: 'password123',
- *   role: Role.USER,
- *   status: UserStatus.ACTIVE
+ * name: 'Carlos Rodríguez',
+ * email: 'carlos@acuaponia.com',
+ * password: 'password123',
+ * role: Role.USER,
+ * status: UserStatus.ACTIVE
  * };
  */
 export interface CreateUserDto {
@@ -204,8 +204,8 @@ export interface CreateUserDto {
  * @property {UserStatus} [status] - Nuevo estado del usuario
  * @example
  * const updates: UpdateUserDto = {
- *   name: 'Carlos Rodríguez Senior',
- *   role: Role.ADMIN
+ * name: 'Carlos Rodríguez Senior',
+ * role: Role.ADMIN
  * };
  */
 export interface UpdateUserDto {
@@ -333,10 +333,10 @@ export interface UpdateSensorDto {
  * @property {number} oxygen - Nivel de oxígeno disuelto en mg/L
  * @example
  * const reading: SensorData = {
- *   timestamp: '2025-01-15T14:30:00.000Z',
- *   temperature: 24.5,
- *   ph: 7.2,
- *   oxygen: 8.3
+ * timestamp: '2025-01-15T14:30:00.000Z',
+ * temperature: 24.5,
+ * ph: 7.2,
+ * oxygen: 8.3
  * };
  */
 export interface SensorData {
@@ -499,11 +499,88 @@ export interface UserSettings {
  * @property {string} newPassword - Nueva contraseña a establecer
  * @example
  * const resetData: ResetPasswordCredentials = {
- *   token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
- *   newPassword: 'nuevaPassword123'
+ * token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+ * newPassword: 'nuevaPassword123'
  * };
  */
  export interface ResetPasswordCredentials {
   token: string;
   newPassword: string;
+}
+
+// --- Dashboard Types (NUEVO) ---
+
+/**
+ * @typedef {object} TimePoint
+ * @description Representa un único punto de datos en una serie de tiempo para los gráficos.
+ * @property {string} timestamp - Marca de tiempo de la lectura en formato ISO 8601.
+ * @property {number | null} ph - Valor de pH en ese momento.
+ * @property {number | null} temperature - Valor de temperatura en °C en ese momento.
+ * @property {number | null} tds - Valor de Sólidos Totales Disueltos (TDS) en ppm.
+ */
+export interface TimePoint {
+  timestamp: string;
+  ph: number | null;
+  temperature: number | null;
+  tds: number | null;
+}
+
+/**
+ * @typedef {object} SummaryValues
+ * @description Contiene los valores agregados (mínimo, máximo, promedio) para los parámetros.
+ * @property {number | null} ph - Valor agregado para pH.
+ * @property {number | null} temperature - Valor agregado para temperatura.
+ * @property {number | null} tds - Valor agregado para TDS.
+ */
+export interface SummaryValues {
+  ph: number | null;
+  temperature: number | null;
+  tds: number | null;
+}
+
+/**
+ * @typedef {object} SummaryData
+ * @description Estructura completa para los datos de resumen mostrados en las tarjetas del dashboard.
+ * @property {SummaryValues} avg - Contiene los promedios de todos los parámetros.
+ * @property {SummaryValues} max - Contiene los valores máximos registrados.
+ * @property {SummaryValues} min - Contiene los valores mínimos registrados.
+ */
+export interface SummaryData {
+  avg: SummaryValues;
+  max: SummaryValues;
+  min: SummaryValues;
+}
+
+/**
+ * @typedef {object} LatestData
+ * @description Representa la lectura de datos más reciente para los velocímetros (gauges).
+ * @property {string} id - ID del punto de dato.
+ * @property {number | null} ph - Último valor de pH.
+ * @property {number | null} temperature - Último valor de temperatura.
+ * @property {number | null} tds - Último valor de TDS.
+ * @property {string} timestamp - Marca de tiempo de la lectura.
+ * @property {string} sensorId - ID del sensor que tomó la lectura.
+ * @property {string} tankId - ID del tanque asociado.
+ */
+export interface LatestData {
+  id: string;
+  ph: number | null;
+  temperature: number | null;
+  tds: number | null;
+  timestamp: string;
+  sensorId: string;
+  tankId: string;
+}
+
+/**
+ * @typedef {object} DashboardData
+ * @description La estructura de datos completa que la API del dashboard devuelve.
+ * @property {LatestData | null} latestData - Los datos más recientes (puede ser null si no hay).
+ * @property {SummaryData} summary - Los datos agregados para las tarjetas de resumen.
+ * @property {TimePoint[]} timeSeries - El array de datos para los gráficos de líneas.
+ */
+export interface DashboardData {
+  latestData: LatestData | null;
+  summary: SummaryData;
+  timeSeries: TimePoint[];
 }
