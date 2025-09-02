@@ -1,90 +1,146 @@
-// src/hooks/useDashboard.ts
-import { useState, useEffect } from "react";
-import { io, Socket } from "socket.io-client";
-import {
-  fetchDashboardData,
-  DashboardData,
-  DashboardFilters,
-} from "../services/dashboardService"; // Ajusta la ruta según tu estructura
+/**
+ * @file useDashboard.ts
+ * @description Hook personalizado para la gestión del estado del dashboard.
+ * @author Kevin Mariano
+ * @version 1.0.0
+ * @since 1.0.0
+ */
+import { useState, useEffect, useCallback } from 'react';
+import { apiClient } from '@/utils/apiClient';
+import { SensorType } from '@/types';
 
-interface UseDashboardResult {
-  data: DashboardData | null;
-  loading: boolean;
-  error: string | null;
-  refresh: () => void;
-  socket: Socket | null;
+interface DashboardFilters {
+  userId?: string;
+  tankId?: string;
+  sensorType?: SensorType;
+  startDate?: string;
+  endDate?: string;
 }
 
-/**
- * Custom hook para manejar el estado del dashboard, incluyendo fetch y socket.io
- * @param initialFilters - Filtros iniciales para cargar los datos del dashboard
- * @returns UseDashboardResult
- */
-export const useDashboard = (initialFilters: DashboardFilters): UseDashboardResult => {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [filters, setFilters] = useState<DashboardFilters>(initialFilters);
+interface SummaryData {
+  tanksCount: number;
+  sensorsCount: number;
+  activeSimulations: number;
+  recentAlerts: number;
+  totalDataPoints: number;
+}
 
-  /**
-   * Fetch de datos del dashboard desde el backend
-   */
-  const loadData = async () => {
-    setLoading(true);
-    setError(null);
+interface RealtimeData {
+  [key: string]: Array<{
+    sensorId: string;
+    sensorName: string;
+    tankName: string;
+    value: number;
+    timestamp: string;
+    hardwareId: string;
+  }>;
+}
+
+interface HistoricalData {
+  timestamp: string;
+  value: number;
+  sensorName: string;
+  sensorType: SensorType;
+  tankName: string;
+}
+
+interface TankOverview {
+  id: string;
+  name: string;
+  location: string;
+  status: string;
+  sensorsCount: number;
+  lastReading: string | null;
+  sensors: Array<{
+    id: string;
+    name: string;
+    type: SensorType;
+    status: string;
+    lastValue: number | null;
+    lastUpdate: string | null;
+  }>;
+}
+
+interface UserOption {
+  id: string;
+  name: string;
+  email: string;
+  _count: { tanks: number };
+}
+
+export const useDashboard = () => {
+  const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
+  const [realtimeData, setRealtimeData] = useState<RealtimeData>({});
+  const [historicalData, setHistoricalData] = useState<HistoricalData[]>([]);
+  const [tanksOverview, setTanksOverview] = useState<TankOverview[]>([]);
+  const [usersList, setUsersList] = useState<UserOption[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchSummary = useCallback(async (filters: DashboardFilters = {}) => {
     try {
-      console.log("🔍 Fetching dashboard data with filters:", filters);
-      const result = await fetchDashboardData(filters);
-      console.log("✅ Dashboard data received:", result);
-      setData(result);
+      setLoading(true);
+      setError(null);
+      const response = await apiClient.get('/dashboard/summary', { params: filters });
+      setSummaryData(response.data);
     } catch (err: any) {
-      console.error("❌ Error fetching dashboard data:", err);
-      setError(err.message || "Error al obtener los datos del dashboard");
+      setError(err.response?.data?.message || 'Error al cargar el resumen');
     } finally {
       setLoading(false);
     }
-  };
-
-  /**
-   * Inicializa conexión con Socket.IO
-   */
-  useEffect(() => {
-    const newSocket = io("http://localhost:5001"); // Ajusta URL si es necesario
-    setSocket(newSocket);
-
-    newSocket.on("connect", () => {
-      console.log("✅ Conectado al servidor Socket.IO con ID:", newSocket.id);
-    });
-
-    newSocket.on("disconnect", () => {
-      console.log("🔌 Desconectado del servidor Socket.IO");
-    });
-
-    newSocket.on("dashboard:update", (updatedData: DashboardData) => {
-      console.log("📡 Actualización recibida por socket:", updatedData);
-      setData(updatedData);
-    });
-
-    return () => {
-      newSocket.disconnect();
-    };
   }, []);
 
-  /**
-   * Refresca los datos del dashboard manualmente
-   */
-  const refresh = () => {
-    loadData();
+  const fetchRealtimeData = useCallback(async (filters: DashboardFilters = {}) => {
+    try {
+      const response = await apiClient.get('/dashboard/realtime', { params: filters });
+      setRealtimeData(response.data);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Error al cargar datos en tiempo real');
+    }
+  }, []);
+
+  const fetchHistoricalData = useCallback(async (filters: DashboardFilters) => {
+    try {
+      setLoading(true);
+      const response = await apiClient.get('/dashboard/historical', { params: filters });
+      setHistoricalData(response.data);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Error al cargar datos históricos');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchTanksOverview = useCallback(async (filters: DashboardFilters = {}) => {
+    try {
+      const response = await apiClient.get('/dashboard/tanks-overview', { params: filters });
+      setTanksOverview(response.data);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Error al cargar vista de tanques');
+    }
+  }, []);
+
+  const fetchUsersList = useCallback(async () => {
+    try {
+      const response = await apiClient.get('/dashboard/users-list');
+      setUsersList(response.data);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Error al cargar lista de usuarios');
+    }
+  }, []);
+
+  return {
+    summaryData,
+    realtimeData,
+    historicalData,
+    tanksOverview,
+    usersList,
+    loading,
+    error,
+    fetchSummary,
+    fetchRealtimeData,
+    fetchHistoricalData,
+    fetchTanksOverview,
+    fetchUsersList,
   };
-
-  /**
-   * Re-fetch cuando cambian los filtros
-   */
-  useEffect(() => {
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]);
-
-  return { data, loading, error, refresh, socket };
 };

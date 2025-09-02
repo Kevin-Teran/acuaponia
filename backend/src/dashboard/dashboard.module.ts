@@ -1,18 +1,19 @@
 /**
  * @file dashboard.module.ts
- * @description Módulo para el Dashboard.
+ * @description Módulo para la gestión del dashboard.
  * @author Kevin Mariano
- * @version 3.0.0
+ * @version 1.0.0
+ * @since 1.0.0
  */
 import { Module } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { DashboardController } from './dashboard.controller';
-import { DataModule } from '../data/data.module';
-import { SettingsModule } from '../settings/settings.module';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
-  imports: [DataModule, SettingsModule], 
+  imports: [PrismaModule],
   controllers: [DashboardController],
   providers: [DashboardService],
+  exports: [DashboardService],
 })
 export class DashboardModule {}

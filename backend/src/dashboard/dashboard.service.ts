@@ -1,137 +1,217 @@
 /**
  * @file dashboard.service.ts
- * @description Servicio con la lógica de negocio para el dashboard
- * @version 1.2.0
+ * @description Servicio para la lógica de negocio del dashboard con datos optimizados.
+ * @author Kevin Mariano
+ * @version 1.0.0
  * @since 1.0.0
  */
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { GetDashboardDataDto } from './dto/get-dashboard-data.dto';
-import { Role } from '@prisma/client';
+import { DashboardFiltersDto } from './dto/dashboard-filters.dto';
+import { User, Role, SensorType } from '@prisma/client';
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(DashboardService.name);
 
-  /**
-   * @method getDashboardData
-   * @description Obtiene los datos agregados y series de tiempo del dashboard
-   * @param {GetDashboardDataDto} filters - Filtros de consulta
-   * @param {Pick<User, 'id' | 'role'>} currentUser - Usuario autenticado
-   * @returns {Promise<object>} Datos para velocímetros, tarjetas y gráficos
-   */
-  async getDashboardData(
-    filters: GetDashboardDataDto,
-    currentUser: Pick<{ id: string; role: Role }, 'id' | 'role'>,
-  ) {
-    const { userId, tankId, startDate, endDate } = filters;
+  constructor(private prisma: PrismaService) {}
 
-    const sensorWhereClause: any = { ...(tankId && { tankId }) };
+  async getSummary(filters: DashboardFiltersDto, user: User) {
+    const targetUserId = this.resolveTargetUserId(filters.userId, user);
+    
+    const [tanksCount, sensorsCount, activeSimulations, recentAlerts] = await Promise.all([
+      this.prisma.tank.count({ where: { userId: targetUserId } }),
+      this.prisma.sensor.count({ where: { tank: { userId: targetUserId } } }),
+      this.prisma.alert.count({ 
+        where: { 
+          userId: targetUserId,
+          createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+        }
+      })
+    ]);
 
-    if (currentUser.role !== Role.ADMIN) {
-      sensorWhereClause.tank = { userId: currentUser.id };
-    } else if (userId) {
-      sensorWhereClause.tank = { userId: Number(userId) };
-    }
-
-    const dataWhereClause: any = {};
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      dataWhereClause.timestamp = { gte: start > end ? end : start, lte: start > end ? start : end };
-    }
-
-    try {
-      const sensors = await this.prisma.sensor.findMany({
-        where: sensorWhereClause,
-        select: { id: true, type: true, name: true, lastReading: true, lastUpdate: true },
-      });
-
-      if (!sensors.length) {
-        return { latestData: null, summary: { avg: { temperature: null, ph: null, oxygen: null }, max: { temperature: null, ph: null, oxygen: null }, min: { temperature: null, ph: null, oxygen: null } }, timeSeries: [] };
-      }
-
-      const sensorIds = sensors.map(s => s.id);
-
-      const latestByType = await this.getLatestDataByType(sensorIds, dataWhereClause);
-      const allSensorData = await this.prisma.sensorData.findMany({
-        where: { sensorId: { in: sensorIds }, ...dataWhereClause },
-        include: { sensor: { select: { type: true } } },
-      });
-      const timeSeriesData = await this.getTimeSeriesDataByType(sensorIds, dataWhereClause);
-
-      return { latestData: latestByType, summary: this.formatSummaryData(allSensorData, sensors), timeSeries: timeSeriesData };
-    } catch (error) {
-      console.error('Error en getDashboardData:', error);
-      throw error;
-    }
+    return {
+      tanksCount,
+      sensorsCount,
+      activeSimulations,
+      recentAlerts,
+      totalDataPoints: await this.prisma.sensorData.count({
+        where: { sensor: { tank: { userId: targetUserId } } }
+      })
+    };
   }
 
-  private async getLatestDataByType(sensorIds: string[], dataWhereClause: any) {
-    const sensors = await this.prisma.sensor.findMany({
-      where: { id: { in: sensorIds } },
-      include: { sensorData: { where: dataWhereClause, orderBy: { timestamp: 'desc' }, take: 1 } },
+  async getRealtimeData(filters: DashboardFiltersDto, user: User) {
+    const targetUserId = this.resolveTargetUserId(filters.userId, user);
+    
+    const whereClause: any = {
+      sensor: {
+        tank: { userId: targetUserId },
+        ...(filters.sensorType && { type: filters.sensorType }),
+        ...(filters.tankId && { tankId: filters.tankId })
+      }
+    };
+
+    // Obtener los últimos datos por sensor
+    const latestData = await this.prisma.sensorData.findMany({
+      where: whereClause,
+      orderBy: { timestamp: 'desc' },
+      distinct: ['sensorId'],
+      include: {
+        sensor: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            hardwareId: true,
+            tank: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
+      }
     });
 
-    const result: any = {};
-    for (const sensor of sensors) {
-      const latestReading = sensor.sensorData[0];
-      const value = latestReading?.value ?? sensor.lastReading;
-      switch (sensor.type) {
-        case 'TEMPERATURE': result.temperature = value; break;
-        case 'PH': result.ph = value; break;
-        case 'OXYGEN': result.oxygen = value; break;
+    // Agrupar por tipo de sensor para los gauges
+    const groupedData = latestData.reduce((acc, data) => {
+      const type = data.sensor.type;
+      if (!acc[type]) {
+        acc[type] = [];
       }
-    }
-    return result;
+      acc[type].push({
+        sensorId: data.sensor.id,
+        sensorName: data.sensor.name,
+        tankName: data.sensor.tank.name,
+        value: data.value,
+        timestamp: data.timestamp,
+        hardwareId: data.sensor.hardwareId
+      });
+      return acc;
+    }, {} as Record<SensorType, any[]>);
+
+    return groupedData;
   }
 
-  private async getTimeSeriesDataByType(sensorIds: string[], dataWhereClause: any) {
-    const timeSeriesRaw = await this.prisma.sensorData.findMany({
-      where: { sensorId: { in: sensorIds }, ...dataWhereClause },
+  async getHistoricalData(filters: DashboardFiltersDto, user: User) {
+    const targetUserId = this.resolveTargetUserId(filters.userId, user);
+    
+    if (!filters.startDate || !filters.endDate) {
+      throw new BadRequestException('startDate y endDate son requeridos para datos históricos');
+    }
+
+    const whereClause: any = {
+      sensor: {
+        tank: { userId: targetUserId },
+        ...(filters.sensorType && { type: filters.sensorType }),
+        ...(filters.tankId && { tankId: filters.tankId })
+      },
+      timestamp: {
+        gte: new Date(filters.startDate),
+        lte: new Date(filters.endDate)
+      }
+    };
+
+    const historicalData = await this.prisma.sensorData.findMany({
+      where: whereClause,
       orderBy: { timestamp: 'asc' },
-      include: { sensor: { select: { type: true } } },
+      include: {
+        sensor: {
+          select: {
+            name: true,
+            type: true,
+            tank: {
+              select: {
+                name: true
+              }
+            }
+          }
+        }
+      }
     });
 
-    const timeSeriesMap = new Map();
-    for (const data of timeSeriesRaw) {
-      const timestamp = data.timestamp.toISOString();
-      if (!timeSeriesMap.has(timestamp)) {
-        timeSeriesMap.set(timestamp, { timestamp: data.timestamp, temperature: null, ph: null, oxygen: null });
-      }
-      const entry = timeSeriesMap.get(timestamp);
-      switch (data.sensor.type) {
-        case 'TEMPERATURE': entry.temperature = data.value; break;
-        case 'PH': entry.ph = data.value; break;
-        case 'OXYGEN': entry.oxygen = data.value; break;
-      }
-    }
-    return Array.from(timeSeriesMap.values());
+    // Formatear datos para el gráfico de líneas
+    const formattedData = historicalData.map(data => ({
+      timestamp: data.timestamp,
+      value: data.value,
+      sensorName: data.sensor.name,
+      sensorType: data.sensor.type,
+      tankName: data.sensor.tank.name
+    }));
+
+    return formattedData;
   }
 
-  private formatSummaryData(allSensorData: any[], sensors: any[]) {
-    const summary = { avg: { temperature: null, ph: null, oxygen: null }, max: { temperature: null, ph: null, oxygen: null }, min: { temperature: null, ph: null, oxygen: null } };
-    const dataByType = { TEMPERATURE: [], PH: [], OXYGEN: [] } as Record<string, number[]>;
-
-    for (const data of allSensorData) {
-      if (data.value != null && dataByType[data.sensor.type]) dataByType[data.sensor.type].push(data.value);
-    }
-
-    const calculateStats = (values: number[]) => values.length ? { min: Math.min(...values), max: Math.max(...values), avg: values.reduce((a, b) => a + b, 0) / values.length } : { min: null, max: null, avg: null };
-
-    ['TEMPERATURE', 'PH', 'OXYGEN'].forEach(type => {
-      const stats = calculateStats(dataByType[type]);
-      if (stats.min === null) {
-        const sensor = sensors.find(s => s.type === type);
-        if (sensor?.lastReading != null) stats.avg = stats.max = stats.min = sensor.lastReading;
-      }
-      switch (type) {
-        case 'TEMPERATURE': summary.avg.temperature = stats.avg; summary.max.temperature = stats.max; summary.min.temperature = stats.min; break;
-        case 'PH': summary.avg.ph = stats.avg; summary.max.ph = stats.max; summary.min.ph = stats.min; break;
-        case 'OXYGEN': summary.avg.oxygen = stats.avg; summary.max.oxygen = stats.max; summary.min.oxygen = stats.min; break;
+  async getTanksOverview(filters: DashboardFiltersDto, user: User) {
+    const targetUserId = this.resolveTargetUserId(filters.userId, user);
+    
+    const tanks = await this.prisma.tank.findMany({
+      where: { 
+        userId: targetUserId,
+        ...(filters.tankId && { id: filters.tankId })
+      },
+      include: {
+        sensors: {
+          include: {
+            sensorData: {
+              orderBy: { timestamp: 'desc' },
+              take: 1
+            }
+          }
+        },
+        _count: {
+          select: { sensors: true }
+        }
       }
     });
 
-    return summary;
+    return tanks.map(tank => ({
+      id: tank.id,
+      name: tank.name,
+      location: tank.location,
+      status: tank.status,
+      sensorsCount: tank._count.sensors,
+      lastReading: tank.sensors.length > 0 ? 
+        tank.sensors.reduce((latest, sensor) => {
+          const sensorLastReading = sensor.sensorData[0]?.timestamp;
+          return !latest || (sensorLastReading && sensorLastReading > latest) ? 
+            sensorLastReading : latest;
+        }, null as Date | null) : null,
+      sensors: tank.sensors.map(sensor => ({
+        id: sensor.id,
+        name: sensor.name,
+        type: sensor.type,
+        status: sensor.status,
+        lastValue: sensor.sensorData[0]?.value || null,
+        lastUpdate: sensor.sensorData[0]?.timestamp || null
+      }))
+    }));
+  }
+
+  async getUsersList(user: User) {
+    if (user.role !== Role.ADMIN) {
+      throw new ForbiddenException('Solo los administradores pueden acceder a la lista de usuarios');
+    }
+
+    return this.prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        _count: {
+          select: { tanks: true }
+        }
+      },
+      orderBy: { name: 'asc' }
+    });
+  }
+
+  private resolveTargetUserId(requestedUserId: string | undefined, currentUser: User): string {
+    if (currentUser.role === Role.ADMIN && requestedUserId) {
+      return requestedUserId;
+    }
+    return currentUser.id;
   }
 }

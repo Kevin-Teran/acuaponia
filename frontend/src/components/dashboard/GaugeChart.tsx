@@ -1,61 +1,184 @@
 /**
  * @file GaugeChart.tsx
- * @description Componente visual de velocímetro. Recibe valor, min y max como props.
+ * @description Componente de gauge chart para mostrar datos en tiempo real.
  * @author Kevin Mariano
- * @version 3.1.0
+ * @version 1.0.0
+ * @since 1.0.0
  */
 'use client';
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/common/Card';
-import { SensorType } from '@/types';
-import { Thermometer, Droplet, Wind, HelpCircle } from 'lucide-react';
 
-interface GaugeChartProps {
-  sensorType: SensorType;
-  value: number | null | undefined;
-  min?: number;
-  max?: number;
+import React from 'react';
+import { Thermometer, Droplets, Wind, BarChart3, Gauge } from 'lucide-react';
+import { SensorType } from '@/types';
+
+interface GaugeData {
+  sensorId: string;
+  sensorName: string;
+  tankName: string;
+  value: number;
+  timestamp: string;
+  hardwareId: string;
 }
 
-const gaugeConfig = {
-  [SensorType.TEMPERATURE]: { title: 'Temperatura', icon: <Thermometer className="h-5 w-5 text-gray-500" />, unit: '°C', defaultMin: 0, defaultMax: 40, color: 'from-red-400 to-red-600' },
-  [SensorType.PH]: { title: 'Nivel de pH', icon: <Droplet className="h-5 w-5 text-gray-500" />, unit: '', defaultMin: 0, defaultMax: 14, color: 'from-blue-400 to-blue-600' },
-  [SensorType.OXYGEN]: { title: 'Oxígeno Disuelto', icon: <Wind className="h-5 w-5 text-gray-500" />, unit: 'mg/L', defaultMin: 0, defaultMax: 15, color: 'from-sky-400 to-sky-600' },
+interface GaugeChartProps {
+  data: { [key in SensorType]?: GaugeData[] };
+  loading: boolean;
+}
+
+const getSensorConfig = (type: SensorType) => {
+  const configs = {
+    TEMPERATURE: {
+      icon: Thermometer,
+      color: 'text-red-500',
+      bgColor: 'bg-red-100 dark:bg-red-900/50',
+      unit: '°C',
+      min: 0,
+      max: 40,
+      optimal: { min: 22, max: 28 }
+    },
+    PH: {
+      icon: Droplets,
+      color: 'text-blue-500',
+      bgColor: 'bg-blue-100 dark:bg-blue-900/50',
+      unit: 'pH',
+      min: 0,
+      max: 14,
+      optimal: { min: 6.8, max: 7.6 }
+    },
+    OXYGEN: {
+      icon: Wind,
+      color: 'text-green-500',
+      bgColor: 'bg-green-100 dark:bg-green-900/50',
+      unit: 'mg/L',
+      min: 0,
+      max: 15,
+      optimal: { min: 6, max: 10 }
+    },
+    LEVEL: {
+      icon: BarChart3,
+      color: 'text-purple-500',
+      bgColor: 'bg-purple-100 dark:bg-purple-900/50',
+      unit: '%',
+      min: 0,
+      max: 100,
+      optimal: { min: 50, max: 95 }
+    },
+    FLOW: {
+      icon: Gauge,
+      color: 'text-orange-500',
+      bgColor: 'bg-orange-100 dark:bg-orange-900/50',
+      unit: 'L/min',
+      min: 0,
+      max: 20,
+      optimal: { min: 5, max: 15 }
+    }
+  };
+  return configs[type];
 };
 
-export const GaugeChart: React.FC<GaugeChartProps> = ({ sensorType, value, min, max }) => {
-  const config = gaugeConfig[sensorType as keyof typeof gaugeConfig];
-  if (!config) return null;
+const getStatusColor = (value: number, config: any) => {
+  if (value >= config.optimal.min && value <= config.optimal.max) {
+    return 'text-green-500';
+  } else if (value < config.optimal.min * 0.8 || value > config.optimal.max * 1.2) {
+    return 'text-red-500';
+  }
+  return 'text-yellow-500';
+};
 
-  const gaugeMin = typeof min === 'number' ? min : config.defaultMin;
-  const gaugeMax = typeof max === 'number' ? max : config.defaultMax;
-
-  const hasValue = typeof value === 'number' && !isNaN(value);
-  const percentage = hasValue ? ((value - gaugeMin) / (gaugeMax - gaugeMin)) * 100 : 0;
-  const rotation = hasValue ? Math.min(180, Math.max(0, (percentage / 100) * 180)) : 0;
+const GaugeItem: React.FC<{ data: GaugeData; type: SensorType }> = ({ data, type }) => {
+  const config = getSensorConfig(type);
+  const Icon = config.icon;
+  const percentage = Math.min(Math.max((data.value / config.max) * 100, 0), 100);
+  const statusColor = getStatusColor(data.value, config);
+  const timeSinceUpdate = Math.floor((Date.now() - new Date(data.timestamp).getTime()) / 1000);
 
   return (
-    <Card>
-      <CardHeader><CardTitle className="flex items-center gap-2 text-md font-medium text-gray-700 dark:text-gray-200">{config.icon} {config.title}</CardTitle></CardHeader>
-      <CardContent>
-        <div className="flex flex-col items-center justify-center">
-          <div className="w-48 h-24 overflow-hidden relative">
-            <div className="w-full h-full rounded-t-full border-t-8 border-l-8 border-r-8 border-gray-200 dark:border-gray-700"></div>
-            {hasValue && (
-              <div
-                  className="absolute top-0 left-0 w-full h-full rounded-t-full"
-                  style={{ transform: `rotate(${rotation}deg)`, transformOrigin: 'bottom center', transition: 'transform 0.5s ease-in-out' }}
-              ><div className={`w-2 h-24 bg-gradient-to-b ${config.color} rounded-full absolute bottom-0 left-1/2 -ml-1`}></div></div>
-            )}
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-4 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full"></div>
-            {!hasValue && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full"><HelpCircle className="h-8 w-8 text-gray-400" /></div>}
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center">
+          <div className={`h-8 w-8 rounded-lg ${config.bgColor} flex items-center justify-center`}>
+            <Icon className={`h-5 w-5 ${config.color}`} />
           </div>
-          <div className="text-center -mt-4">
-            <p className="text-3xl font-bold text-gray-800 dark:text-white">{hasValue ? value.toFixed(2) : 'Sin datos'}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{config.unit || 'unidades'}</p>
+          <div className="ml-3">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{data.sensorName}</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{data.tankName}</p>
           </div>
         </div>
-      </CardContent>
-    </Card>
+        <div className="text-right">
+          <p className={`text-lg font-bold ${statusColor}`}>
+            {data.value.toFixed(1)} {config.unit}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {timeSinceUpdate < 60 ? `${timeSinceUpdate}s` : `${Math.floor(timeSinceUpdate / 60)}m`}
+          </p>
+        </div>
+      </div>
+      
+      {/* Gauge visual */}
+      <div className="relative">
+        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+          <div 
+            className={`h-2 rounded-full transition-all duration-500 ${
+              statusColor.includes('green') ? 'bg-green-500' :
+              statusColor.includes('yellow') ? 'bg-yellow-500' : 'bg-red-500'
+            }`}
+            style={{ width: `${percentage}%` }}
+          ></div>
+        </div>
+        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+          <span>{config.min}</span>
+          <span className="text-green-600 dark:text-green-400">
+            {config.optimal.min}-{config.optimal.max}
+          </span>
+          <span>{config.max}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const GaugeChart: React.FC<GaugeChartProps> = ({ data, loading }) => {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 animate-pulse">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center">
+                <div className="h-8 w-8 bg-gray-300 rounded-lg"></div>
+                <div className="ml-3">
+                  <div className="h-4 bg-gray-300 rounded w-24 mb-1"></div>
+                  <div className="h-3 bg-gray-300 rounded w-16"></div>
+                </div>
+              </div>
+              <div className="h-6 bg-gray-300 rounded w-16"></div>
+            </div>
+            <div className="h-2 bg-gray-300 rounded w-full"></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const allSensors = Object.entries(data).flatMap(([type, sensors]) => 
+    sensors.map(sensor => ({ ...sensor, type: type as SensorType }))
+  );
+
+  if (allSensors.length === 0) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center mb-6">
+        <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No hay datos en tiempo real</h3>
+        <p className="text-gray-500 dark:text-gray-400">No se encontraron sensores con datos recientes.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+      {allSensors.map(sensor => (
+        <GaugeItem key={sensor.sensorId} data={sensor} type={sensor.type} />
+      ))}
+    </div>
   );
 };
