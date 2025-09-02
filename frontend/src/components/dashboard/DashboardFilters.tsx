@@ -2,136 +2,144 @@
  * @file DashboardFilters.tsx
  * @description Componente de filtros para el dashboard.
  * @author Kevin Mariano
- * @version 1.0.0
+ * @version 2.1.0
  * @since 1.0.0
  */
-'use client';
-
 import React from 'react';
-import { Search, Calendar, Users, Container, Activity } from 'lucide-react';
-import { SensorType, Role } from '@/types';
+import { Role, SensorType, Tank, UserFromApi as User } from '@/types';
+import { Users, Container, Cpu } from 'lucide-react';
+import { cn } from '@/utils/cn'; // Se importa la utilidad para clases condicionales
 
 interface DashboardFiltersProps {
-  filters: {
-    userId?: string;
-    tankId?: string;
-    sensorType?: SensorType;
-    startDate?: string;
-    endDate?: string;
-  };
-  onFiltersChange: (filters: any) => void;
-  usersList: Array<{ id: string; name: string; email: string; _count: { tanks: number } }>;
-  tanksList: Array<{ id: string; name: string; location: string }>;
+  filters: any;
+  onFiltersChange: (newFilters: any) => void;
+  usersList: User[];
+  tanksList: Tank[];
   currentUserRole: Role;
-  loading?: boolean;
+  loading: boolean;
 }
 
-export const DashboardFilters: React.FC<DashboardFiltersProps> = ({
+const allowedSensorTypes = [
+  { value: SensorType.TEMPERATURE, label: 'Temperatura' },
+  { value: SensorType.PH, label: 'pH' },
+  { value: SensorType.OXYGEN, label: 'Oxígeno Disuelto' },
+];
+
+export const DashboardFilters = ({
   filters,
   onFiltersChange,
   usersList,
   tanksList,
   currentUserRole,
-  loading = false
-}) => {
-  const handleFilterChange = (key: string, value: string) => {
-    const newFilters = { ...filters, [key]: value || undefined };
-    if (key === 'userId') {
-      // Reset tankId cuando cambia el usuario
-      newFilters.tankId = undefined;
-    }
-    onFiltersChange(newFilters);
+  loading,
+}: DashboardFiltersProps) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    onFiltersChange({ ...filters, [e.target.name]: e.target.value });
   };
-
-  const sensorTypes = [
-    { value: 'TEMPERATURE', label: 'Temperatura' },
-    { value: 'PH', label: 'pH' },
-    { value: 'OXYGEN', label: 'Oxígeno' },
-    { value: 'LEVEL', label: 'Nivel' },
-    { value: 'FLOW', label: 'Caudal' }
-  ];
+  
+  const today = new Date().toISOString().split('T')[0];
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md mb-6 transition-colors duration-300">
+      {/* El layout de la grilla ahora es dinámico */}
+      <div className={cn(
+        "grid grid-cols-1 md:grid-cols-2 gap-4 items-end",
+        currentUserRole === Role.ADMIN ? "lg:grid-cols-5" : "lg:grid-cols-4"
+      )}>
         
-        {/* Filtro de Usuario (solo para admins) */}
         {currentUserRole === Role.ADMIN && (
-          <div className="relative">
-            <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+          <div className="flex flex-col">
+            <label htmlFor="userId" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center">
+              {/* Icono con color */}
+              <Users className="w-4 h-4 mr-2 text-blue-500" />
+              Usuario
+            </label>
             <select
+              id="userId"
+              name="userId"
               value={filters.userId || ''}
-              onChange={(e) => handleFilterChange('userId', e.target.value)}
-              disabled={loading}
-              className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] disabled:opacity-50"
+              onChange={handleInputChange}
+              disabled={loading || usersList.length === 0}
+              className="form-select rounded-lg"
             >
-              <option value="">Todos los usuarios</option>
               {usersList.map(user => (
-                <option key={user.id} value={user.id}>
-                  {user.name} ({user._count.tanks} tanques)
-                </option>
+                <option key={user.id} value={user.id}>{user.name}</option>
               ))}
             </select>
           </div>
         )}
 
-        {/* Filtro de Tanque */}
-        <div className="relative">
-          <Container className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+        <div className="flex flex-col">
+          <label htmlFor="tankId" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center">
+            {/* Icono con color */}
+            <Container className="w-4 h-4 mr-2 text-sky-500" />
+            Tanque
+          </label>
           <select
+            id="tankId"
+            name="tankId"
             value={filters.tankId || ''}
-            onChange={(e) => handleFilterChange('tankId', e.target.value)}
-            disabled={loading}
-            className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] disabled:opacity-50"
+            onChange={handleInputChange}
+            disabled={loading || tanksList.length === 0}
+            className="form-select rounded-lg"
           >
-            <option value="">Todos los tanques</option>
             {tanksList.map(tank => (
-              <option key={tank.id} value={tank.id}>
-                {tank.name} - {tank.location}
-              </option>
+              <option key={tank.id} value={tank.id}>{tank.name}</option>
             ))}
           </select>
         </div>
 
-        {/* Filtro de Tipo de Sensor */}
-        <div className="relative">
-          <Activity className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+        <div className="flex flex-col">
+          <label htmlFor="sensorType" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center">
+            {/* Icono con color */}
+            <Cpu className="w-4 h-4 mr-2 text-orange-500" />
+            Sensor
+          </label>
           <select
+            id="sensorType"
+            name="sensorType"
             value={filters.sensorType || ''}
-            onChange={(e) => handleFilterChange('sensorType', e.target.value)}
+            onChange={handleInputChange}
             disabled={loading}
-            className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] disabled:opacity-50"
+            className="form-select rounded-lg"
           >
-            <option value="">Todos los sensores</option>
-            {sensorTypes.map(type => (
-              <option key={type.value} value={type.value}>
-                {type.label}
-              </option>
+            <option value="">Todos los Sensores</option>
+            {allowedSensorTypes.map(type => (
+              <option key={type.value} value={type.value}>{type.label}</option>
             ))}
           </select>
         </div>
 
-        {/* Fecha de Inicio */}
-        <div className="relative">
-          <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+        <div className="flex flex-col">
+          <label htmlFor="startDate" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Fecha Inicio
+          </label>
           <input
             type="date"
+            id="startDate"
+            name="startDate"
             value={filters.startDate || ''}
-            onChange={(e) => handleFilterChange('startDate', e.target.value)}
+            onChange={handleInputChange}
             disabled={loading}
-            className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] disabled:opacity-50"
+            max={filters.endDate || today}
+            className="form-input rounded-lg"
           />
         </div>
 
-        {/* Fecha de Fin */}
-        <div className="relative">
-          <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+        <div className="flex flex-col">
+          <label htmlFor="endDate" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Fecha Fin
+          </label>
           <input
             type="date"
+            id="endDate"
+            name="endDate"
             value={filters.endDate || ''}
-            onChange={(e) => handleFilterChange('endDate', e.target.value)}
+            onChange={handleInputChange}
             disabled={loading}
-            className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] disabled:opacity-50"
+            min={filters.startDate || ''}
+            max={today}
+            className="form-input rounded-lg"
           />
         </div>
       </div>

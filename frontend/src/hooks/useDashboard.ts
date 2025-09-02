@@ -1,146 +1,60 @@
 /**
  * @file useDashboard.ts
- * @description Hook personalizado para la gestión del estado del dashboard.
+ * @description Hook para obtener todos los datos necesarios para el dashboard.
  * @author Kevin Mariano
  * @version 1.0.0
  * @since 1.0.0
  */
-import { useState, useEffect, useCallback } from 'react';
-import { apiClient } from '@/utils/apiClient';
-import { SensorType } from '@/types';
+import { useState, useCallback } from 'react';
+import api from '@/config/api';
+import { SensorType, UserFromApi as User } from '@/types';
+import { SummaryData, RealtimeData, HistoricalDataPoint } from '@/types/dashboard';
 
-interface DashboardFilters {
-  userId?: string;
-  tankId?: string;
-  sensorType?: SensorType;
-  startDate?: string;
-  endDate?: string;
-}
-
-interface SummaryData {
-  tanksCount: number;
-  sensorsCount: number;
-  activeSimulations: number;
-  recentAlerts: number;
-  totalDataPoints: number;
-}
-
-interface RealtimeData {
-  [key: string]: Array<{
-    sensorId: string;
-    sensorName: string;
-    tankName: string;
-    value: number;
-    timestamp: string;
-    hardwareId: string;
-  }>;
-}
-
-interface HistoricalData {
-  timestamp: string;
-  value: number;
-  sensorName: string;
-  sensorType: SensorType;
-  tankName: string;
-}
-
-interface TankOverview {
-  id: string;
-  name: string;
-  location: string;
-  status: string;
-  sensorsCount: number;
-  lastReading: string | null;
-  sensors: Array<{
-    id: string;
-    name: string;
-    type: SensorType;
-    status: string;
-    lastValue: number | null;
-    lastUpdate: string | null;
-  }>;
-}
-
-interface UserOption {
-  id: string;
-  name: string;
-  email: string;
-  _count: { tanks: number };
-}
+// (El resto de las interfaces no cambian)
 
 export const useDashboard = () => {
   const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
   const [realtimeData, setRealtimeData] = useState<RealtimeData>({});
-  const [historicalData, setHistoricalData] = useState<HistoricalData[]>([]);
-  const [tanksOverview, setTanksOverview] = useState<TankOverview[]>([]);
-  const [usersList, setUsersList] = useState<UserOption[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>([]);
+  const [usersList, setUsersList] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true); // Solo para la carga inicial
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSummary = useCallback(async (filters: DashboardFilters = {}) => {
+  // Se añade el parámetro 'isBackground' para evitar el parpadeo
+  const fetcher = async (promise: Promise<any>, setter: (data: any) => void, isBackground = false) => {
+    if (!isBackground) setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-      const response = await apiClient.get('/dashboard/summary', { params: filters });
-      setSummaryData(response.data);
+      const { data } = await promise;
+      setter(data);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al cargar el resumen');
+      const errorMessage = err.response?.data?.message || err.message || 'Ocurrió un error';
+      setError(errorMessage);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
+  };
+
+  const fetchSummary = useCallback((filters: any, isBackground = false) => {
+    fetcher(api.get('/dashboard/summary', { params: filters }), setSummaryData, isBackground);
   }, []);
 
-  const fetchRealtimeData = useCallback(async (filters: DashboardFilters = {}) => {
-    try {
-      const response = await apiClient.get('/dashboard/realtime', { params: filters });
-      setRealtimeData(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al cargar datos en tiempo real');
-    }
+  const fetchRealtimeData = useCallback((filters: any, isBackground = false) => {
+    fetcher(api.get('/dashboard/realtime', { params: filters }), setRealtimeData, isBackground);
   }, []);
 
-  const fetchHistoricalData = useCallback(async (filters: DashboardFilters) => {
-    try {
-      setLoading(true);
-      const response = await apiClient.get('/dashboard/historical', { params: filters });
-      setHistoricalData(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al cargar datos históricos');
-    } finally {
-      setLoading(false);
-    }
+  const fetchHistoricalData = useCallback((filters: any) => {
+    if (!filters.startDate || !filters.endDate) return;
+    fetcher(api.get('/dashboard/historical', { params: filters }), setHistoricalData);
   }, []);
 
-  const fetchTanksOverview = useCallback(async (filters: DashboardFilters = {}) => {
-    try {
-      const response = await apiClient.get('/dashboard/tanks-overview', { params: filters });
-      setTanksOverview(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al cargar vista de tanques');
-    }
-  }, []);
-
-  const fetchUsersList = useCallback(async () => {
-    try {
-      const response = await apiClient.get('/dashboard/users-list');
-      setUsersList(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al cargar lista de usuarios');
-    }
+  const fetchUsersList = useCallback(() => {
+    fetcher(api.get('/dashboard/users'), setUsersList);
   }, []);
 
   return {
-    summaryData,
-    realtimeData,
-    historicalData,
-    tanksOverview,
-    usersList,
-    loading,
-    error,
-    fetchSummary,
-    fetchRealtimeData,
-    fetchHistoricalData,
-    fetchTanksOverview,
-    fetchUsersList,
+    summaryData, realtimeData, historicalData, usersList,
+    loading, error,
+    fetchSummary, fetchRealtimeData, fetchHistoricalData, fetchUsersList,
   };
 };

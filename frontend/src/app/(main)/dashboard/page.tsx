@@ -11,151 +11,102 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useDashboard } from '@/hooks/useDashboard';
-import { useTanks } from '@/hooks/useTanks';
+import { useInfrastructure } from '@/hooks/useInfrastructure';
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
 import { SummaryCards } from '@/components/dashboard/SummaryCards';
 import { GaugeChart } from '@/components/dashboard/GaugeChart';
 import { LineChart } from '@/components/dashboard/LineChart';
-import { Role } from '@/types';
-import { RefreshCw } from 'lucide-react';
+import { Role, Settings } from '@/types';
+import { getSettings } from '@/services/settingsService';
 
 const DashboardPage = () => {
   const { user } = useAuth();
-  const { tanks } = useTanks();
+  // La lista de tanques se recibe en la variable 'tanks'
+  const { tanks, fetchDataForUser } = useInfrastructure(user?.role === Role.ADMIN);
   const {
-    summaryData,
-    realtimeData,
-    historicalData,
-    usersList,
-    loading,
-    error,
-    fetchSummary,
-    fetchRealtimeData,
-    fetchHistoricalData,
-    fetchUsersList
+    summaryData, realtimeData, historicalData, usersList,
+    loading, error, fetchSummary, fetchRealtimeData,
+    fetchHistoricalData, fetchUsersList,
   } = useDashboard();
-
-  const [filters, setFilters] = useState<{
-    userId?: string;
-    tankId?: string;
-    sensorType?: any;
-    startDate?: string;
-    endDate?: string;
-  }>({
+  
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [filters, setFilters] = useState<any>({
     startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
+    endDate: new Date().toISOString().split('T')[0],
   });
 
-  const [autoRefresh, setAutoRefresh] = useState(true);
-
-  // Cargar datos iniciales
   useEffect(() => {
-    fetchSummary(filters);
-    fetchRealtimeData(filters);
-    if (filters.startDate && filters.endDate) {
-      fetchHistoricalData(filters);
-    }
-    if (user?.role === Role.ADMIN) {
-      fetchUsersList();
-    }
-  }, [filters, user?.role]);
-
-  // Auto-refresh para datos en tiempo real
+    if (!user) return;
+    const initialFetch = async () => {
+      if (user.role === Role.ADMIN) await fetchUsersList();
+      setSettings(await getSettings());
+    };
+    initialFetch();
+  }, [user]);
+  
   useEffect(() => {
-    if (!autoRefresh) return;
-    
-    const interval = setInterval(() => {
-      fetchRealtimeData(filters);
+    const targetUserId = filters.userId || user?.id;
+    if (targetUserId) fetchDataForUser(targetUserId);
+  }, [filters.userId, user?.id]);
+
+  useEffect(() => {
+    if (tanks.length > 0 && !tanks.some(tank => tank.id === filters.tankId)) {
+      setFilters(prev => ({ ...prev, tankId: tanks[0].id }));
+    }
+  }, [tanks]);
+
+  useEffect(() => {
+    if (filters.tankId) {
       fetchSummary(filters);
-    }, 10000); // Refresh cada 10 segundos
+      fetchRealtimeData(filters);
+      if (filters.startDate && filters.endDate) fetchHistoricalData(filters);
+    }
+  }, [filters]);
 
+  useEffect(() => {
+    if (!filters.tankId) return;
+    const interval = setInterval(() => {
+        fetchRealtimeData(filters, true);
+        fetchSummary(filters, true);
+    }, 15000);
     return () => clearInterval(interval);
-  }, [autoRefresh, filters, fetchRealtimeData, fetchSummary]);
+  }, [filters]);
 
   const handleFiltersChange = useCallback((newFilters: any) => {
-    setFilters(newFilters);
+    setFilters(prevFilters => ({ ...prevFilters, ...newFilters }));
   }, []);
-
-  const handleManualRefresh = useCallback(() => {
-    fetchSummary(filters);
-    fetchRealtimeData(filters);
-    if (filters.startDate && filters.endDate) {
-      fetchHistoricalData(filters);
-    }
-  }, [filters, fetchSummary, fetchRealtimeData, fetchHistoricalData]);
-
-  // Filtrar tanques según el usuario seleccionado
-  const filteredTanks = React.useMemo(() => {
-    if (user?.role === Role.ADMIN && filters.userId) {
-      return tanks.filter(tank => tank.user?.id === filters.userId);
-    }
-    return tanks;
-  }, [tanks, filters.userId, user?.role]);
 
   if (!user) return null;
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8">
-      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Monitoreo en tiempo real de tus sistemas acuapónicos
+            Monitoreo en tiempo real de tus sistemas acuapónicos.
           </p>
         </div>
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              autoRefresh 
-                ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' 
-                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-            }`}
-          >
-            {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF'}
-          </button>
-          <button
-            onClick={handleManualRefresh}
-            disabled={loading}
-            className="flex items-center px-4 py-2 bg-[#39A900] text-white rounded-lg hover:bg-[#2F8B00] transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Actualizar
-          </button>
-        </div>
       </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-100 dark:bg-red-900/50 border border-red-400 text-red-700 dark:text-red-300 px-4 py-3 rounded mb-6">
-          {error}
-        </div>
-      )}
-
-      {/* Filtros */}
+      {error && <div className="bg-red-100 dark:bg-red-900/50 border border-red-400 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl mb-6">{error}</div>}
+      
+      {/* FIX: Se pasa la variable correcta 'tanks' como la prop 'tanksList' */}
       <DashboardFilters
         filters={filters}
-        onFiltersChange={handleFiltersChange}
+        onFiltersChange={handleFiltersChange} 
         usersList={usersList}
-        tanksList={filteredTanks}
+        tanksList={tanks}
         currentUserRole={user.role}
         loading={loading}
       />
-
-      {/* Tarjetas de Resumen */}
       <SummaryCards data={summaryData} loading={loading} />
-
-      {/* Datos en Tiempo Real - Gauges */}
-      <div className="mb-6">
+      <div className="mb-8">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
           Lecturas en Tiempo Real
         </h2>
-        <GaugeChart data={realtimeData} loading={loading} />
+        <GaugeChart data={realtimeData} settings={settings} loading={loading} />
       </div>
-
-      {/* Datos Históricos - Gráfico de Líneas */}
-      <div className="mb-6">
+      <div>
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
           Tendencias Históricas
         </h2>
