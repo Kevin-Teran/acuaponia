@@ -1,4 +1,11 @@
-// backend/src/auth/auth.module.ts
+/**
+ * @file dashboard-filters.dto.ts
+ * @description Módulo para la gestión del auth.
+ * @author Kevin Mariano
+ * @version 1.0.0
+ * @since 1.0.0
+ */
+
 import { Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';

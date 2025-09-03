@@ -1,7 +1,8 @@
 /**
  * @file current-user.decorator.ts
  * @description Decorador para extraer el usuario autenticado del request
- * @author Kevin
+ * @author Kevin Mariano
+ * @version 1.1.9
  * @since 1.0.0
  */
  import { createParamDecorator, ExecutionContext } from '@nestjs/common';

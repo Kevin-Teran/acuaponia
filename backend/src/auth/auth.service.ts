@@ -3,7 +3,7 @@
  * @description Lógica de negocio para la autenticación.
  * Versión final y definitiva que garantiza la correcta estructura de la respuesta del login.
  * @author kevin mariano
- * @version 4.0.0 (Final & Corrected)
+ * @version 1.0.0 
  * @since 1.0.0
  */
 

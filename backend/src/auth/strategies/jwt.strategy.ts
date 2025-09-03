@@ -4,7 +4,7 @@
  * Se encarga de extraer el token tanto de la cabecera de autorización como de cookies,
  * verificar su firma y extraer el payload del usuario para adjuntarlo a la petición.
  * @author kevin mariano
- * @version 3.0.0 - CORREGIDO
+ * @version 1.0.0 
  * @since 1.0.0
  */
 

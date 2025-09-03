@@ -1,8 +1,8 @@
 /**
  * @file public.decorator.ts
  * @description Decorador para marcar rutas como públicas y eximirlas de la autenticación JWT global.
- * @author Sistema de Acuaponía SENA
- * @version 2.0.0
+ * @author Kevin Mariano
+ * @version 1.0.9
  * @since 1.0.0
  */
 
