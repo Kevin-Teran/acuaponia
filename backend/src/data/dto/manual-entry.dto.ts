@@ -1,9 +1,11 @@
 /**
  * @file manual-entry.dto.ts
+ * @route 
  * @description DTO para el registro manual de datos de un sensor.
  * @author Kevin Mariano
  * @version 2.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 import { IsString, IsNotEmpty, IsNumber, IsOptional, IsDate } from 'class-validator';

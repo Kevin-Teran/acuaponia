@@ -1,14 +1,16 @@
 /**
  * @file page.tsx
- * @route /dashboard
- * @description Página principal del dashboard con datos en tiempo real y históricos.
- * @author Kevin Mariano
- * @version 1.0.0
+ * @route /frontend/src/app/(main)/dashboard/
+ * @description Página principal del dashboard, optimizada para mostrar los 3 sensores principales en gráficos individuales de ancho completo.
+ * @author Kevin Mariano (con mejoras de IA)
+ * @version 1.1.1
  * @since 1.0.0
+ * @copyright SENA 2025
  */
+
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useInfrastructure } from '@/hooks/useInfrastructure';
@@ -16,22 +18,32 @@ import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
 import { SummaryCards } from '@/components/dashboard/SummaryCards';
 import { GaugeChart } from '@/components/dashboard/GaugeChart';
 import { LineChart } from '@/components/dashboard/LineChart';
-import { Role, Settings } from '@/types';
+import { Role, SensorType, Settings } from '@/types';
 import { getSettings } from '@/services/settingsService';
+import { Card } from '@/components/common/Card';
+import { format } from 'date-fns';
 
 const DashboardPage = () => {
   const { user } = useAuth();
-  // La lista de tanques se recibe en la variable 'tanks'
   const { tanks, fetchDataForUser } = useInfrastructure(user?.role === Role.ADMIN);
   const {
-    summaryData, realtimeData, historicalData, usersList,
-    loading, error, fetchSummary, fetchRealtimeData,
-    fetchHistoricalData, fetchUsersList,
+    summaryData,
+    realtimeData,
+    historicalData,
+    usersList,
+    loading,
+    error,
+    fetchSummary,
+    fetchRealtimeData,
+    fetchHistoricalData,
+    fetchUsersList,
   } = useDashboard();
-  
+
   const [settings, setSettings] = useState<Settings | null>(null);
   const [filters, setFilters] = useState<any>({
-    startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
   });
 
@@ -39,78 +51,135 @@ const DashboardPage = () => {
     if (!user) return;
     const initialFetch = async () => {
       if (user.role === Role.ADMIN) await fetchUsersList();
-      setSettings(await getSettings());
+      const fetchedSettings = await getSettings();
+      setSettings(fetchedSettings);
     };
     initialFetch();
-  }, [user]);
-  
+  }, [user, fetchUsersList]);
+
   useEffect(() => {
     const targetUserId = filters.userId || user?.id;
     if (targetUserId) fetchDataForUser(targetUserId);
-  }, [filters.userId, user?.id]);
-
+  }, [filters.userId, user?.id, fetchDataForUser]);
+  
   useEffect(() => {
-    if (tanks.length > 0 && !tanks.some(tank => tank.id === filters.tankId)) {
-      setFilters(prev => ({ ...prev, tankId: tanks[0].id }));
+    if (tanks.length > 0 && !tanks.some((tank) => tank.id === filters.tankId)) {
+      setFilters((prev) => ({ ...prev, tankId: tanks[0].id }));
     }
-  }, [tanks]);
+  }, [tanks, filters.tankId]);
 
   useEffect(() => {
     if (filters.tankId) {
       fetchSummary(filters);
       fetchRealtimeData(filters);
-      if (filters.startDate && filters.endDate) fetchHistoricalData(filters);
+      if (filters.startDate && filters.endDate) {
+        fetchHistoricalData(filters);
+      }
     }
-  }, [filters]);
+  }, [filters, fetchSummary, fetchRealtimeData, fetchHistoricalData]);
 
   useEffect(() => {
     if (!filters.tankId) return;
     const interval = setInterval(() => {
-        fetchRealtimeData(filters, true);
-        fetchSummary(filters, true);
+      fetchRealtimeData(filters, true);
+      fetchSummary(filters, true);
     }, 15000);
     return () => clearInterval(interval);
-  }, [filters]);
+  }, [filters, fetchRealtimeData, fetchSummary]);
 
   const handleFiltersChange = useCallback((newFilters: any) => {
-    setFilters(prevFilters => ({ ...prevFilters, ...newFilters }));
+    setFilters((prevFilters) => ({ ...prevFilters, ...newFilters }));
   }, []);
+  
+  const chartData = useMemo(() => {
+    const transformData = (sensorType: SensorType) => {
+      if (!historicalData) return [];
+      return historicalData
+        .filter((point) => point.sensorType === sensorType)
+        .map((point) => ({
+          time: format(new Date(point.timestamp), 'HH:mm'),
+          value: point.value,
+        }))
+        .sort((a, b) => a.time.localeCompare(b.time));
+    };
+
+    return {
+      temperature: transformData(SensorType.TEMPERATURE),
+      ph: transformData(SensorType.PH),
+      oxygen: transformData(SensorType.OXYGEN),
+    };
+  }, [historicalData]);
 
   if (!user) return null;
 
   return (
-    <div className="container mx-auto p-4 md:p-6 lg:p-8">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Monitoreo en tiempo real de tus sistemas acuapónicos.
-          </p>
-        </div>
+    <div className="container mx-auto flex flex-col gap-8 p-4 md:p-6 lg:p-8">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Dashboard
+        </h1>
+        <p className="mt-1 text-gray-500 dark:text-gray-400">
+          Monitoreo en tiempo real de tus sistemas acuapónicos.
+        </p>
       </div>
-      {error && <div className="bg-red-100 dark:bg-red-900/50 border border-red-400 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl mb-6">{error}</div>}
-      
-      {/* FIX: Se pasa la variable correcta 'tanks' como la prop 'tanksList' */}
+
+      {error && (
+        <div className="mb-6 rounded-xl border border-red-400 bg-red-100 px-4 py-3 text-red-700 dark:bg-red-900/50 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
       <DashboardFilters
         filters={filters}
-        onFiltersChange={handleFiltersChange} 
+        onFiltersChange={handleFiltersChange}
         usersList={usersList}
         tanksList={tanks}
         currentUserRole={user.role}
         loading={loading}
       />
+      
       <SummaryCards data={summaryData} loading={loading} />
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+
+      <div>
+        <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
           Lecturas en Tiempo Real
         </h2>
         <GaugeChart data={realtimeData} settings={settings} loading={loading} />
       </div>
+
       <div>
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+        <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
           Tendencias Históricas
         </h2>
-        <LineChart data={historicalData} loading={loading} />
+        <div className="grid grid-cols-1 gap-6"> 
+            <Card>
+                <LineChart
+                    data={chartData.temperature}
+                    title="Historial de Temperatura"
+                    yAxisLabel="°C"
+                    lineColor="#ef4444"
+                    loading={loading}
+                />
+            </Card>
+            <Card>
+                <LineChart
+                    data={chartData.ph}
+                    title="Historial de pH"
+                    yAxisLabel="pH"
+                    lineColor="#3b82f6"
+                    loading={loading}
+                />
+            </Card>
+            <Card>
+                <LineChart
+                    data={chartData.oxygen}
+                    title="Oxígeno Disuelto"
+                    yAxisLabel="mg/L"
+                    lineColor="#10b981"
+                    loading={loading}
+                />
+            </Card>
+        </div>
       </div>
     </div>
   );

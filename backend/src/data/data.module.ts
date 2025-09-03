@@ -1,9 +1,11 @@
 /**
  * @file data.module.ts
+ * @route 
  * @description Módulo para la gestión de datos, corrigiendo dependencias circulares.
  * @author Kevin Mariano
- * @version 2.0.0
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
  import { Module, forwardRef } from '@nestjs/common';
  import { DataService } from './data.service';

@@ -1,13 +1,15 @@
 /**
  * @file users.service.ts
+ * @route 
  * @description Servicio para la gestión de usuarios.
  * Este archivo contiene la lógica de negocio para interactuar con la entidad de usuarios en la base de datos.
  * @author Kevin Mariano
- * @version 3.1.0
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
- import {
+import {
   Injectable,
   NotFoundException,
   Logger,

@@ -1,3 +1,13 @@
+/**
+ * @file main.ts
+ * @route 
+ * @description 
+ * @author kevin mariano
+ * @version 1.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
+ */
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';

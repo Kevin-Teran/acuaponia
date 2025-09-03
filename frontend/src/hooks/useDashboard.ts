@@ -1,9 +1,11 @@
 /**
  * @file useDashboard.ts
+ * @route 
  * @description Hook para obtener todos los datos necesarios para el dashboard.
  * @author Kevin Mariano
  * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 import { useState, useCallback } from 'react';
 import api from '@/config/api';

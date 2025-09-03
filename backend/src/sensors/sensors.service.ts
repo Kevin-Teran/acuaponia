@@ -1,9 +1,11 @@
 /**
  * @file sensors.service.ts
+ * @route 
  * @description Lógica de negocio para la gestión de sensores, con validación de límite por tipo de sensor por tanque.
  * @author Kevin Mariano 
  * @version 2.1.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';

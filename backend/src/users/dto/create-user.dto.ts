@@ -1,3 +1,13 @@
+/**
+ * @file create-user.dto.ts
+ * @route 
+ * @description DTO para validar los datos al crear un nuevo usuario.
+ * @author Kevin Mariano 
+ * @version 1.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
+ */
+
 import { IsEmail, IsString, IsNotEmpty, MinLength, IsEnum, IsOptional } from 'class-validator';
 import { Role, users_status } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';

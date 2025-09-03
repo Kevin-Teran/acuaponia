@@ -1,9 +1,11 @@
 /**
  * @file dashboard-filters.dto.ts
+ * @route 
  * @description  Asigna los roles permitidos a un endpoint específico. Se usa junto con el RolesGuard para proteger rutas
  * @author Kevin Mariano
  * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 import { SetMetadata } from '@nestjs/common';

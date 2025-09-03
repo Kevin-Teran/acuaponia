@@ -1,10 +1,12 @@
 /**
  * @file events.gateway.ts
+ * @route 
  * @description Gateway de WebSockets para comunicación en tiempo real.
  * Emite eventos a salas específicas por `userId` para sensores y reportes.
  * @author Kevin Mariano (Actualizado por Gemini)
- * @version 3.0.0
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 import {
   WebSocketGateway,

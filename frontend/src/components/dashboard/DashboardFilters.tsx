@@ -1,10 +1,13 @@
 /**
  * @file DashboardFilters.tsx
+ * @route frontend/src/components/dashboard/
  * @description Componente de filtros para el dashboard.
  * @author Kevin Mariano
- * @version 2.1.0
- * @since 1.0.0
+ * @version 1.1.0
+ * @since 1.0.00
+ * @copyright SENA 2025
  */
+
 import React from 'react';
 import { Role, SensorType, Tank, UserFromApi as User } from '@/types';
 import { Users, Container, Cpu } from 'lucide-react';

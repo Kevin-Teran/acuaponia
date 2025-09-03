@@ -1,9 +1,11 @@
 /**
  * @file dashboard.service.ts
+ * @route 
  * @description Servicio para la lógica de negocio del dashboard con datos optimizados.
  * @author Kevin Mariano
- * @version 1.2.0 (Filter Fix)
+ * @version 1.2.0 
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 import { Injectable, Logger, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';

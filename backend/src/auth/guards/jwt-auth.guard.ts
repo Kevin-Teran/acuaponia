@@ -1,9 +1,11 @@
 /**
  * @file jwt-auth.guard.ts
+ * @route 
  * @description Guardián de autenticación que protege las rutas de la aplicación.
  * @author Sistema de Acuaponía SENA
  * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 import { Injectable, ExecutionContext } from '@nestjs/common';

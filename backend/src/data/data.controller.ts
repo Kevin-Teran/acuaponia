@@ -1,9 +1,11 @@
 /**
  * @file data.controller.ts
+ * @route 
  * @description Controlador para endpoints de datos de sensores.
  * @author Kevin Mariano 
- * @version 4.0.0
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 import { Controller, Get, Post, Body, Query, UseGuards, Req, Param } from '@nestjs/common';
 import { DataService } from './data.service';

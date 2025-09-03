@@ -1,11 +1,13 @@
 /**
  * @file settings.controller.ts
+ * @route 
  * @description Controlador para gestionar las rutas de la API relacionadas con la configuración del usuario.
  * Protegido por autenticación JWT. Permite a los usuarios gestionar su propia configuración y a los
  * administradores consultar la configuración de otros usuarios.
  * @author Kevin Mariano
  * @version 1.1.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 import { Controller, Get, Put, Body, UseGuards, Req, Query } from '@nestjs/common';

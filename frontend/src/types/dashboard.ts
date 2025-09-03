@@ -1,9 +1,11 @@
 /**
  * @file dashboard.ts
+ * @route 
  * @description Tipos específicos para el módulo de dashboard.
  * @author Kevin Mariano
  * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 import { SensorType } from './index';
 

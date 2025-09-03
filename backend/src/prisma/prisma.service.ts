@@ -1,3 +1,16 @@
+/**
+ * @file prisma.module.ts
+ * @route 
+ * @description Extiende el PrismaClient para integrarse con el ciclo de vida de los módulos de NestJS.
+ * Se encarga de conectar y desconectar la base de datos de forma segura.
+ * Los métodos `$connect` y `$disconnect` son heredados directamente de PrismaClient después
+ * de una generación exitosa del cliente.
+ * @author Kevin Mariano 
+ * @version 1.0.0 
+ * @since 1.0.0
+ * @copyright SENA 2025
+ */
+
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 

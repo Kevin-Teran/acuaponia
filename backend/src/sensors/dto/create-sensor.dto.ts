@@ -1,10 +1,13 @@
 /**
  * @file create-sensor.dto.ts
- * @description DTO para la creación de un sensor.
+ * @route 
+ * @description 
  * @author Kevin Mariano
- * @version 5.0.0
+ * @version 1.0.1
  * @since 1.0.0
+ * @copyright SENA 2025
  */
+
 import { IsString, IsNotEmpty, IsEnum, IsDateString } from 'class-validator';
 import { SensorType } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';

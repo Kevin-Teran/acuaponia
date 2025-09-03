@@ -1,3 +1,13 @@
+/**
+ * @file jwt-refresh.strategy.ts
+ * @route 
+ * @description Extrae el refresh token de la cookie 'refresh_token'.
+ * @author Sistema de Acuaponía SENA
+ * @version 1.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
+ */
+
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-jwt';

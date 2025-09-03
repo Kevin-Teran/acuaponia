@@ -1,10 +1,12 @@
 /**
  * @file settings.service.ts
+ * @route 
  * @description Servicio que encapsula la lógica de negocio para la gestión de la configuración de usuarios.
  * Utiliza Prisma para interactuar con la base de datos y manejar un campo JSON 'settings' en el modelo de Usuario.
  * @author Kevin Mariano
  * @version 1.1.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 import { Injectable, NotFoundException } from '@nestjs/common';

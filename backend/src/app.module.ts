@@ -1,9 +1,13 @@
 /**
  * @file app.module.ts
+ * @route 
  * @description Módulo raíz de la aplicación NestJS.
  * @author kevin mariano
  * @version 1.1.0
+ * @since 1.0.0
+ * @copyright SENA 2025
  */
+
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';

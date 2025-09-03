@@ -1,3 +1,13 @@
+/**
+ * @file sensors.ts
+ * @route 
+ * @description 
+ * @author Kevin Mariano
+ * @version 1.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
+ */
+
 export type NormalizedType = 'TEMPERATURE' | 'PH' | 'OXYGEN' | 'LEVEL' | 'FLOW' | null;
 
 export function normalizeSensorType(type?: string): NormalizedType {

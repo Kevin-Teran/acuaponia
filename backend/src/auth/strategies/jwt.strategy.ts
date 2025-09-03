@@ -1,11 +1,13 @@
 /**
  * @file jwt.strategy.ts
+ * @route 
  * @description Estrategia de Passport.js para validar tokens de acceso JWT.
  * Se encarga de extraer el token tanto de la cabecera de autorización como de cookies,
  * verificar su firma y extraer el payload del usuario para adjuntarlo a la petición.
  * @author kevin mariano
  * @version 1.0.0 
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 import { Injectable, UnauthorizedException } from '@nestjs/common';

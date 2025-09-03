@@ -1,5 +1,6 @@
 /**
  * @file login.dto.ts
+ * @route 
  * @description
  * Define la estructura de datos y las reglas de validación para el cuerpo (body)
  * de la solicitud de inicio de sesión. Incluye las credenciales del usuario y
@@ -7,6 +8,7 @@
  * @author kevin mariano
  * @version 1.1.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 import { IsEmail, IsNotEmpty, IsString, MinLength, IsBoolean, IsOptional } from 'class-validator';

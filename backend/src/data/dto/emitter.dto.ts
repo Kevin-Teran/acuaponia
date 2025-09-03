@@ -1,3 +1,14 @@
+/**
+ * @file emitter.dto.ts
+ * @route 
+ * @description DTO para validar el cuerpo de la petición al iniciar o detener simuladores.
+ * Debe contener un array de IDs de sensores.
+ * @author Kevin Mariano
+ * @version 1.2.0 
+ * @since 1.0.0
+ * @copyright SENA 2025
+ */
+
 import { IsArray, IsString, IsNotEmpty } from 'class-validator';
 
 /**

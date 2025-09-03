@@ -1,11 +1,14 @@
 /**
  * @file data.service.ts
+ * @route 
  * @description Servicio completo y robusto para toda la gestión de datos de sensores.
  * Incluye: simulación, persistencia, recepción y guardado desde MQTT, y endpoints de consulta de datos.
  * @author Kevin Mariano (Actualizado por Gemini)
- * @version 10.1.0
+ * @version 1.1.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
+
 import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, OnModuleInit, OnModuleDestroy, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../events/events.gateway';

@@ -1,8 +1,12 @@
 /**
  * @file dashboardService.ts
- * @version 1.0.0
+ * @route 
  * @description Servicio para manejar la comunicación con el backend del Dashboard.
- *              Incluye fetch de datos y manejo de filtros.
+ * Incluye fetch de datos y manejo de filtros.
+ * @author Kevin Mariano 
+ * @version 1.0.0 
+ * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 import axios from "axios";

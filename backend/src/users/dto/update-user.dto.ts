@@ -1,3 +1,13 @@
+/**
+ * @file update-user.dto.ts
+ * @route 
+ * @description DTO para validar los datos al actualizar un usuario. Todos los campos son opcionales.
+ * @author Kevin Mariano 
+ * @version 1.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
+ */
+
 import { IsEmail, IsString, IsOptional, MinLength, IsEnum } from 'class-validator';
 import { Role, users_status } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';

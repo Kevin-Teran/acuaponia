@@ -11,7 +11,6 @@ import { Skeleton } from '@/components/common/Skeleton';
 import { Thermometer, Droplets, Wind, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-// --- Interfaces y Tipos ---
 interface GaugeChartProps {
   data: RealtimeData | null;
   settings: Settings | null;
@@ -24,7 +23,6 @@ interface StatusInfo {
     textColorClass: string;
 }
 
-// --- Constantes y Configuración ---
 const sensorInfo: Record<string, { icon: React.ElementType, name: string }> = {
   [SensorType.TEMPERATURE]: { icon: Thermometer, name: 'Temperatura' },
   [SensorType.PH]: { icon: Droplets, name: 'pH' },
@@ -63,39 +61,30 @@ const getSensorConfig = (type: SensorType, settings: Settings | null) => {
     };
 };
 
-// --- Componente Reutilizable para el Medidor (AGUJA TRIANGULAR DEFINITIVA) ---
 const SemiCircularGauge = ({ percentage, strokeColor }: { percentage: number; strokeColor: string }) => {
     const radius = 35;
     const strokeWidth = 8;
     const needleLength = radius - 5;
-    const needleBaseWidth = 8; // Ancho de la base de la aguja
+    const needleBaseWidth = 8;
 
-    // Dimensiones y centro del SVG
     const svgWidth = 100;
     const svgHeight = 60;
     const centerX = svgWidth / 2;
     const centerY = svgHeight - 10;
 
-    // Coordenadas del arco
     const startX = centerX - radius;
     const startY = centerY;
     const endX = centerX + radius;
     const endY = centerY;
     const circumference = Math.PI * radius;
     
-    // Transición de la animación
     const transition = { duration: 1.5, ease: "circOut" };
     
-    // --- Lógica de la Aguja Triangular con <path> ---
-    // 1. Calculamos el ángulo en radianes basado en el porcentaje
     const needleAngleRad = (percentage / 100) * Math.PI;
 
-    // 2. Calculamos la punta de la aguja usando la misma lógica que la línea original
     const needleTipX = centerX - Math.cos(needleAngleRad) * needleLength;
     const needleTipY = centerY - Math.sin(needleAngleRad) * needleLength;
 
-    // 3. Calculamos los dos puntos de la base del triángulo.
-    // El vector perpendicular a la aguja nos da la dirección para la base.
     const baseOffsetX = (needleBaseWidth / 2) * Math.sin(needleAngleRad);
     const baseOffsetY = (needleBaseWidth / 2) * -Math.cos(needleAngleRad);
     const base1X = centerX + baseOffsetX;
@@ -103,10 +92,8 @@ const SemiCircularGauge = ({ percentage, strokeColor }: { percentage: number; st
     const base2X = centerX - baseOffsetX;
     const base2Y = centerY - baseOffsetY;
     
-    // 4. Creamos el string 'd' para el path del SVG que dibuja el triángulo
     const needlePathD = `M ${needleTipX} ${needleTipY} L ${base1X} ${base1Y} L ${base2X} ${base2Y} Z`;
 
-    // 5. Creamos el 'd' para la posición inicial (percentage = 0) para que la animación comience correctamente
     const initialTipX = centerX - needleLength;
     const initialTipY = centerY;
     const initialBase1X = centerX;
@@ -123,7 +110,7 @@ const SemiCircularGauge = ({ percentage, strokeColor }: { percentage: number; st
                 viewBox={`0 0 ${svgWidth} ${svgHeight}`}
                 className="overflow-visible"
             >
-                {/* Arco de fondo (sin cambios) */}
+                {/* Arco de fondo */}
                 <path
                     d={`M ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`}
                     className="stroke-current text-gray-200 dark:text-gray-700"
@@ -132,7 +119,7 @@ const SemiCircularGauge = ({ percentage, strokeColor }: { percentage: number; st
                     strokeLinecap="round"
                 />
                 
-                {/* Arco de progreso (sin cambios) */}
+                {/* Arco de progreso */}
                 <motion.path
                     d={`M ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`}
                     fill="none"
@@ -145,7 +132,7 @@ const SemiCircularGauge = ({ percentage, strokeColor }: { percentage: number; st
                     transition={transition}
                 />
                 
-                {/* Aguja Triangular (Path animado) */}
+                {/* Aguja Triangular */}
                 <motion.path
                     fill={strokeColor}
                     initial={{ d: initialNeedlePathD }}
@@ -153,7 +140,7 @@ const SemiCircularGauge = ({ percentage, strokeColor }: { percentage: number; st
                     transition={transition}
                 />
                 
-                {/* Pivote central (sin cambios) */}
+                {/* Pivote central */}
                 <circle 
                     cx={centerX} 
                     cy={centerY} 
@@ -171,7 +158,6 @@ const SemiCircularGauge = ({ percentage, strokeColor }: { percentage: number; st
     );
 };
 
-// --- Componente de Item Individual (sin cambios) ---
 const GaugeItem = ({ data, type, settings }: { data: any, type: SensorType, settings: Settings | null }) => {
   const config = getSensorConfig(type, settings);
   const { icon: Icon, name } = sensorInfo[type];
@@ -223,7 +209,6 @@ const GaugeItem = ({ data, type, settings }: { data: any, type: SensorType, sett
   );
 };
 
-// --- Componente Principal (sin cambios) ---
 export const GaugeChart = ({ data, settings, loading }: GaugeChartProps) => {
     const sensorData = useMemo(() => {
         if (!data || !settings) return [];

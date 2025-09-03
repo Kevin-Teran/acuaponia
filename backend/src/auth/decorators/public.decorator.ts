@@ -1,9 +1,11 @@
 /**
  * @file public.decorator.ts
+ * @route 
  * @description Decorador para marcar rutas como públicas y eximirlas de la autenticación JWT global.
  * @author Kevin Mariano
  * @version 1.0.9
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 import { SetMetadata } from '@nestjs/common';

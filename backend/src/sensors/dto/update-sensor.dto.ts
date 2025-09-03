@@ -1,10 +1,12 @@
 /**
  * @file update-sensor.dto.ts
+ * @route 
  * @description Data Transfer Object (DTO) para la actualización parcial de un sensor.
  * Define la estructura y las validaciones para los datos que se pueden modificar.
  * @author Kevin Mariano
- * @version 3.1.0
+ * @version 1.1.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 import { IsString, IsOptional, IsDateString, IsEnum } from 'class-validator';

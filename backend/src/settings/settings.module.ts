@@ -1,8 +1,10 @@
 /**
  * @file settings.module.ts
+ * @route 
  * @description Módulo para la gestión de configuraciones.
  * @author Kevin Mariano
- * @version 3.1.0
+ * @version 1.1.0
+ * @copyright SENA 2025
  */
  import { Module } from '@nestjs/common';
  import { SettingsService } from './settings.service';

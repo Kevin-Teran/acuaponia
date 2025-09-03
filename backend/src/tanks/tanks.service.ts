@@ -1,10 +1,13 @@
 /**
  * @file tanks.service.ts
+ * @route 
  * @description Lógica de negocio para la gestión de tanques con validación de nombres únicos por usuario.
  * @author Kevin Mariano 
- * @version 9.1.0
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
+
  import {
   Injectable,
   ForbiddenException,

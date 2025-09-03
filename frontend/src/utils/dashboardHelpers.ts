@@ -1,8 +1,10 @@
 /**
  * @file dashboardHelpers.ts
+ * @route 
  * @description Utilidades y helpers para el dashboard.
  * @author Kevin Mariano
  * @version 1.0.0
+ * @copyright SENA 2025
  */
 import { SensorType } from '@/types';
 

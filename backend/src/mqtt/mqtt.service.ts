@@ -1,10 +1,12 @@
 /**
  * @file mqtt.service.ts
+ * @route 
  * @description Servicio backend para gestionar la conexión y comunicación con el broker MQTT.
  * Escucha los topics de los sensores y delega el procesamiento de datos al DataService.
- * @author Kevin Mariano (Actualizado por Gemini)
- * @version 6.0.0 
+ * @author Kevin Mariano 
+ * @version 1.0.0 
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger, Inject, forwardRef } from '@nestjs/common';
 import { connect, MqttClient, IClientOptions } from 'mqtt';

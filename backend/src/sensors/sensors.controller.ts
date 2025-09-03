@@ -1,10 +1,13 @@
 /**
  * @file sensors.controller.ts
+ * @route 
  * @description Controlador de NestJS para gestionar las rutas de los sensores con nuevas funcionalidades.
  * @author Kevin Mariano 
- * @version 6.0.0
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
+
  import { 
   Controller, 
   Get, 

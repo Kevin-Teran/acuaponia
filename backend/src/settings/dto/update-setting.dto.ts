@@ -1,10 +1,12 @@
 /**
  * @file update-setting.dto.ts
+ * @route 
  * @description Data Transfer Object (DTO) para la actualización de la configuración de un usuario.
  * Utiliza class-validator para garantizar la integridad y el formato de los datos de entrada.
  * @author Kevin Mariano
  * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 import { IsString, IsBoolean, IsOptional, IsIn, MinLength } from 'class-validator';

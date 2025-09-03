@@ -1,10 +1,12 @@
 /**
  * @file users.controller.ts
+ * @route 
  * @description Controlador para gestionar las peticiones HTTP relacionadas con los usuarios.
  * Expone los endpoints para las operaciones CRUD de usuarios.
  * @author Kevin Mariano
- * @version 2.0.0
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
  import {

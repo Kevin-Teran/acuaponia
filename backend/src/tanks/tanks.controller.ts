@@ -1,10 +1,13 @@
 /**
  * @file tanks.controller.ts
+ * @route 
  * @description Endpoints para la gestión de tanques.
  * @author Kevin Mariano
- * @version 8.0.0
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
+
  import {
   Controller,
   Get,
