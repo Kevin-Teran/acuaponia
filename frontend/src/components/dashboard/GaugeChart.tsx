@@ -1,8 +1,8 @@
 /**
  * @file GaugeChart.tsx
- * @description Componente para mostrar medidores semicirculares, animados y de alta calidad (PIVOTE 100% CORREGIDO).
- * @author Kevin Mariano & Gemini
- * @version 71.2.0 (Definitive Pivot Fix)
+ * @description Componente para mostrar medidores semicirculares, animados y de alta calidad (AGUJA TRIANGULAR DEFINITIVA).
+ * @author Kevin Mariano & Claude & Gemini
+ * @version 1.3.0
  * @since 1.0.0
  */
 import React, { useMemo } from 'react';
@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/common/Skeleton';
 import { Thermometer, Droplets, Wind, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-// --- Interfaces y Tipos (Sin cambios) ---
+// --- Interfaces y Tipos ---
 interface GaugeChartProps {
   data: RealtimeData | null;
   settings: Settings | null;
@@ -24,7 +24,7 @@ interface StatusInfo {
     textColorClass: string;
 }
 
-// --- Constantes y Configuración (Sin cambios) ---
+// --- Constantes y Configuración ---
 const sensorInfo: Record<string, { icon: React.ElementType, name: string }> = {
   [SensorType.TEMPERATURE]: { icon: Thermometer, name: 'Temperatura' },
   [SensorType.PH]: { icon: Droplets, name: 'pH' },
@@ -63,37 +63,78 @@ const getSensorConfig = (type: SensorType, settings: Settings | null) => {
     };
 };
 
-// --- Componente Reutilizable para el Medidor (CON PIVOTE DEFINITIVO) ---
+// --- Componente Reutilizable para el Medidor (AGUJA TRIANGULAR DEFINITIVA) ---
 const SemiCircularGauge = ({ percentage, strokeColor }: { percentage: number; strokeColor: string }) => {
-    const radius = 40;
-    const circumference = Math.PI * radius;
+    const radius = 35;
     const strokeWidth = 8;
-    const viewBoxSize = 100;
-    const center = viewBoxSize / 2;
+    const needleLength = radius - 5;
+    const needleBaseWidth = 8; // Ancho de la base de la aguja
 
+    // Dimensiones y centro del SVG
+    const svgWidth = 100;
+    const svgHeight = 60;
+    const centerX = svgWidth / 2;
+    const centerY = svgHeight - 10;
+
+    // Coordenadas del arco
+    const startX = centerX - radius;
+    const startY = centerY;
+    const endX = centerX + radius;
+    const endY = centerY;
+    const circumference = Math.PI * radius;
+    
+    // Transición de la animación
     const transition = { duration: 1.5, ease: "circOut" };
+    
+    // --- Lógica de la Aguja Triangular con <path> ---
+    // 1. Calculamos el ángulo en radianes basado en el porcentaje
+    const needleAngleRad = (percentage / 100) * Math.PI;
 
-    const needleRotation = -90 + (percentage / 100) * 180;
+    // 2. Calculamos la punta de la aguja usando la misma lógica que la línea original
+    const needleTipX = centerX - Math.cos(needleAngleRad) * needleLength;
+    const needleTipY = centerY - Math.sin(needleAngleRad) * needleLength;
+
+    // 3. Calculamos los dos puntos de la base del triángulo.
+    // El vector perpendicular a la aguja nos da la dirección para la base.
+    const baseOffsetX = (needleBaseWidth / 2) * Math.sin(needleAngleRad);
+    const baseOffsetY = (needleBaseWidth / 2) * -Math.cos(needleAngleRad);
+    const base1X = centerX + baseOffsetX;
+    const base1Y = centerY + baseOffsetY;
+    const base2X = centerX - baseOffsetX;
+    const base2Y = centerY - baseOffsetY;
+    
+    // 4. Creamos el string 'd' para el path del SVG que dibuja el triángulo
+    const needlePathD = `M ${needleTipX} ${needleTipY} L ${base1X} ${base1Y} L ${base2X} ${base2Y} Z`;
+
+    // 5. Creamos el 'd' para la posición inicial (percentage = 0) para que la animación comience correctamente
+    const initialTipX = centerX - needleLength;
+    const initialTipY = centerY;
+    const initialBase1X = centerX;
+    const initialBase1Y = centerY - (needleBaseWidth / 2);
+    const initialBase2X = centerX;
+    const initialBase2Y = centerY + (needleBaseWidth / 2);
+    const initialNeedlePathD = `M ${initialTipX} ${initialTipY} L ${initialBase1X} ${initialBase1Y} L ${initialBase2X} ${initialBase2Y} Z`;
 
     return (
         <div className="relative w-full h-auto flex justify-center items-center">
             <svg
                 width="100%"
                 height="100%"
-                viewBox={`0 0 ${viewBoxSize} ${center + strokeWidth}`}
-                style={{ overflow: 'visible' }}
+                viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+                className="overflow-visible"
             >
-                {/* 1. Arco de fondo */}
+                {/* Arco de fondo (sin cambios) */}
                 <path
-                    d={`M ${strokeWidth},${center} a ${radius},${radius} 0 0 1 ${radius * 2},0`}
+                    d={`M ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`}
                     className="stroke-current text-gray-200 dark:text-gray-700"
                     strokeWidth={strokeWidth}
                     fill="none"
                     strokeLinecap="round"
                 />
-                {/* 2. Arco de progreso */}
+                
+                {/* Arco de progreso (sin cambios) */}
                 <motion.path
-                    d={`M ${strokeWidth},${center} a ${radius},${radius} 0 0 1 ${radius * 2},0`}
+                    d={`M ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`}
                     fill="none"
                     stroke={strokeColor}
                     strokeWidth={strokeWidth}
@@ -104,34 +145,33 @@ const SemiCircularGauge = ({ percentage, strokeColor }: { percentage: number; st
                     transition={transition}
                 />
                 
-                {/* highlight-start */}
-                {/* 3. Grupo de la Aguja (CORRECCIÓN DEFINITIVA) */}
-                {/* Grupo 1 (Estático): Mueve el sistema de coordenadas al centro del arco. */}
-                <g transform={`translate(${center}, ${center})`}>
-                    {/* Grupo 2 (Animado): Rota sobre el nuevo origen (0,0) del grupo padre. */}
-                    <motion.g
-                        initial={{ rotate: -90 }}
-                        animate={{ rotate: needleRotation }}
-                        transition={transition}
-                    >
-                        {/* La aguja y el pivote se dibujan en el origen (0,0) */}
-                        <path
-                            d={`M 0,${strokeWidth / 2} L ${radius - strokeWidth},0 L 0,-${strokeWidth / 2} Z`}
-                            fill={strokeColor}
-                        />
-                        <circle cx="0" cy="0" r="5" fill={strokeColor} />
-                        <circle cx="0" cy="0" r="2.5" fill="white" />
-                    </motion.g>
-                </g>
-                {/* highlight-end */}
-
+                {/* Aguja Triangular (Path animado) */}
+                <motion.path
+                    fill={strokeColor}
+                    initial={{ d: initialNeedlePathD }}
+                    animate={{ d: needlePathD }}
+                    transition={transition}
+                />
+                
+                {/* Pivote central (sin cambios) */}
+                <circle 
+                    cx={centerX} 
+                    cy={centerY} 
+                    r="4" 
+                    fill={strokeColor} 
+                />
+                <circle 
+                    cx={centerX} 
+                    cy={centerY} 
+                    r="2" 
+                    fill="white" 
+                />
             </svg>
         </div>
     );
 };
 
-
-// --- Componente de Item Individual (Sin cambios) ---
+// --- Componente de Item Individual (sin cambios) ---
 const GaugeItem = ({ data, type, settings }: { data: any, type: SensorType, settings: Settings | null }) => {
   const config = getSensorConfig(type, settings);
   const { icon: Icon, name } = sensorInfo[type];
@@ -183,7 +223,7 @@ const GaugeItem = ({ data, type, settings }: { data: any, type: SensorType, sett
   );
 };
 
-// --- Componente Principal (Sin cambios) ---
+// --- Componente Principal (sin cambios) ---
 export const GaugeChart = ({ data, settings, loading }: GaugeChartProps) => {
     const sensorData = useMemo(() => {
         if (!data || !settings) return [];
