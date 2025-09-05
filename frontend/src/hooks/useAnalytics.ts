@@ -8,70 +8,73 @@
  * @copyright SENA 2025
  */
 
+'use client';
+
 import { useState, useCallback } from 'react';
-import toast from 'react-hot-toast';
-import {
-  getKpis,
-  getTimeSeries,
-  getAlertsSummary,
-  getCorrelations,
-} from '@/services/analyticsService';
+import * as analyticsService from '@/services/analyticsService';
+import { Kpi, TimeSeriesData, AlertSummary, CorrelationData } from '@/types';
+
+interface LoadingState {
+  kpis: boolean;
+  timeSeries: boolean;
+  alerts: boolean;
+  correlation: boolean;
+}
+
+interface AnalyticsFilters {
+  tankId?: string;
+  sensorType?: string;
+  range?: string;
+  userId?: string;
+}
 
 export const useAnalytics = () => {
-  const [loading, setLoading] = useState({
+  const [kpis, setKpis] = useState<Kpi | null>(null);
+  const [timeSeriesData, setTimeSeriesData] = useState<TimeSeriesData[]>([]);
+  const [alertsSummary, setAlertsSummary] = useState<AlertSummary | null>(null);
+  const [correlationData, setCorrelationData] = useState<CorrelationData[]>([]);
+  const [loading, setLoading] = useState<LoadingState>({
     kpis: false,
     timeSeries: false,
     alerts: false,
     correlation: false,
   });
-  const [kpis, setKpis] = useState(null);
-  const [timeSeriesData, setTimeSeriesData] = useState([]);
-  const [alertsSummary, setAlertsSummary] = useState(null);
-  const [correlationData, setCorrelationData] = useState([]);
   const [error, setError] = useState<string | null>(null);
 
-  /**
-   * @function fetchData
-   * @description Función principal para obtener todos los datos de analíticas basado en los filtros.
-   * @param {any} filters - Filtros para las consultas.
-   */
-  const fetchData = useCallback(async (filters: any) => {
+  const fetchData = useCallback(async (filters: AnalyticsFilters) => {
     setError(null);
 
-    // Fetch KPIs, Time Series y Alertas (basado en el parámetro principal)
-    if (filters.sensorType) {
-      setLoading((prev) => ({ ...prev, kpis: true, timeSeries: true, alerts: true }));
-      try {
-        const [kpisData, timeSeries, alertsData] = await Promise.all([
-          getKpis(filters),
-          getTimeSeries(filters),
-          getAlertsSummary(filters),
-        ]);
-        setKpis(kpisData);
-        setTimeSeriesData(timeSeries);
-        setAlertsSummary(alertsData);
-      } catch (err: any) {
-        toast.error('Error al cargar datos principales de análisis.');
-        setError('Error al cargar datos principales de análisis.');
-      } finally {
-        setLoading((prev) => ({ ...prev, kpis: false, timeSeries: false, alerts: false }));
-      }
-    }
+    // Ejecutar todas las peticiones en paralelo para mayor eficiencia
+    setLoading({ kpis: true, timeSeries: true, alerts: true, correlation: true });
+    
+    try {
+      const [kpisData, tsData, summaryData, corrData] = await Promise.all([
+        analyticsService.getKpis(filters),
+        analyticsService.getTimeSeries(filters),
+        analyticsService.getAlertsSummary(filters),
+        analyticsService.getCorrelations(filters),
+      ]);
 
-    // Fetch Correlación (basado en los dos parámetros de correlación)
-    if (filters.sensorTypeX && filters.sensorTypeY) {
-        setLoading(prev => ({ ...prev, correlation: true }));
-        try {
-            const corrData = await getCorrelations(filters);
-            setCorrelationData(corrData);
-        } catch (err: any) {
-            toast.error('Error al cargar datos de correlación.');
-            setError('Error al cargar datos de correlación.');
-        } finally {
-            setLoading(prev => ({ ...prev, correlation: false }));
-        }
+      setKpis(kpisData);
+      setTimeSeriesData(tsData);
+      setAlertsSummary(summaryData);
+      setCorrelationData(corrData);
+
+    } catch (err) {
+      console.error('Error al obtener datos de analíticas:', err);
+      setError('No se pudieron cargar todos los datos de analíticas.');
+    } finally {
+      setLoading({ kpis: false, timeSeries: false, alerts: false, correlation: false });
     }
   }, []);
 
-  return { loading, kpis, timeSeriesData, alertsSummary, correlationData, error, fetchData };
+  return {
+    kpis,
+    timeSeriesData,
+    alertsSummary,
+    correlationData,
+    loading,
+    error,
+    fetchData,
+  };
 };

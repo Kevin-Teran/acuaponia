@@ -7,12 +7,13 @@
  * @since 1.0.0
  * @copyright SENA 2025
  */
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AnalyticsFiltersDto } from './dto/analytics-filters.dto';
-import { User, Role, SensorType } from '@prisma/client';
-import { Prisma } from '@prisma/client';
+import { User, Role, Prisma, SensorType } from '@prisma/client';
 import { CorrelationFiltersDto } from './dto/correlation-filters.dto';
+import { subDays, startOfDay, endOfDay, subMonths, subYears } from 'date-fns';
 
 @Injectable()
 export class AnalyticsService {
@@ -20,13 +21,18 @@ export class AnalyticsService {
 
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * @method getKpis
-   * @description Calcula los Indicadores Clave de Rendimiento (KPIs) para los datos de los sensores.
-   * @param {AnalyticsFiltersDto} filters - Filtros para la consulta.
-   * @param {User} user - El usuario que realiza la solicitud.
-   * @returns {Promise<any>} Un objeto con los KPIs calculados.
-   */
+  async getDataDateRange(userId: string) {
+    const aggregations = await this.prisma.sensorData.aggregate({
+      where: { sensor: { tank: { userId } } },
+      _min: { timestamp: true },
+      _max: { timestamp: true },
+    });
+    return {
+      firstDataPoint: aggregations._min.timestamp,
+      lastDataPoint: aggregations._max.timestamp,
+    };
+  }
+
   async getKpis(filters: AnalyticsFiltersDto, user: User) {
     const where = this.buildWhereClause(filters, user);
 
@@ -49,184 +55,115 @@ export class AnalyticsService {
     };
   }
 
-  /**
-   * @method getTimeSeries
-   * @description Obtiene los datos históricos para un gráfico de series de tiempo.
-   * @param {AnalyticsFiltersDto} filters - Filtros para la consulta.
-   * @param {User} user - El usuario que realiza la solicitud.
-   * @returns {Promise<any>} Datos para el gráfico de series de tiempo.
-   */
   async getTimeSeries(filters: AnalyticsFiltersDto, user: User) {
     const where = this.buildWhereClause(filters, user);
-
     return this.prisma.sensorData.findMany({
       where,
       orderBy: { timestamp: 'asc' },
-      select: {
-        timestamp: true,
-        value: true,
-        sensor: {
-          select: { name: true, type: true },
-        },
-      },
+      select: { timestamp: true, value: true, sensor: { select: { name: true, type: true } } },
     });
   }
 
-  /**
-   * @method getAlertsSummary
-   * @description Obtiene un resumen de las alertas generadas en el período.
-   * @param {AnalyticsFiltersDto} filters - Filtros para la consulta.
-   * @param {User} user - El usuario que realiza la solicitud.
-   * @returns {Promise<any>} Resumen de alertas por tipo y severidad.
-   */
   async getAlertsSummary(filters: AnalyticsFiltersDto, user: User) {
     const targetUserId = this.resolveTargetUserId(filters.userId, user);
+    const dateFilter = this.getDateFilter(filters.range);
 
     const alertsByType = await this.prisma.alert.groupBy({
       by: ['type'],
-      where: {
-        userId: targetUserId,
-        createdAt: {
-          gte: new Date(filters.startDate),
-          lte: new Date(filters.endDate),
-        },
-      },
+      where: { userId: targetUserId, createdAt: dateFilter },
       _count: { type: true },
     });
 
     const alertsBySeverity = await this.prisma.alert.groupBy({
       by: ['severity'],
-      where: {
-        userId: targetUserId,
-        createdAt: {
-          gte: new Date(filters.startDate),
-          lte: new Date(filters.endDate),
-        },
-      },
+      where: { userId: targetUserId, createdAt: dateFilter },
       _count: { severity: true },
     });
 
     return { alertsByType, alertsBySeverity };
   }
 
-  /**
-   * @private
-   * @method buildWhereClause
-   * @description Construye la cláusula 'where' de Prisma para las consultas.
-   * @param {AnalyticsFiltersDto} filters - Filtros de la solicitud.
-   * @param {User} user - Usuario actual.
-   * @returns {Prisma.SensorDataWhereInput} Cláusula 'where' para Prisma.
-   */
   private buildWhereClause(
     filters: AnalyticsFiltersDto,
     user: User,
   ): Prisma.SensorDataWhereInput {
     const targetUserId = this.resolveTargetUserId(filters.userId, user);
+    const dateFilter = this.getDateFilter(filters.range);
 
-    if (!filters.startDate || !filters.endDate) {
-      throw new BadRequestException(
-        'startDate y endDate son requeridos para las analíticas.',
-      );
-    }
-
-    return {
+    const whereClause: Prisma.SensorDataWhereInput = {
+      timestamp: dateFilter,
       sensor: {
         tank: {
           userId: targetUserId,
-          ...(filters.tankId && { id: filters.tankId }),
+          ...(filters.tankId && filters.tankId !== 'ALL' && { id: filters.tankId }),
         },
+        ...(filters.sensorId && filters.sensorId !== 'ALL' && { id: filters.sensorId }),
         ...(filters.sensorType && { type: filters.sensorType }),
       },
-      timestamp: {
-        gte: new Date(filters.startDate),
-        lte: new Date(filters.endDate),
-      },
     };
+    return whereClause;
   }
 
-  /**
-   * @private
-   * @method resolveTargetUserId
-   * @description Resuelve el ID del usuario objetivo basado en el rol del usuario actual.
-   * @param {string | undefined} requestedUserId - ID del usuario solicitado.
-   * @param {User} currentUser - El usuario que realiza la la solicitud.
-   * @returns {string} El ID del usuario objetivo.
-   */
-  private resolveTargetUserId(
-    requestedUserId: string | undefined,
-    currentUser: User,
-  ): string {
+  private getDateFilter(range?: string): { gte: Date; lte: Date } {
+    const now = new Date();
+    switch (range) {
+      case 'day': return { gte: startOfDay(now), lte: endOfDay(now) };
+      case 'month': return { gte: subMonths(now, 1), lte: now };
+      case 'year': return { gte: subYears(now, 1), lte: now };
+      case 'week': default: return { gte: subDays(now, 7), lte: now };
+    }
+  }
+
+  private resolveTargetUserId(requestedUserId: string | undefined, currentUser: User): string {
     if (currentUser.role === Role.ADMIN && requestedUserId) {
       return requestedUserId;
     }
     return currentUser.id;
   }
 
-  /**
-   * @private
-   * @method calculateVariance
-   * @description Calcula la varianza de un conjunto de datos.
-   * @param {Prisma.SensorDataWhereInput} where - Cláusula 'where' de Prisma.
-   * @returns {Promise<number>} La varianza calculada.
-   */
-  private async calculateVariance(
-    where: Prisma.SensorDataWhereInput,
-  ): Promise<number> {
+  private async calculateVariance(where: Prisma.SensorDataWhereInput): Promise<number> {
     const data = await this.prisma.sensorData.findMany({ where });
     if (data.length < 2) return 0;
-
     const mean = data.reduce((acc, curr) => acc + curr.value, 0) / data.length;
-    const variance =
-      data.reduce((acc, curr) => acc + Math.pow(curr.value - mean, 2), 0) /
-      (data.length - 1);
-
+    const variance = data.reduce((acc, curr) => acc + Math.pow(curr.value - mean, 2), 0) / (data.length - 1);
     return variance;
   }
-
-  /**
-   * @method getCorrelations
-   * @description Obtiene datos para analizar la correlación entre dos tipos de sensores.
-   * @param {CorrelationFiltersDto} filters - Filtros para la consulta.
-   * @param {User} user - El usuario que realiza la solicitud.
-   * @returns {Promise<any[]>} Un array de puntos de datos para el gráfico de dispersión.
-   */
+  
    async getCorrelations(filters: CorrelationFiltersDto, user: User) {
     const targetUserId = this.resolveTargetUserId(filters.userId, user);
-    const { startDate, endDate, tankId, sensorTypeX, sensorTypeY } = filters;
+    const dateFilter = this.getDateFilter(filters.range);
+    const { tankId, sensorId, sensorTypeX, sensorTypeY } = filters;
 
-    const whereBase = {
-      tank: {
-        userId: targetUserId,
-        ...(tankId && { id: tankId }),
-      },
-      timestamp: {
-        gte: new Date(startDate),
-        lte: new Date(endDate),
+    const whereBase: Prisma.SensorDataWhereInput = {
+      timestamp: dateFilter,
+      sensor: {
+        tank: {
+          userId: targetUserId,
+          ...(tankId && tankId !== 'ALL' && { id: tankId }),
+        },
+        ...(sensorId && sensorId !== 'ALL' && { id: sensorId }),
       },
     };
 
     const dataX = await this.prisma.sensorData.findMany({
-      where: { ...whereBase, type: sensorTypeX },
+      where: { ...whereBase, sensor: { ...whereBase.sensor, type: sensorTypeX } },
       orderBy: { timestamp: 'asc' },
       select: { value: true, timestamp: true },
     });
 
     const dataY = await this.prisma.sensorData.findMany({
-      where: { ...whereBase, type: sensorTypeY },
+      where: { ...whereBase, sensor: { ...whereBase.sensor, type: sensorTypeY } },
       orderBy: { timestamp: 'asc' },
       select: { value: true, timestamp: true },
     });
 
     const yMap = new Map(dataY.map((d) => [d.timestamp.toISOString(), d.value]));
-
     const correlationData = dataX
       .map((dx) => {
         const yValue = yMap.get(dx.timestamp.toISOString());
-        return yValue !== undefined
-          ? { x: dx.value, y: yValue }
-          : null;
+        return yValue !== undefined ? { x: dx.value, y: yValue } : null;
       })
-      .filter(Boolean);
+      .filter((item): item is { x: number; y: number } => item !== null);
 
     return correlationData;
   }

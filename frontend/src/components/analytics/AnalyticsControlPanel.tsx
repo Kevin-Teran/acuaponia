@@ -10,98 +10,103 @@
 
 import React from 'react';
 import { Card } from '@/components/common/Card';
-import { SensorType, Role, User, Tank } from '@/types';
+import { SensorType, Role, User, Tank, Sensor } from '@/types';
 import { SlidersHorizontal } from 'lucide-react';
+import { sensorTypeTranslations, rangeTranslations } from '@/utils/translations';
 
 interface AnalyticsControlPanelProps {
-  filters: { tankId: string; sensorType: SensorType; sensorTypeX: SensorType; sensorTypeY: SensorType; startDate: string; endDate: string; };
-  setFilters: React.Dispatch<React.SetStateAction<any>>;
-  tanksList: Tank[];
-  usersList: User[]; // Esta prop ahora recibe la variable `users` de tu hook
-  currentUser: User | null;
+  users: User[];
   selectedUserId: string | null;
   onUserChange: (userId: string | null) => void;
+  isAdmin: boolean;
+  tanks: Tank[];
+  selectedTankId: string;
+  onTankChange: (tankId: string) => void;
+  selectedSensorType: SensorType;
+  onSensorTypeChange: (type: SensorType) => void;
+  availableSensors: Sensor[];
+  selectedSensorId: string;
+  onSensorChange: (sensorId: string) => void;
+  availableRanges: { day: boolean; week: boolean; month: boolean; year: boolean; };
+  selectedRange: string;
+  onRangeChange: (range: string) => void;
   isLoading: boolean;
 }
 
 export const AnalyticsControlPanel: React.FC<AnalyticsControlPanelProps> = ({
-  filters, setFilters, tanksList, usersList, currentUser,
-  selectedUserId, onUserChange, isLoading
+  users, selectedUserId, onUserChange, isAdmin,
+  tanks, selectedTankId, onTankChange,
+  selectedSensorType, onSensorTypeChange,
+  availableSensors, selectedSensorId, onSensorChange,
+  availableRanges, selectedRange, onRangeChange,
+  isLoading
 }) => {
-  const isAdmin = currentUser?.role === Role.ADMIN;
-
-  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFilters((prev: any) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const handleUserChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onUserChange(e.target.value === 'ALL' ? null : e.target.value);
-  };
-  
   return (
     <Card className="shadow-lg">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
         <SlidersHorizontal className="text-green-500" />
-        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Panel de Control</h3>
+        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Panel de Análisis</h3>
       </div>
       <div className="p-4 space-y-4">
         {isAdmin && (
           <div>
             <label htmlFor="user-select" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Usuario</label>
             <select
-              id="user-select"
-              value={selectedUserId || 'ALL'}
-              onChange={handleUserChange}
-              disabled={isLoading}
+              id="user-select" value={selectedUserId || ''}
+              onChange={(e) => onUserChange(e.target.value || null)}
+              disabled={isLoading || !users}
               className="mt-1 block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700 focus:border-green-500 focus:ring-green-500"
             >
-              <option value="ALL">Seleccione un usuario...</option>
-              {/* Se asegura que `usersList` sea un array antes de mapearlo */}
-              {(usersList || []).map((user) => (
+              {(users || []).map((user) => (
                 <option key={user.id} value={user.id}>{user.name}</option>
               ))}
             </select>
           </div>
         )}
 
-        {/* El resto de los filtros no necesita cambios */}
         <div>
-          <label htmlFor="tankId" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tanque</label>
+          <label htmlFor="tank-select" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tanque</label>
           <select
-            id="tankId" name="tankId" value={filters.tankId} onChange={handleFilterChange}
-            disabled={isLoading || !selectedUserId || tanksList.length === 0}
+            id="tank-select" value={selectedTankId} onChange={(e) => onTankChange(e.target.value)}
+            disabled={isLoading || !selectedUserId}
             className="mt-1 block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700 focus:border-green-500 focus:ring-green-500"
           >
-            <option value="">{tanksList.length === 0 ? 'No hay tanques' : 'Seleccione un tanque...'}</option>
-            {tanksList.map((tank) => ( <option key={tank.id} value={tank.id}>{tank.name}</option> ))}
+            <option value="ALL">Todos los Tanques</option>
+            {(tanks || []).map((tank) => (
+              <option key={tank.id} value={tank.id}>{tank.name}</option>
+            ))}
           </select>
         </div>
         
         <div>
-          <label htmlFor="startDate" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fecha de Inicio</label>
-          <input type="date" id="startDate" name="startDate" value={filters.startDate} onChange={handleFilterChange} disabled={isLoading} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700" />
+          <label htmlFor="sensor-select" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Parámetro</label>
+          <select
+            id="sensor-select" value={selectedSensorId} onChange={(e) => onSensorChange(e.target.value)}
+            disabled={isLoading || !selectedUserId}
+            className="mt-1 block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700 focus:border-green-500 focus:ring-green-500"
+          >
+            <option value="ALL">Todos los Sensores</option>
+            {Object.entries(sensorTypeTranslations).map(([key, value]) => (
+              <optgroup key={key} label={value}>
+                {availableSensors.filter(s => s.type === key).map(sensor => (
+                  <option key={sensor.id} value={sensor.id}>{sensor.name}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
         </div>
+
         <div>
-          <label htmlFor="endDate" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fecha de Fin</label>
-          <input type="date" id="endDate" name="endDate" value={filters.endDate} onChange={handleFilterChange} disabled={isLoading} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700" />
-        </div>
-        <hr className="border-slate-200 dark:border-slate-700" />
-        <div>
-            <label htmlFor="sensorType" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Parámetro Principal</label>
-            <select id="sensorType" name="sensorType" value={filters.sensorType} onChange={handleFilterChange} disabled={isLoading} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700 focus:border-green-500 focus:ring-green-500">
-              {Object.values(SensorType).map((type) => (<option key={type} value={type}>{type}</option>))}
-            </select>
-        </div>
-        <div className="space-y-2">
-            <p className="block text-sm font-medium text-slate-700 dark:text-slate-300">Correlación</p>
-            <div className="flex gap-2">
-                <select name="sensorTypeX" value={filters.sensorTypeX} onChange={handleFilterChange} disabled={isLoading} className="block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700" aria-label="Eje X">
-                  {Object.values(SensorType).map((type) => (<option key={`x-${type}`} value={type}>{type}</option>))}
-                </select>
-                <select name="sensorTypeY" value={filters.sensorTypeY} onChange={handleFilterChange} disabled={isLoading} className="block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700" aria-label="Eje Y">
-                  {Object.values(SensorType).map((type) => (<option key={`y-${type}`} value={type}>{type}</option>))}
-                </select>
-            </div>
+          <label htmlFor="range-select" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Período</label>
+          <select
+            id="range-select" value={selectedRange} onChange={(e) => onRangeChange(e.target.value)}
+            disabled={isLoading || !selectedUserId}
+            className="mt-1 block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700 focus:border-green-500 focus:ring-green-500"
+          >
+            {Object.entries(rangeTranslations).map(([key, value]) => (
+              (availableRanges as any)[key] && <option key={key} value={key}>{value}</option>
+            ))}
+          </select>
         </div>
       </div>
     </Card>
