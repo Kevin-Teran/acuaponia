@@ -1,125 +1,152 @@
-"use client";
-
-import React from 'react';
-import { Card } from '@/components/common/Card';
-import { LineChart } from '@/components/dashboard/LineChart';
-import { useSensorData } from '@/hooks/useSensorData';
-import { DataSummary, ProcessedDataPoint } from '@/types';
-import { AlertTriangle, CheckCircle, TrendingUp } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
-
-
 /**
- * @component Analytics
- * @description Componente de página para visualizar análisis de datos históricos de los sensores.
- * Muestra gráficos de línea para temperatura, pH y oxígeno a lo largo del tiempo.
+ * @file page.tsx
+ * @route frontend/src/app/(main)/analytics/
+ * @description Página de análisis de datos históricos con visualizaciones avanzadas.
+ * @author kevin mariano
+ * @version 2.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
  */
-const Analytics: React.FC = () => {
-  const { data, summary } = useSensorData();
 
-  /**
-   * @function getRecommendations
-   * @description Genera una lista de recomendaciones para el sistema basándose en el resumen de datos.
-   * Esta es una versión simplificada, se puede expandir para un análisis más profundo.
-   * @param {DataSummary | null} currentSummary - El resumen de los datos de los sensores.
-   * @returns {Array<object>} Un array de objetos de recomendación.
-   */
-  const getRecommendations = (currentSummary: DataSummary | null) => {
-    if (!currentSummary) return [];
-    const recommendations = [];
-    
-    // Recomendaciones basadas en rangos óptimos
-    if (currentSummary.temperature.avg < 20 || currentSummary.temperature.avg > 28) {
-        recommendations.push({ type: 'warning', parameter: 'Temperatura', message: 'La temperatura promedio histórica está fuera del rango óptimo.' });
-    }
-    if (currentSummary.ph.avg < 6.8 || currentSummary.ph.avg > 7.6) {
-        recommendations.push({ type: 'alert', parameter: 'pH', message: 'El pH promedio histórico muestra desviaciones significativas.' });
-    }
-    if (currentSummary.oxygen.avg < 6) {
-        recommendations.push({ type: 'alert', parameter: 'Oxígeno', message: 'El nivel de oxígeno promedio histórico es bajo.' });
-    }
-    
-    if (recommendations.length === 0) {
-      recommendations.push({ type: 'success', parameter: 'Sistema', message: 'Los parámetros históricos se mantienen dentro de los rangos óptimos.' });
-    }
-    
-    return recommendations;
-  };
+'use client';
 
-  const recommendations = getRecommendations(summary);
+import React, { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { useInfrastructure } from '@/hooks/useInfrastructure';
+import { useAnalytics } from '@/hooks/useAnalytics';
+import { Card } from '@/components/common/Card';
+import { AnalyticsControlPanel } from '@/components/analytics/AnalyticsControlPanel';
+import { KpiCards } from '@/components/analytics/KpiCards';
+import { TimeSeriesChart } from '@/components/analytics/TimeSeriesChart';
+import { AlertsSummaryCharts } from '@/components/analytics/AlertsSummaryCharts';
+import { ParameterCorrelation } from '@/components/analytics/ParameterCorrelation';
+import { Role, SensorType } from '@/types';
+import { subDays, format } from 'date-fns';
+import { Activity } from 'lucide-react';
 
-  const createChartData = (processedData: ProcessedDataPoint[], key: keyof Omit<ProcessedDataPoint, 'timestamp'>, label: string, color: string) => {
-    return {
-      labels: processedData.map(d => d.timestamp),
-      datasets: [{
-        label,
-        data: processedData.map(d => d[key]),
-        borderColor: color,
-        backgroundColor: `${color}40`,
-        tension: 0.4,
-      }]
-    };
-  };
-
-  const hasData = data && data.length > 0;
-  const startDate = hasData ? data[0].timestamp : '';
-  const endDate = hasData ? data[data.length - 1].timestamp : '';
+const AnalyticsPage = () => {
+  const { user } = useAuth();
+  // El hook ahora se inicializa sabiendo si debe comportarse como admin
+  const { tanks, usersList, fetchDataForUser, isInfraLoading } = useInfrastructure(user?.role === Role.ADMIN);
   
-  const thresholds = {
-    temperature: { min: 22, max: 26 },
-    ph: { min: 6.8, max: 7.6 },
-    oxygen: { min: 6, max: 10 },
-  };
+  const {
+    loading,
+    kpis,
+    timeSeriesData,
+    alertsSummary,
+    correlationData,
+    fetchData,
+  } = useAnalytics();
+
+  const [filters, setFilters] = useState({
+    userId: '',
+    tankId: '',
+    sensorType: SensorType.TEMPERATURE,
+    sensorTypeX: SensorType.TEMPERATURE,
+    sensorTypeY: SensorType.PH,
+    startDate: format(subDays(new Date(), 7), 'yyyy-MM-dd'),
+    endDate: format(new Date(), 'yyyy-MM-dd'),
+  });
+
+  // 1. Establece el usuario a consultar tan pronto como la información del usuario esté disponible.
+  useEffect(() => {
+    if (user) {
+      // Si el usuario es ADMIN, no seleccionamos a nadie por defecto.
+      // Si NO es admin, su ID se convierte en el filtro principal.
+      const targetUserId = user.role === Role.ADMIN ? '' : user.id;
+      setFilters(prev => ({ ...prev, userId: targetUserId }));
+      // Llama a fetchDataForUser para cargar los tanques del usuario NO-ADMIN
+      if (targetUserId) {
+        fetchDataForUser(targetUserId);
+      }
+    }
+  }, [user, fetchDataForUser]);
+
+  // 2. Si el usuario es ADMIN y SELECCIONA un usuario, cargamos los tanques de ese usuario.
+  const handleUserChangeForAdmin = useCallback((userId: string) => {
+    setFilters(prev => ({ ...prev, userId: userId, tankId: '' })); // Resetea el tanque
+    if (userId) {
+      fetchDataForUser(userId);
+    }
+  }, [fetchDataForUser]);
+
+  // 3. Cuando la lista de tanques (tanks) cambia, selecciona el primero por defecto.
+  useEffect(() => {
+    if (tanks && tanks.length > 0) {
+      setFilters(prev => ({ ...prev, tankId: prev.tankId || tanks[0].id }));
+    }
+  }, [tanks]);
+
+  // 4. Dispara el análisis de datos SÓLO cuando tenemos un usuario y un tanque seleccionados.
+  useEffect(() => {
+    if (filters.userId && filters.tankId) {
+      fetchData(filters);
+    }
+  }, [filters, fetchData]);
+
+  const isReadyForAnalysis = filters.userId && filters.tankId;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Análisis de Datos Históricos
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-1">
-          Visualización de tendencias y análisis de parámetros a lo largo del tiempo.
-        </p>
-      </div>
-
-      <Card title="Resumen de Recomendaciones" subtitle="Análisis de los promedios históricos">
-        <div className="space-y-4">
-          {recommendations.map((rec, index) => {
-            const Icon = rec.type === 'success' ? CheckCircle : AlertTriangle;
-            const colorClasses = 
-                rec.type === 'success' ? 'text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-900/30' :
-                rec.type === 'warning' ? 'text-orange-600 bg-orange-50 dark:text-orange-400 dark:bg-orange-900/30' :
-                'text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-900/30';
-            
-            const textColor = colorClasses.split(' ')[0] + ' ' + colorClasses.split(' ')[2];
-            const bgColor = colorClasses.split(' ')[1] + ' ' + colorClasses.split(' ')[3];
-
-            return (
-              <div key={index} className={`p-4 rounded-lg ${bgColor}`}>
-                <div className="flex items-start space-x-3">
-                  <Icon className={`w-5 h-5 mt-0.5 ${textColor}`} />
-                  <div className="flex-1">
-                    <span className={`font-semibold ${textColor}`}>{rec.parameter}</span>
-                    <p className="text-gray-700 dark:text-gray-300 mt-1 mb-2">{rec.message}</p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <LineChart
-            data={data}
-            thresholds={thresholds}
-            startDate={startDate}
-            endDate={endDate}
+    <div className="grid grid-cols-1 lg:grid-cols-4 xl:grid-cols-5 gap-6 p-4 md:p-6 bg-gray-50 dark:bg-gray-900 min-h-full">
+      {/* Columna de Control Izquierda */}
+      <aside className="lg:col-span-1 xl:col-span-1">
+        <AnalyticsControlPanel
+          filters={filters}
+          setFilters={setFilters}
+          tanksList={tanks}
+          usersList={usersList}
+          currentUser={user}
+          onAdminUserChange={handleUserChangeForAdmin}
+          isLoading={isInfraLoading}
         />
-      </div>
+      </aside>
+
+      {/* Contenido Principal Derecha */}
+      <main className="lg:col-span-3 xl:col-span-4 space-y-6">
+        {isReadyForAnalysis ? (
+          <>
+            <section>
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">
+                Análisis de Parámetro Principal: <span className="text-blue-600 dark:text-blue-400">{filters.sensorType}</span>
+              </h2>
+              <KpiCards kpis={kpis} loading={loading.kpis} />
+              <Card className="mt-6">
+                <TimeSeriesChart
+                  data={timeSeriesData}
+                  loading={loading.timeSeries}
+                  sensorType={filters.sensorType}
+                />
+              </Card>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Correlación de Parámetros</h2>
+              <Card>
+                <ParameterCorrelation 
+                  data={correlationData}
+                  loading={loading.correlation}
+                  filters={filters}
+                />
+              </Card>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Resumen de Alertas del Periodo</h2>
+              <AlertsSummaryCharts data={alertsSummary} loading={loading.alerts} />
+            </section>
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full bg-white dark:bg-gray-800 rounded-lg p-8">
+            <Activity className="w-16 h-16 text-blue-500 mb-4" />
+            <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200">Selecciona para comenzar</h3>
+            <p className="text-gray-500 dark:text-gray-400 mt-2 text-center">
+              {user?.role === Role.ADMIN ? 'Por favor, selecciona un usuario y un tanque en el panel de control para iniciar el análisis.' : 'Por favor, selecciona un tanque para iniciar el análisis.'}
+            </p>
+          </div>
+        )}
+      </main>
     </div>
   );
 };
 
-export default Analytics;
+export default AnalyticsPage;

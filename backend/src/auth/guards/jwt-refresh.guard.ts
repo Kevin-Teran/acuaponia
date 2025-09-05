@@ -1,6 +1,6 @@
 /**
  * @file jwt-refresh.guard
- * @route 
+ * @route backend/src/auth/guards
  * @description Un guard que protege la ruta de refresco de token, utilizando la estrategia 'jwt-refresh'.
  * @author Kevin Mariano
  * @version 1.0.0

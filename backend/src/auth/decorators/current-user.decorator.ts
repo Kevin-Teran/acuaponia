@@ -1,6 +1,6 @@
 /**
  * @file current-user.decorator.ts
- * @route 
+ * @route backend/src/auth/decorators
  * @description Decorador para extraer el usuario autenticado del request
  * @author Kevin Mariano
  * @version 1.1.2

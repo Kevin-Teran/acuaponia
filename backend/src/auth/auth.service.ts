@@ -1,6 +1,6 @@
 /**
  * @file auth.service.ts
- * @route 
+ * @route backend/src/auth/
  * @description Lógica de negocio para la autenticación.
  * Versión final y definitiva que garantiza la correcta estructura de la respuesta del login.
  * @author kevin mariano

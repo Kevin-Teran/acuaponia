@@ -1,6 +1,6 @@
 /**
  * @file jwt.strategy.ts
- * @route 
+ * @route backend/src/auth/strategies
  * @description Estrategia de Passport.js para validar tokens de acceso JWT.
  * Se encarga de extraer el token tanto de la cabecera de autorización como de cookies,
  * verificar su firma y extraer el payload del usuario para adjuntarlo a la petición.

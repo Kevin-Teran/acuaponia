@@ -1,6 +1,6 @@
 /**
  * @file jwt-auth.guard.ts
- * @route 
+ * @route backend/src/auth/guards
  * @description Guardián de autenticación que protege las rutas de la aplicación.
  * @author Sistema de Acuaponía SENA
  * @version 1.0.0

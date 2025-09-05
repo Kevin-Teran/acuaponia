@@ -1,6 +1,6 @@
 /**
  * @file roles.guard.ts
- * @route 
+ * @route backend/src/auth/guards
  * @description Un guard que protege rutas, permitiendo el acceso solo a usuarios
  * con los roles especificados en el decorador `@Roles`. Es fundamental para la
  * autorización basada en roles (RBAC).

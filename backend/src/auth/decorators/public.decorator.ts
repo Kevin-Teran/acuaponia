@@ -1,6 +1,6 @@
 /**
  * @file public.decorator.ts
- * @route 
+ * @route backend/src/auth/decorators
  * @description Decorador para marcar rutas como públicas y eximirlas de la autenticación JWT global.
  * @author Kevin Mariano
  * @version 1.0.9

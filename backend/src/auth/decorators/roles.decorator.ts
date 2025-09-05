@@ -1,6 +1,6 @@
 /**
  * @file dashboard-filters.dto.ts
- * @route 
+ * @route backend/src/auth/decorators
  * @description  Asigna los roles permitidos a un endpoint específico. Se usa junto con el RolesGuard para proteger rutas
  * @author Kevin Mariano
  * @version 1.0.0

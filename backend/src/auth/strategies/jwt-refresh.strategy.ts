@@ -1,6 +1,6 @@
 /**
  * @file jwt-refresh.strategy.ts
- * @route 
+ * @route backend/src/auth/strategies
  * @description Extrae el refresh token de la cookie 'refresh_token'.
  * @author Sistema de Acuaponía SENA
  * @version 1.0.0

@@ -1,6 +1,6 @@
 /**
  * @file login.dto.ts
- * @route 
+ * @route backend/src/auth/dto
  * @description
  * Define la estructura de datos y las reglas de validación para el cuerpo (body)
  * de la solicitud de inicio de sesión. Incluye las credenciales del usuario y

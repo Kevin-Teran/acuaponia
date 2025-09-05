@@ -1,6 +1,6 @@
 /**
  * @file auth.controller.ts
- * @route 
+ * @route backend/src/auth/
  * @description
  * Controlador de NestJS que gestiona las rutas de autenticación. Expone los
  * endpoints para el inicio de sesión, cierre de sesión, obtención del perfil

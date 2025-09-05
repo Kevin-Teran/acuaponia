@@ -1,6 +1,6 @@
 /**
  * @file main.ts
- * @route 
+ * @route backend/src
  * @description 
  * @author kevin mariano
  * @version 1.0.0

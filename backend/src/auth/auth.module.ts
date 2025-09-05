@@ -1,6 +1,6 @@
 /**
  * @file dashboard-filters.dto.ts
- * @route 
+ * @route backend/src/auth/
  * @description Módulo para la gestión del auth.
  * @author Kevin Mariano
  * @version 1.0.0
