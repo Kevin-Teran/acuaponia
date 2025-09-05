@@ -8,106 +8,102 @@
  * @copyright SENA 2025
  */
 
-import { useState } from 'react';
-import { Role, SensorType, User } from '@/types';
-import { format, subDays, startOfWeek, startOfMonth, startOfYear } from 'date-fns';
-import { es } from 'date-fns/locale';
+import React from 'react';
+import { Card } from '@/components/common/Card';
+import { SensorType, Role, User, Tank } from '@/types';
 import { SlidersHorizontal } from 'lucide-react';
 
-interface ControlPanelProps {
-  filters: any;
-  setFilters: (filters: any) => void;
-  tanksList: any[];
-  usersList: any[];
+interface AnalyticsControlPanelProps {
+  filters: { tankId: string; sensorType: SensorType; sensorTypeX: SensorType; sensorTypeY: SensorType; startDate: string; endDate: string; };
+  setFilters: React.Dispatch<React.SetStateAction<any>>;
+  tanksList: Tank[];
+  usersList: User[]; // Esta prop ahora recibe la variable `users` de tu hook
   currentUser: User | null;
   selectedUserId: string | null;
-  onUserChange: (userId: string) => void;
+  onUserChange: (userId: string | null) => void;
   isLoading: boolean;
 }
 
-const DatePresetButton = ({ label, isActive, onClick }: any) => (
-  <button onClick={onClick} className={`w-full px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-800 focus:ring-indigo-500 ${isActive ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600'}`}>
-    {label}
-  </button>
-);
+export const AnalyticsControlPanel: React.FC<AnalyticsControlPanelProps> = ({
+  filters, setFilters, tanksList, usersList, currentUser,
+  selectedUserId, onUserChange, isLoading
+}) => {
+  const isAdmin = currentUser?.role === Role.ADMIN;
 
-const FilterSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
-    <div className="border-t border-slate-200 dark:border-slate-700 pt-4 first:border-t-0 first:pt-0">
-        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">{title}</label>
-        {children}
-    </div>
-);
-
-export const AnalyticsControlPanel = ({
-  filters, setFilters, tanksList, usersList, currentUser, selectedUserId, onUserChange, isLoading
-}: ControlPanelProps) => {
-  const [activePreset, setActivePreset] = useState('week');
-
-  const setDateRange = (preset: 'day' | 'week' | 'month' | 'year') => {
-    setActivePreset(preset);
-    const endDate = new Date();
-    let startDate: Date;
-    switch (preset) {
-      case 'week': startDate = startOfWeek(endDate, { locale: es }); break;
-      case 'month': startDate = startOfMonth(endDate); break;
-      case 'year': startDate = startOfYear(endDate); break;
-      default: startDate = subDays(endDate, 0); break;
-    }
-    setFilters(prev => ({ ...prev, startDate: format(startDate, 'yyyy-MM-dd'), endDate: format(endDate, 'yyyy-MM-dd') }));
+  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setFilters((prev: any) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const selectClassName = "w-full rounded-lg border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition disabled:opacity-50 disabled:cursor-not-allowed";
-
+  const handleUserChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    onUserChange(e.target.value === 'ALL' ? null : e.target.value);
+  };
+  
   return (
-    <div className="p-4 bg-white dark:bg-slate-800 rounded-xl shadow-lg space-y-4 h-full">
-      <div className="flex items-center gap-3 pb-3">
-        <SlidersHorizontal className="text-indigo-600 dark:text-indigo-400"/>
-        <h2 className="text-lg font-bold text-slate-900 dark:text-white">Panel de Análisis</h2>
+    <Card className="shadow-lg">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
+        <SlidersHorizontal className="text-green-500" />
+        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Panel de Control</h3>
       </div>
+      <div className="p-4 space-y-4">
+        {isAdmin && (
+          <div>
+            <label htmlFor="user-select" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Usuario</label>
+            <select
+              id="user-select"
+              value={selectedUserId || 'ALL'}
+              onChange={handleUserChange}
+              disabled={isLoading}
+              className="mt-1 block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700 focus:border-green-500 focus:ring-green-500"
+            >
+              <option value="ALL">Seleccione un usuario...</option>
+              {/* Se asegura que `usersList` sea un array antes de mapearlo */}
+              {(usersList || []).map((user) => (
+                <option key={user.id} value={user.id}>{user.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
-      {currentUser?.role === Role.ADMIN && (
-        <FilterSection title="Filtrar por Usuario">
-          <select value={selectedUserId || ''} onChange={(e) => onUserChange(e.target.value)} className={selectClassName} disabled={isLoading}>
-            <option value="">{isLoading ? 'Cargando...' : 'Seleccionar usuario'}</option>
-            {(usersList || []).map((user) => (<option key={user.id} value={user.id}>{user.name}</option>))}
+        {/* El resto de los filtros no necesita cambios */}
+        <div>
+          <label htmlFor="tankId" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tanque</label>
+          <select
+            id="tankId" name="tankId" value={filters.tankId} onChange={handleFilterChange}
+            disabled={isLoading || !selectedUserId || tanksList.length === 0}
+            className="mt-1 block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700 focus:border-green-500 focus:ring-green-500"
+          >
+            <option value="">{tanksList.length === 0 ? 'No hay tanques' : 'Seleccione un tanque...'}</option>
+            {tanksList.map((tank) => ( <option key={tank.id} value={tank.id}>{tank.name}</option> ))}
           </select>
-        </FilterSection>
-      )}
-      
-      <FilterSection title="Seleccionar Tanque">
-        <select value={filters.tankId} onChange={(e) => setFilters(prev => ({...prev, tankId: e.target.value}))} className={selectClassName} disabled={!selectedUserId || isLoading}>
-          <option value="">
-            {isLoading ? 'Cargando...' : (!selectedUserId ? 'Seleccione un usuario' : 'Seleccionar tanque')}
-          </option>
-          {(tanksList || []).map((tank) => (<option key={tank.id} value={tank.id}>{tank.name}</option>))}
-        </select>
-      </FilterSection>
-
-      <FilterSection title="Periodo">
-        <div className="grid grid-cols-2 gap-2">
-            <DatePresetButton label="Hoy" isActive={activePreset === 'day'} onClick={() => setDateRange('day')} />
-            <DatePresetButton label="Semana" isActive={activePreset === 'week'} onClick={() => setDateRange('week')} />
-            <DatePresetButton label="Mes" isActive={activePreset === 'month'} onClick={() => setDateRange('month')} />
-            <DatePresetButton label="Año" isActive={activePreset === 'year'} onClick={() => setDateRange('year')} />
         </div>
-      </FilterSection>
-
-      <FilterSection title="Parámetro Principal">
-        <select value={filters.sensorType} onChange={(e) => setFilters(prev => ({...prev, sensorType: e.target.value}))} className={selectClassName}>
-          {Object.values(SensorType).map((type) => (<option key={type} value={type}>{type}</option>))}
-        </select>
-      </FilterSection>
-
-       <FilterSection title="Correlación (X vs Y)">
-        <div className="flex gap-2">
-            <select value={filters.sensorTypeX} onChange={(e) => setFilters(prev => ({...prev, sensorTypeX: e.target.value}))} className={selectClassName}>
-              {Object.values(SensorType).map((type) => (<option key={`x-${type}`} value={type}>{type}</option>))}
-            </select>
-             <select value={filters.sensorTypeY} onChange={(e) => setFilters(prev => ({...prev, sensorTypeY: e.target.value}))} className={selectClassName}>
-              {Object.values(SensorType).map((type) => (<option key={`y-${type}`} value={type}>{type}</option>))}
+        
+        <div>
+          <label htmlFor="startDate" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fecha de Inicio</label>
+          <input type="date" id="startDate" name="startDate" value={filters.startDate} onChange={handleFilterChange} disabled={isLoading} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700" />
+        </div>
+        <div>
+          <label htmlFor="endDate" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fecha de Fin</label>
+          <input type="date" id="endDate" name="endDate" value={filters.endDate} onChange={handleFilterChange} disabled={isLoading} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700" />
+        </div>
+        <hr className="border-slate-200 dark:border-slate-700" />
+        <div>
+            <label htmlFor="sensorType" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Parámetro Principal</label>
+            <select id="sensorType" name="sensorType" value={filters.sensorType} onChange={handleFilterChange} disabled={isLoading} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700 focus:border-green-500 focus:ring-green-500">
+              {Object.values(SensorType).map((type) => (<option key={type} value={type}>{type}</option>))}
             </select>
         </div>
-      </FilterSection>
-    </div>
+        <div className="space-y-2">
+            <p className="block text-sm font-medium text-slate-700 dark:text-slate-300">Correlación</p>
+            <div className="flex gap-2">
+                <select name="sensorTypeX" value={filters.sensorTypeX} onChange={handleFilterChange} disabled={isLoading} className="block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700" aria-label="Eje X">
+                  {Object.values(SensorType).map((type) => (<option key={`x-${type}`} value={type}>{type}</option>))}
+                </select>
+                <select name="sensorTypeY" value={filters.sensorTypeY} onChange={handleFilterChange} disabled={isLoading} className="block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700" aria-label="Eje Y">
+                  {Object.values(SensorType).map((type) => (<option key={`y-${type}`} value={type}>{type}</option>))}
+                </select>
+            </div>
+        </div>
+      </div>
+    </Card>
   );
 };
