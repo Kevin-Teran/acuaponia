@@ -7,26 +7,74 @@
  * @since 1.0.0
  * @copyright SENA 2025
  */
-import { IsEnum, IsNotEmpty } from 'class-validator';
-import { SensorType } from '@prisma/client';
-import { AnalyticsFiltersDto } from './analytics-filters.dto';
 
-export class CorrelationFiltersDto extends AnalyticsFiltersDto {
+import { IsEnum, IsNotEmpty, IsOptional, IsString, IsDateString } from 'class-validator';
+import { SensorType } from '@prisma/client';
+
+export class CorrelationFiltersDto {
+  /**
+   * @description ID del usuario (opcional, solo para administradores).
+   * @example 'clx...'
+   */
+  @IsOptional()
+  @IsString()
+  userId?: string;
+
+  /**
+   * @description ID del tanque (opcional).
+   * @example 'clx...'
+   */
+  @IsOptional()
+  @IsString()
+  tankId?: string;
+
+  /**
+   * @description ID del sensor específico (opcional).
+   * @example 'clx...'
+   */
+  @IsOptional()
+  @IsString()
+  sensorId?: string;
+
+  /**
+   * @description Rango de tiempo para la consulta (día, semana, mes, año).
+   * @example 'week'
+   */
+  @IsOptional()
+  @IsString()
+  range?: string;
+
+  /**
+   * @description Fecha de inicio para el rango de la consulta.
+   * @example '2025-01-01T00:00:00.000Z'
+   */
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  /**
+   * @description Fecha de fin para el rango de la consulta.
+   * @example '2025-01-31T23:59:59.999Z'
+   */
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
   /**
    * @description Tipo de sensor para el eje X.
    * @enum {SensorType}
    * @example SensorType.TEMPERATURE
    */
-  @IsNotEmpty()
+  @IsOptional()
   @IsEnum(SensorType)
-  sensorTypeX: SensorType;
+  sensorTypeX?: SensorType;
 
   /**
    * @description Tipo de sensor para el eje Y.
    * @enum {SensorType}
    * @example SensorType.PH
    */
-  @IsNotEmpty()
+  @IsOptional()
   @IsEnum(SensorType)
-  sensorTypeY: SensorType;
+  sensorTypeY?: SensorType;
 }

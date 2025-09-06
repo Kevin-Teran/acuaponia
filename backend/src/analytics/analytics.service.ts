@@ -21,6 +21,12 @@ export class AnalyticsService {
 
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * @method getDataDateRange
+   * @description Obtiene el rango de fechas de los datos para un usuario específico.
+   * @param {string} userId - ID del usuario
+   * @returns {Promise<{firstDataPoint: Date | null, lastDataPoint: Date | null}>}
+   */
   async getDataDateRange(userId: string) {
     const aggregations = await this.prisma.sensorData.aggregate({
       where: { sensor: { tank: { userId } } },
@@ -33,6 +39,13 @@ export class AnalyticsService {
     };
   }
 
+  /**
+   * @method getKpis
+   * @description Obtiene las métricas KPI basadas en los filtros proporcionados.
+   * @param {AnalyticsFiltersDto} filters - Filtros de consulta
+   * @param {User} user - Usuario que realiza la consulta
+   * @returns {Promise<{average: number, max: number, min: number, count: number, stdDev: number}>}
+   */
   async getKpis(filters: AnalyticsFiltersDto, user: User) {
     const where = this.buildWhereClause(filters, user);
 
@@ -55,6 +68,13 @@ export class AnalyticsService {
     };
   }
 
+  /**
+   * @method getTimeSeries
+   * @description Obtiene datos de series temporales basados en los filtros.
+   * @param {AnalyticsFiltersDto} filters - Filtros de consulta
+   * @param {User} user - Usuario que realiza la consulta
+   * @returns {Promise<Array>}
+   */
   async getTimeSeries(filters: AnalyticsFiltersDto, user: User) {
     const where = this.buildWhereClause(filters, user);
     return this.prisma.sensorData.findMany({
@@ -64,6 +84,13 @@ export class AnalyticsService {
     });
   }
 
+  /**
+   * @method getAlertsSummary
+   * @description Obtiene un resumen de alertas agrupadas por tipo y severidad.
+   * @param {AnalyticsFiltersDto} filters - Filtros de consulta
+   * @param {User} user - Usuario que realiza la consulta
+   * @returns {Promise<{alertsByType: Array, alertsBySeverity: Array}>}
+   */
   async getAlertsSummary(filters: AnalyticsFiltersDto, user: User) {
     const targetUserId = this.resolveTargetUserId(filters.userId, user);
     const dateFilter = this.getDateFilter(filters.range);
@@ -83,6 +110,14 @@ export class AnalyticsService {
     return { alertsByType, alertsBySeverity };
   }
 
+  /**
+   * @method buildWhereClause
+   * @description Construye la cláusula WHERE para las consultas de Prisma.
+   * @private
+   * @param {AnalyticsFiltersDto} filters - Filtros de consulta
+   * @param {User} user - Usuario que realiza la consulta
+   * @returns {Prisma.SensorDataWhereInput}
+   */
   private buildWhereClause(
     filters: AnalyticsFiltersDto,
     user: User,
@@ -104,6 +139,13 @@ export class AnalyticsService {
     return whereClause;
   }
 
+  /**
+   * @method getDateFilter
+   * @description Genera el filtro de fechas basado en el rango especificado.
+   * @private
+   * @param {string} range - Rango de tiempo (day, week, month, year)
+   * @returns {{ gte: Date; lte: Date }}
+   */
   private getDateFilter(range?: string): { gte: Date; lte: Date } {
     const now = new Date();
     switch (range) {
@@ -114,6 +156,14 @@ export class AnalyticsService {
     }
   }
 
+  /**
+   * @method resolveTargetUserId
+   * @description Resuelve el ID del usuario objetivo basado en permisos.
+   * @private
+   * @param {string | undefined} requestedUserId - ID del usuario solicitado
+   * @param {User} currentUser - Usuario actual
+   * @returns {string}
+   */
   private resolveTargetUserId(requestedUserId: string | undefined, currentUser: User): string {
     if (currentUser.role === Role.ADMIN && requestedUserId) {
       return requestedUserId;
@@ -121,6 +171,13 @@ export class AnalyticsService {
     return currentUser.id;
   }
 
+  /**
+   * @method calculateVariance
+   * @description Calcula la varianza de los datos que coinciden con la consulta WHERE.
+   * @private
+   * @param {Prisma.SensorDataWhereInput} where - Cláusula WHERE
+   * @returns {Promise<number>}
+   */
   private async calculateVariance(where: Prisma.SensorDataWhereInput): Promise<number> {
     const data = await this.prisma.sensorData.findMany({ where });
     if (data.length < 2) return 0;
@@ -129,14 +186,23 @@ export class AnalyticsService {
     return variance;
   }
   
-   async getCorrelations(filters: CorrelationFiltersDto, user: User) {
+  /**
+   * @method getCorrelations
+   * @description Obtiene datos de correlación entre dos tipos de sensores.
+   * @param {CorrelationFiltersDto} filters - Filtros de correlación
+   * @param {User} user - Usuario que realiza la consulta
+   * @returns {Promise<Array<{x: number, y: number}>>}
+   */
+  async getCorrelations(filters: CorrelationFiltersDto, user: User) {
     const targetUserId = this.resolveTargetUserId(filters.userId, user);
     const dateFilter = this.getDateFilter(filters.range);
     const { tankId, sensorId, sensorTypeX, sensorTypeY } = filters;
 
-    const whereBase: Prisma.SensorDataWhereInput = {
+    // Consulta para datos del sensor X
+    const whereX: Prisma.SensorDataWhereInput = {
       timestamp: dateFilter,
       sensor: {
+        type: sensorTypeX,
         tank: {
           userId: targetUserId,
           ...(tankId && tankId !== 'ALL' && { id: tankId }),
@@ -145,18 +211,33 @@ export class AnalyticsService {
       },
     };
 
+    // Consulta para datos del sensor Y
+    const whereY: Prisma.SensorDataWhereInput = {
+      timestamp: dateFilter,
+      sensor: {
+        type: sensorTypeY,
+        tank: {
+          userId: targetUserId,
+          ...(tankId && tankId !== 'ALL' && { id: tankId }),
+        },
+        ...(sensorId && sensorId !== 'ALL' && { id: sensorId }),
+      },
+    };
+
+    // Ejecutar consultas por separado
     const dataX = await this.prisma.sensorData.findMany({
-      where: { ...whereBase, sensor: { ...whereBase.sensor, type: sensorTypeX } },
+      where: whereX,
       orderBy: { timestamp: 'asc' },
       select: { value: true, timestamp: true },
     });
 
     const dataY = await this.prisma.sensorData.findMany({
-      where: { ...whereBase, sensor: { ...whereBase.sensor, type: sensorTypeY } },
+      where: whereY,
       orderBy: { timestamp: 'asc' },
       select: { value: true, timestamp: true },
     });
 
+    // Mapeo y correlación de datos por timestamp
     const yMap = new Map(dataY.map((d) => [d.timestamp.toISOString(), d.value]));
     const correlationData = dataX
       .map((dx) => {

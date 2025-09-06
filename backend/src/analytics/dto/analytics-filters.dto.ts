@@ -7,6 +7,7 @@
  * @since 1.0.0
  * @copyright SENA 2025
  */
+
 import { IsOptional, IsString, IsDateString, IsEnum } from 'class-validator';
 import { SensorType } from '@prisma/client';
 
@@ -28,6 +29,14 @@ export class AnalyticsFiltersDto {
   tankId?: string;
 
   /**
+   * @description ID del sensor específico (opcional).
+   * @example 'clx...'
+   */
+  @IsOptional()
+  @IsString()
+  sensorId?: string;
+
+  /**
    * @description Tipo de sensor (opcional).
    * @enum {SensorType}
    * @example SensorType.TEMPERATURE
@@ -37,16 +46,26 @@ export class AnalyticsFiltersDto {
   sensorType?: SensorType;
 
   /**
+   * @description Rango de tiempo para la consulta (día, semana, mes, año).
+   * @example 'week'
+   */
+  @IsOptional()
+  @IsString()
+  range?: string;
+
+  /**
    * @description Fecha de inicio para el rango de la consulta.
    * @example '2025-01-01T00:00:00.000Z'
    */
+  @IsOptional()
   @IsDateString()
-  startDate: string;
+  startDate?: string;
 
   /**
    * @description Fecha de fin para el rango de la consulta.
    * @example '2025-01-31T23:59:59.999Z'
    */
+  @IsOptional()
   @IsDateString()
-  endDate: string;
+  endDate?: string;
 }
