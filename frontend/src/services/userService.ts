@@ -8,7 +8,7 @@
  */
 
 import api from '../config/api';
-import { User, UserFromApi } from '../types'; // Se importa UserFromApi para mayor precisión
+import { User, UserFromApi } from '../types'; 
 
 /**
  * @typedef {Omit<UserFromApi, 'id' | 'createdAt' | 'updatedAt' | 'lastLogin' | '_count' | 'tanks'> & { password?: string }} CreateUserInput

@@ -22,6 +22,7 @@
      * @description Asegura que las importaciones con 'import' se usen consistentemente.
      */
     "forceConsistentCasingInFileNames": true,
+
     /* =================== CONFIGURACIÓN DEL ENTORNO Y MÓDULOS =================== */
     /**
      * @description Especifica la versión de ECMAScript a la que se compilará el código. 'ESNext' es la más reciente.
@@ -40,9 +41,9 @@
      */
     "module": "esnext",
     /**
-     * @description Estrategia de resolución de módulos. 'bundler' es la recomendada para herramientas como Webpack o Turbopack.
+     * @description Estrategia de resolución de módulos. Debe ser 'node' para soportar resolveJsonModule.
      */
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
     /**
      * @description Permite la interoperabilidad entre módulos CommonJS y ES Modules.
      */
@@ -55,6 +56,7 @@
      * @description No reporta errores en código inalcanzable.
      */
     "allowUnreachableCode": false,
+
     /* =================== CONFIGURACIÓN DE NEXT.JS Y REACT =================== */
     /**
      * @description Especifica cómo se maneja JSX. 'preserve' mantiene el JSX para que Next.js lo transforme.
@@ -76,6 +78,7 @@
      * @description Incrementa la velocidad de compilación.
      */
     "incremental": true,
+
     /* =================== ALIAS DE RUTA (PARA IMPORTACIONES LIMPIAS) =================== */
     /**
      * @description Define el directorio base para resolver rutas no relativas.
@@ -89,6 +92,7 @@
         "./src/*"
       ]
     },
+
     /* =================== PLUGINS Y OTRAS CONFIGURACIONES =================== */
     /**
      * @description Añade plugins para mejorar la experiencia con el editor de código.
