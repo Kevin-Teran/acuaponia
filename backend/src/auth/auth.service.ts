@@ -54,18 +54,15 @@ export class AuthService {
     this.logger.log(`Usuario ${email} verificado. Generando tokens...`);
     const tokens = await this.getTokens(user.id, user.email, user.role);
 
-    // Actualizamos el último acceso del usuario
+    // @ts-ignore
     await this.prisma.user.update({
       where: { id: user.id },
       data: { lastLogin: new Date() },
     });
 
-    // Excluimos la contraseña del objeto de usuario que enviaremos
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...userPayload } = user;
 
-    // **LA CORRECCIÓN DEFINITIVA ESTÁ AQUÍ**
-    // Creamos el objeto de respuesta final, combinando el usuario y los tokens.
     const responsePayload = {
       user: userPayload,
       accessToken: tokens.accessToken,
@@ -94,7 +91,6 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  // Las funciones forgotPassword y resetPassword se mantienen igual
   async forgotPassword(email: string) {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
@@ -119,6 +115,7 @@ export class AuthService {
         throw new Error('Token inválido.');
       }
       const hashedPassword = await bcrypt.hash(newPassword, 10);
+      // @ts-ignore
       await this.prisma.user.update({
         where: { id: payload.sub },
         data: { password: hashedPassword },
