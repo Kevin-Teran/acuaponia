@@ -105,8 +105,8 @@
   "include": [
     "src/**/*",
     "types",           
-    "prisma/**/*"    
-  ],
+    "prisma/**/*"
+   ],
   /**
    * @description Especifica los archivos y directorios que serán excluidos de la compilación.
    */
