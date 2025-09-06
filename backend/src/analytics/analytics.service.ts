@@ -1,19 +1,19 @@
 /**
  * @file analytics.service.ts
  * @route backend/src/analytics/
- * @description Servicio para la lógica de negocio de analíticas avanzadas.
+ * @description Servicio para la lógica de negocio de analíticas avanzadas - VERSIÓN CORREGIDA.
  * @author kevin mariano
- * @version 1.0.0
+ * @version 2.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AnalyticsFiltersDto } from './dto/analytics-filters.dto';
 import { User, Role, Prisma, SensorType } from '@prisma/client';
 import { CorrelationFiltersDto } from './dto/correlation-filters.dto';
-import { subDays, startOfDay, endOfDay, subMonths, subYears } from 'date-fns';
+import { subDays, startOfDay, endOfDay, subMonths, subYears, parseISO, isValid } from 'date-fns';
 
 @Injectable()
 export class AnalyticsService {
@@ -28,16 +28,25 @@ export class AnalyticsService {
    * @returns {Promise<{firstDataPoint: Date | null, lastDataPoint: Date | null}>}
    */
   async getDataDateRange(userId: string) {
-    // @ts-ignore
-    const aggregations = await this.prisma.sensorData.aggregate({
-      where: { sensor: { tank: { userId } } },
-      _min: { timestamp: true },
-      _max: { timestamp: true },
-    });
-    return {
-      firstDataPoint: aggregations._min.timestamp,
-      lastDataPoint: aggregations._max.timestamp,
-    };
+    try {    
+      // @ts-ignore
+      const aggregations = await this.prisma.sensorData.aggregate({
+        where: { sensor: { tank: { userId } } },
+        _min: { timestamp: true },
+        _max: { timestamp: true },
+      });
+
+      return {
+        firstDataPoint: aggregations._min.timestamp,
+        lastDataPoint: aggregations._max.timestamp,
+      };
+    } catch (error) {
+      this.logger.error(`Error obteniendo rango de fechas para usuario ${userId}:`, error);
+      return {
+        firstDataPoint: null,
+        lastDataPoint: null,
+      };
+    }
   }
 
   /**
@@ -48,25 +57,40 @@ export class AnalyticsService {
    * @returns {Promise<{average: number, max: number, min: number, count: number, stdDev: number}>}
    */
   async getKpis(filters: AnalyticsFiltersDto, user: User) {
-    const where = this.buildWhereClause(filters, user);
-    // @ts-ignore
-    const aggregations = await this.prisma.sensorData.aggregate({
-      where,
-      _avg: { value: true },
-      _max: { value: true },
-      _min: { value: true },
-      _count: { value: true },
-    });
+    try {
+      const where = this.buildWhereClause(filters, user);
+      // @ts-ignore
+      const aggregations = await this.prisma.sensorData.aggregate({
+        where,
+        _avg: { value: true },
+        _max: { value: true },
+        _min: { value: true },
+        _count: { value: true },
+      });
 
-    const variance = await this.calculateVariance(where);
+      if (!aggregations._count.value) {
+        return {
+          average: null,
+          max: null,
+          min: null,
+          count: 0,
+          stdDev: null,
+        };
+      }
 
-    return {
-      average: aggregations._avg.value,
-      max: aggregations._max.value,
-      min: aggregations._min.value,
-      count: aggregations._count.value,
-      stdDev: Math.sqrt(variance),
-    };
+      const variance = await this.calculateVariance(where);
+
+      return {
+        average: aggregations._avg.value,
+        max: aggregations._max.value,
+        min: aggregations._min.value,
+        count: aggregations._count.value,
+        stdDev: variance > 0 ? Math.sqrt(variance) : 0,
+      };
+    } catch (error) {
+      this.logger.error('Error obteniendo KPIs:', error);
+      throw new BadRequestException('Error al obtener las métricas KPI');
+    }
   }
 
   /**
@@ -77,13 +101,27 @@ export class AnalyticsService {
    * @returns {Promise<Array>}
    */
   async getTimeSeries(filters: AnalyticsFiltersDto, user: User) {
-    const where = this.buildWhereClause(filters, user);
-    // @ts-ignore
-    return this.prisma.sensorData.findMany({
-      where,
-      orderBy: { timestamp: 'asc' },
-      select: { timestamp: true, value: true, sensor: { select: { name: true, type: true } } },
-    });
+    try {
+      const where = this.buildWhereClause(filters, user);
+      // @ts-ignore
+      const data = await this.prisma.sensorData.findMany({
+        where,
+        orderBy: { timestamp: 'asc' },
+        select: { 
+          timestamp: true, 
+          value: true, 
+          sensor: { 
+            select: { name: true, type: true } 
+          } 
+        },
+        take: 1000, 
+      });
+
+      return data;
+    } catch (error) {
+      this.logger.error('Error obteniendo series temporales:', error);
+      throw new BadRequestException('Error al obtener los datos de series temporales');
+    }
   }
 
   /**
@@ -94,22 +132,139 @@ export class AnalyticsService {
    * @returns {Promise<{alertsByType: Array, alertsBySeverity: Array}>}
    */
   async getAlertsSummary(filters: AnalyticsFiltersDto, user: User) {
-    const targetUserId = this.resolveTargetUserId(filters.userId, user);
-    const dateFilter = this.getDateFilter(filters.range);
-    // @ts-ignore
-    const alertsByType = await this.prisma.alert.groupBy({
-      by: ['type'],
-      where: { userId: targetUserId, createdAt: dateFilter },
-      _count: { type: true },
-    });
-    // @ts-ignore
-    const alertsBySeverity = await this.prisma.alert.groupBy({
-      by: ['severity'],
-      where: { userId: targetUserId, createdAt: dateFilter },
-      _count: { severity: true },
-    });
+    try {
+      const targetUserId = this.resolveTargetUserId(filters.userId, user);
+      const dateFilter = this.getDateFilter(filters.range, filters.startDate, filters.endDate);
 
-    return { alertsByType, alertsBySeverity };
+      const [alertsByType, alertsBySeverity] = await Promise.all([
+        // @ts-ignore
+        this.prisma.alert.groupBy({
+          by: ['type'],
+          where: { userId: targetUserId, createdAt: dateFilter },
+          _count: { type: true },
+        }).catch(error => {
+          this.logger.warn('Error obteniendo alertas por tipo:', error);
+          return [];
+        }),
+        // @ts-ignore
+        this.prisma.alert.groupBy({
+          by: ['severity'],
+          where: { userId: targetUserId, createdAt: dateFilter },
+          _count: { severity: true },
+        }).catch(error => {
+          this.logger.warn('Error obteniendo alertas por severidad:', error);
+          return [];
+        })
+      ]);
+
+      return { alertsByType, alertsBySeverity };
+    } catch (error) {
+      this.logger.error('Error obteniendo resumen de alertas:', error);
+      return { alertsByType: [], alertsBySeverity: [] };
+    }
+  }
+
+  /**
+   * @method getCorrelations
+   * @description Obtiene datos de correlación entre dos tipos de sensores.
+   * @param {CorrelationFiltersDto} filters - Filtros de correlación
+   * @param {User} user - Usuario que realiza la consulta
+   * @returns {Promise<Array<{x: number, y: number}>>}
+   */
+  async getCorrelations(filters: CorrelationFiltersDto, user: User) {
+    try {
+      this.logger.log('Procesando correlaciones con filtros:', JSON.stringify(filters));
+
+      const sensorTypeX = filters.sensorTypeX || SensorType.TEMPERATURE;
+      const sensorTypeY = filters.sensorTypeY || SensorType.PH;
+
+      if (!Object.values(SensorType).includes(sensorTypeX)) {
+        throw new BadRequestException(`Tipo de sensor X inválido: ${sensorTypeX}`);
+      }
+
+      if (!Object.values(SensorType).includes(sensorTypeY)) {
+        throw new BadRequestException(`Tipo de sensor Y inválido: ${sensorTypeY}`);
+      }
+
+      if (sensorTypeX === sensorTypeY) {
+        throw new BadRequestException('Los tipos de sensor X e Y deben ser diferentes para la correlación');
+      }
+
+      const targetUserId = this.resolveTargetUserId(filters.userId, user);
+      const dateFilter = this.getDateFilter(filters.range, filters.startDate, filters.endDate);
+      const { tankId, sensorId } = filters;
+
+      const baseWhere = {
+        timestamp: dateFilter,
+        sensor: {
+          tank: {
+            userId: targetUserId,
+            ...(tankId && tankId !== 'ALL' && { id: tankId }),
+          },
+          ...(sensorId && sensorId !== 'ALL' && { id: sensorId }),
+        },
+      };
+
+      const whereX: Prisma.SensorDataWhereInput = {
+        ...baseWhere,
+        sensor: {
+          ...baseWhere.sensor,
+          type: sensorTypeX,
+        },
+      };
+
+      const whereY: Prisma.SensorDataWhereInput = {
+        ...baseWhere,
+        sensor: {
+          ...baseWhere.sensor,
+          type: sensorTypeY,
+        },
+      };
+
+      const [dataX, dataY] = await Promise.all([
+        // @ts-ignore
+        this.prisma.sensorData.findMany({
+          where: whereX,
+          orderBy: { timestamp: 'asc' },
+          select: { value: true, timestamp: true },
+          take: 500,
+        }),
+        // @ts-ignore
+        this.prisma.sensorData.findMany({
+          where: whereY,
+          orderBy: { timestamp: 'asc' },
+          select: { value: true, timestamp: true },
+          take: 500, 
+        })
+      ]);
+
+      this.logger.log(`Datos obtenidos - X: ${dataX.length}, Y: ${dataY.length}`);
+
+      if (dataX.length === 0 || dataY.length === 0) {
+        this.logger.warn('No se encontraron datos suficientes para la correlación');
+        return [];
+      }
+
+      const yMap = new Map(dataY.map((d) => [this.normalizeTimestamp(d.timestamp), d.value]));
+      const correlationData = dataX
+        .map((dx) => {
+          const normalizedTime = this.normalizeTimestamp(dx.timestamp);
+          const yValue = yMap.get(normalizedTime);
+          return yValue !== undefined ? { x: dx.value, y: yValue } : null;
+        })
+        .filter((item): item is { x: number; y: number } => item !== null);
+
+      this.logger.log(`Puntos de correlación generados: ${correlationData.length}`);
+
+      return correlationData;
+
+    } catch (error) {
+      this.logger.error('Error obteniendo correlaciones:', error);
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException('Error al obtener los datos de correlación');
+    }
   }
 
   /**
@@ -125,7 +280,7 @@ export class AnalyticsService {
     user: User,
   ): Prisma.SensorDataWhereInput {
     const targetUserId = this.resolveTargetUserId(filters.userId, user);
-    const dateFilter = this.getDateFilter(filters.range);
+    const dateFilter = this.getDateFilter(filters.range, filters.startDate, filters.endDate);
 
     const whereClause: Prisma.SensorDataWhereInput = {
       timestamp: dateFilter,
@@ -143,18 +298,30 @@ export class AnalyticsService {
 
   /**
    * @method getDateFilter
-   * @description Genera el filtro de fechas basado en el rango especificado.
+   * @description Genera el filtro de fechas basado en el rango especificado o fechas custom.
    * @private
    * @param {string} range - Rango de tiempo (day, week, month, year)
+   * @param {string} startDate - Fecha de inicio custom (opcional)
+   * @param {string} endDate - Fecha de fin custom (opcional)
    * @returns {{ gte: Date; lte: Date }}
    */
-  private getDateFilter(range?: string): { gte: Date; lte: Date } {
+  private getDateFilter(range?: string, startDate?: string, endDate?: string): { gte: Date; lte: Date } {
+    if (startDate && endDate) {
+      const start = parseISO(startDate);
+      const end = parseISO(endDate);
+      
+      if (isValid(start) && isValid(end)) {
+        return { gte: start, lte: end };
+      }
+    }
+
     const now = new Date();
     switch (range) {
       case 'day': return { gte: startOfDay(now), lte: endOfDay(now) };
       case 'month': return { gte: subMonths(now, 1), lte: now };
       case 'year': return { gte: subYears(now, 1), lte: now };
-      case 'week': default: return { gte: subDays(now, 7), lte: now };
+      case 'week': 
+      default: return { gte: subDays(now, 7), lte: now };
     }
   }
 
@@ -181,93 +348,37 @@ export class AnalyticsService {
    * @returns {Promise<number>}
    */
   private async calculateVariance(where: Prisma.SensorDataWhereInput): Promise<number> {
-    // @ts-ignore
-    const data = await this.prisma.sensorData.findMany({ where });
-    if (data.length < 2) return 0;
-    const mean = data.reduce((acc, curr) => acc + curr.value, 0) / data.length;
-    const variance = data.reduce((acc, curr) => acc + Math.pow(curr.value - mean, 2), 0) / (data.length - 1);
-    return variance;
-  }
-  
-  /**
-   * @method getCorrelations
-   * @description Obtiene datos de correlación entre dos tipos de sensores.
-   * @param {CorrelationFiltersDto} filters - Filtros de correlación
-   * @param {User} user - Usuario que realiza la consulta
-   * @returns {Promise<Array<{x: number, y: number}>>}
-   */
-  async getCorrelations(filters: CorrelationFiltersDto, user: User) {
-    const targetUserId = this.resolveTargetUserId(filters.userId, user);
-    const dateFilter = this.getDateFilter(filters.range);
-    
-    // Valores por defecto para los tipos de sensor si no se proporcionan
-    const sensorTypeX = filters.sensorTypeX || SensorType.TEMPERATURE;
-    const sensorTypeY = filters.sensorTypeY || SensorType.PH;
-    
-    const { tankId, sensorId } = filters;
-
-    // Validar que los tipos de sensor sean diferentes
-    if (sensorTypeX === sensorTypeY) {
-      this.logger.warn('Los tipos de sensor X e Y son iguales, no se puede realizar correlación');
-      return [];
-    }
-
-    // Consulta para datos del sensor X
-    const whereX: Prisma.SensorDataWhereInput = {
-      timestamp: dateFilter,
-      sensor: {
-        type: sensorTypeX,
-        tank: {
-          userId: targetUserId,
-          ...(tankId && tankId !== 'ALL' && { id: tankId }),
-        },
-        ...(sensorId && sensorId !== 'ALL' && { id: sensorId }),
-      },
-    };
-
-    // Consulta para datos del sensor Y
-    const whereY: Prisma.SensorDataWhereInput = {
-      timestamp: dateFilter,
-      sensor: {
-        type: sensorTypeY,
-        tank: {
-          userId: targetUserId,
-          ...(tankId && tankId !== 'ALL' && { id: tankId }),
-        },
-        ...(sensorId && sensorId !== 'ALL' && { id: sensorId }),
-      },
-    };
-
     try {
       // @ts-ignore
-      const dataX = await this.prisma.sensorData.findMany({
-        where: whereX,
-        orderBy: { timestamp: 'asc' },
-        select: { value: true, timestamp: true },
-      });
-      // @ts-ignore
-      const dataY = await this.prisma.sensorData.findMany({
-        where: whereY,
-        orderBy: { timestamp: 'asc' },
-        select: { value: true, timestamp: true },
+      const data = await this.prisma.sensorData.findMany({ 
+        where,
+        select: { value: true },
+        take: 1000, 
       });
 
-      this.logger.debug(`Datos encontrados - X: ${dataX.length}, Y: ${dataY.length}`);
-
-      const yMap = new Map(dataY.map((d) => [d.timestamp.toISOString(), d.value]));
-      const correlationData = dataX
-        .map((dx) => {
-          const yValue = yMap.get(dx.timestamp.toISOString());
-          return yValue !== undefined ? { x: dx.value, y: yValue } : null;
-        })
-        .filter((item): item is { x: number; y: number } => item !== null);
-
-      this.logger.debug(`Puntos de correlación generados: ${correlationData.length}`);
-      return correlationData;
-
+      if (data.length < 2) return 0;
+      
+      const values = data.map(d => d.value);
+      const mean = values.reduce((acc, curr) => acc + curr, 0) / values.length;
+      const variance = values.reduce((acc, curr) => acc + Math.pow(curr - mean, 2), 0) / (values.length - 1);
+      
+      return variance;
     } catch (error) {
-      this.logger.error('Error al obtener datos de correlación:', error);
-      return [];
+      this.logger.error('Error calculando varianza:', error);
+      return 0;
     }
+  }
+
+  /**
+   * @method normalizeTimestamp
+   * @description Normaliza timestamps para permitir correlación con tolerancia de tiempo.
+   * @private
+   * @param {Date} timestamp - Timestamp a normalizar
+   * @returns {string} Timestamp normalizado a minutos
+   */
+  private normalizeTimestamp(timestamp: Date): string {
+    const normalized = new Date(timestamp);
+    normalized.setSeconds(0, 0); 
+    return normalized.toISOString();
   }
 }
