@@ -2,7 +2,7 @@
  * @file LineChart.tsx
  * @route frontend/src/components/dashboard/
  * @description Componente de gráfico de líneas reutilizable con puntos interactivos al pasar el ratón.
- * @author Kevin Mariano (con mejoras de IA)
+ * @author Kevin Mariano 
  * @version 3.4.0
  * @since 1.0.0
  * @copyright SENA 2025

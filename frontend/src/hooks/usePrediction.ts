@@ -1,5 +1,5 @@
 /**
- * @file useMediaQuery.ts
+ * @file usePrediction.ts
  * @route frontend/src/hooks
  * @description 
  * @author Kevin Mariano
@@ -12,7 +12,7 @@
 
 import { useState, useEffect } from 'react';
 
-export function useMediaQuery(query: string) {
+export function usePrediction(query: string) {
   const [matches, setMatches] = useState(false);
 
   useEffect(() => {
