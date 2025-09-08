@@ -13,8 +13,8 @@ import axios from "axios";
 
 export interface DashboardFilters {
   tankId: string;
-  startDate: string; // YYYY-MM-DD
-  endDate: string;   // YYYY-MM-DD
+  startDate: string; 
+  endDate: string;   
 }
 
 export interface SensorDataPoint {
@@ -51,7 +51,6 @@ export const fetchDashboardData = async (filters: DashboardFilters): Promise<Das
     const response = await axios.get<DashboardData>("/api/dashboard", { params: filters });
     const data = response.data;
 
-    // Asegurar que timeSeries siempre sea un array
     if (!data.timeSeries) data.timeSeries = [];
 
     console.log("✅ Dashboard data received:", data);

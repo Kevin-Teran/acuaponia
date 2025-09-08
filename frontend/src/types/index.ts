@@ -1,11 +1,13 @@
 /**
  * @file index.ts
+ * @route frontend/src/types
  * @description Archivo central para la definición de tipos y enumeraciones de TypeScript
  * utilizados en toda la aplicación frontend. Proporciona tipado estático robusto
  * para mejorar la experiencia de desarrollo y prevenir errores en tiempo de ejecución.
  * @author kevin mariano
- * @version 4.0.0
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 /**
@@ -583,4 +585,105 @@ export interface DashboardData {
   latestData: LatestData | null;
   summary: SummaryData;
   timeSeries: TimePoint[];
+}
+
+/**
+ * @typedef {object} AnalyticsFilters
+ * @description Define la estructura de los filtros utilizados en las consultas de analíticas.
+ * Corresponde al DTO 'AnalyticsFiltersDto' del backend.
+ */
+ export interface AnalyticsFilters {
+  userId?: string;
+  tankId?: string;
+  sensorId?: string;
+  sensorType?: SensorType;
+  range?: 'day' | 'week' | 'month' | 'year' | 'custom';
+  startDate?: string;
+  endDate?: string;
+}
+
+/**
+ * @typedef {object} CorrelationFilters
+ * @description Define la estructura de los filtros para la consulta de correlación.
+ * Corresponde al DTO 'CorrelationFiltersDto' del backend.
+ */
+export interface CorrelationFilters {
+  userId?: string;
+  tankId?: string;
+  sensorId?: string;
+  range?: 'day' | 'week' | 'month' | 'year' | 'custom';
+  startDate?: string;
+  endDate?: string;
+  sensorTypeX: SensorType;
+  sensorTypeY: SensorType;
+}
+
+/**
+ * @typedef {object} KpiData
+ * @description Estructura de los datos de KPI que devuelve el backend.
+ */
+export interface KpiData {
+  average: number | null;
+  max: number | null;
+  min: number | null;
+  count: number;
+  stdDev: number | null;
+}
+
+/**
+ * @typedef {object} TimeSeriesData
+ * @description Estructura de un punto de dato para las series temporales de analíticas.
+ */
+export interface TimeSeriesData {
+  timestamp: string;
+  value: number;
+  sensor: {
+    name: string;
+    type: SensorType;
+  };
+}
+
+/**
+ * @typedef {object} AlertsSummaryData
+ * @description Estructura del resumen de alertas que devuelve el backend.
+ */
+export interface AlertsSummaryData {
+  alertsByType: Array<{ type: string; _count: { type: number } }>;
+  alertsBySeverity: Array<{ severity: string; _count: { severity: number } }>;
+}
+
+/**
+ * @typedef {object} CorrelationDataPoint
+ * @description Estructura de un punto de dato para el gráfico de correlación.
+ */
+export interface CorrelationDataPoint {
+  x: number;
+  y: number;
+}
+
+/**
+ * @typedef {object} DataDateRange
+ * @description Estructura para el rango de fechas de datos de un usuario.
+ */
+ export interface DataDateRange {
+  firstDataPoint: string | null;
+  lastDataPoint: string | null;
+}
+
+
+/**
+ * @typedef {object} Kpi
+ * @description Estructura para las métricas KPI de analíticas.
+ * @property {number | null} average - Valor promedio
+ * @property {number | null} max - Valor máximo
+ * @property {number | null} min - Valor mínimo
+ * @property {number} count - Cantidad de registros
+ * @property {number | null} stdDev - Desviación estándar
+ */
+ export interface Kpi {
+  average: number | null;
+  max: number | null;
+  min: number | null;
+  count: number;
+  stdDev: number | null;
 }

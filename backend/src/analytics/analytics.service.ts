@@ -28,7 +28,7 @@ export class AnalyticsService {
    * @returns {Promise<{firstDataPoint: Date | null, lastDataPoint: Date | null}>}
    */
   async getDataDateRange(userId: string) {
-    try {    
+    try {
       // @ts-ignore
       const aggregations = await this.prisma.sensorData.aggregate({
         where: { sensor: { tank: { userId } } },
@@ -234,7 +234,7 @@ export class AnalyticsService {
           where: whereY,
           orderBy: { timestamp: 'asc' },
           select: { value: true, timestamp: true },
-          take: 500, 
+          take: 500,
         })
       ]);
 

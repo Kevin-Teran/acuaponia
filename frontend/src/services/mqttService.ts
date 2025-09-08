@@ -62,7 +62,6 @@ class MqttService {
     messagesReceived: 0
   };
 
-  // Métricas de rendimiento
   private publishMetrics: PublishMetrics = {
     totalMessages: 0,
     successfulMessages: 0,
@@ -71,19 +70,16 @@ class MqttService {
     lastPublishTime: null
   };
 
-  // Configuración optimizada
   private readonly maxReconnectAttempts = 5;
-  private readonly reconnectInterval = 3000; // 3 segundos (reducido)
-  private readonly publishTimeout = 5000; // 5 segundos (reducido)
-  private readonly keepalive = 60; // Aumentado para eficiencia
-  private readonly connectTimeout = 8000; // Reducido
+  private readonly reconnectInterval = 3000;
+  private readonly publishTimeout = 5000;
+  private readonly keepalive = 60; 
+  private readonly connectTimeout = 8000; 
 
-  // Callbacks para eventos
   private statusListeners: Array<(status: MqttConnectionStatus) => void> = [];
   private messageListeners: Array<(topic: string, message: string) => void> = [];
   private metricsListeners: Array<(metrics: PublishMetrics) => void> = [];
 
-  // Cache para optimización
   private topicCache = new Set<string>();
   private publishQueue: Array<{ topic: string; message: string; options: any; resolve: Function; reject: Function }> = [];
   private processingQueue = false;
@@ -103,7 +99,6 @@ class MqttService {
   private static instance: MqttService;
 
   private constructor() {
-    // Constructor privado para patrón singleton
     this.startMetricsReporting();
   }
 
@@ -117,7 +112,7 @@ class MqttService {
       if (this.publishMetrics.totalMessages > 0 && this.metricsListeners.length > 0) {
         this.notifyMetricsListeners();
       }
-    }, 30000); // Cada 30 segundos
+    }, 30000); 
   }
 
   /**
@@ -127,12 +122,10 @@ class MqttService {
    * @throws {Error} Si no se puede establecer la conexión
    */
   public async connect(): Promise<void> {
-    // Si ya estamos conectados, devolver inmediatamente
     if (this.client?.connected) {
       return Promise.resolve();
     }
     
-    // Si ya hay un intento de conexión en curso, devolver esa promesa
     if (this.connectionPromise) {
       return this.connectionPromise;
     }
@@ -174,11 +167,10 @@ class MqttService {
           clean: true,
           connectTimeout: this.connectTimeout,
           keepalive: this.keepalive,
-          reconnectPeriod: 0, // Manejo manual de reconexión
+          reconnectPeriod: 0,
           username,
           password,
-          // Configuración optimizada
-          protocolVersion: 4, // MQTT 3.1.1 para mejor compatibilidad
+          protocolVersion: 4,
           reschedulePings: true,
           will: {
             topic: 'acuaponia/clients/disconnect',
@@ -216,7 +208,6 @@ class MqttService {
   private setupEventHandlers(resolve: Function, reject: Function): void {
     if (!this.client) return;
 
-    // Evento: Conexión exitosa
     this.client.on('connect', () => {
       console.log('✅ [MQTT] Conectado exitosamente al broker');
       this.updateStatus({
@@ -227,15 +218,12 @@ class MqttService {
         lastConnected: new Date()
       });
       
-      // Procesar cola de mensajes pendientes
       this.processPublishQueue();
       
-      // Publicar estado online de forma optimizada
       this.publishConnectionStatus('online');
       resolve();
     });
 
-    // Evento: Error de conexión
     this.client.on('error', (err) => {
       console.error(`❌ [MQTT] Error de conexión:`, err);
       const errorMessage = err.message || 'Error de conexión desconocido';
@@ -247,21 +235,18 @@ class MqttService {
       
       this.publishMetrics.failedMessages++;
       
-      // Solo rechazar si es el primer intento
       if (this.status.reconnectAttempts === 0) {
         reject(new Error(errorMessage));
       }
     });
 
-    // Evento: Desconexión
     this.client.on('close', () => {
       console.log('🔌 [MQTT] Desconectado del broker');
       this.updateStatus({ 
         connected: false, 
         connecting: false 
       });
-      
-      // Intentar reconectar automáticamente
+
       if (this.status.reconnectAttempts < this.maxReconnectAttempts) {
         this.scheduleReconnect();
       } else {
@@ -269,17 +254,14 @@ class MqttService {
       }
     });
 
-    // Evento: Mensaje recibido (optimizado para logging)
     this.client.on('message', (topic, payload) => {
       this.status.messagesReceived++;
       const message = payload.toString();
       
-      // Log selectivo para evitar spam
       if (this.status.messagesReceived % 50 === 0) {
         console.log(`📨 [MQTT] Mensajes recibidos: ${this.status.messagesReceived}`);
       }
-      
-      // Notificar a los listeners
+
       this.messageListeners.forEach(listener => {
         try {
           listener(topic, message);
@@ -289,7 +271,6 @@ class MqttService {
       });
     });
 
-    // Evento: Reconexión
     this.client.on('reconnect', () => {
       console.log(`🔄 [MQTT] Reconectando... (Intento ${this.status.reconnectAttempts + 1})`);
       this.updateStatus({ 
@@ -298,16 +279,13 @@ class MqttService {
       });
     });
 
-    // Evento: Desconexión del paquete
     this.client.on('packetsend', (packet) => {
       if (packet.cmd === 'publish') {
         this.status.messagesPublished++;
       }
     });
 
-    // Evento: Ping respuesta (para monitorear latencia)
     this.client.on('pingresp', () => {
-      // Cliente está respondiendo correctamente
     });
   }
 
@@ -329,11 +307,10 @@ class MqttService {
       return;
     }
 
-    // Backoff exponencial con jitter
     const baseDelay = this.reconnectInterval;
     const backoffMultiplier = Math.pow(2, this.status.reconnectAttempts);
     const jitter = Math.random() * 1000;
-    const delay = Math.min(baseDelay * backoffMultiplier + jitter, 30000); // Máximo 30 segundos
+    const delay = Math.min(baseDelay * backoffMultiplier + jitter, 30000);
 
     console.log(`⏰ [MQTT] Reconexión programada en ${Math.round(delay)}ms`);
     
@@ -360,7 +337,6 @@ class MqttService {
     message: string, 
     options: { qos?: 0 | 1 | 2; retain?: boolean; priority?: 'high' | 'normal' | 'low' } = {}
   ): Promise<void> {
-    // Validación de entrada
     if (!hardwareId || typeof hardwareId !== 'string' || hardwareId.trim() === '') {
       throw new Error('El hardwareId es requerido y debe ser una cadena válida');
     }
@@ -369,7 +345,6 @@ class MqttService {
       throw new Error('El mensaje es requerido y debe ser una cadena válida');
     }
 
-    // Verificar conexión
     if (!this.client || !this.client.connected) {
       if (options.priority === 'high') {
         console.warn(`⚠️ [MQTT] Mensaje prioritario encolado - Cliente no conectado`);
@@ -403,16 +378,12 @@ class MqttService {
         retain: options.retain || false
       };
 
-      // Métricas de inicio
       const startTime = Date.now();
       this.publishMetrics.totalMessages++;
 
-      // Log optimizado (cada 10 mensajes)
       if (this.publishMetrics.totalMessages % 10 === 0) {
-        console.log(`📤 [MQTT] Enviando mensaje ${this.publishMetrics.totalMessages} al topic "${topic}"`);
       }
 
-      // Timeout optimizado
       const timeoutId = setTimeout(() => {
         this.publishMetrics.failedMessages++;
         reject(new Error(`Timeout al publicar en topic "${topic}" (${this.publishTimeout}ms)`));
@@ -430,19 +401,15 @@ class MqttService {
           this.publishMetrics.successfulMessages++;
           this.publishMetrics.lastPublishTime = new Date();
           
-          // Calcular latencia promedio
           this.updateAverageLatency(latency);
           
-          // Log de éxito cada 50 mensajes
           if (this.publishMetrics.successfulMessages % 50 === 0) {
-            console.log(`✅ [MQTT] ${this.publishMetrics.successfulMessages} mensajes enviados exitosamente`);
           }
           
           resolve();
         }
       });
 
-      // Agregar topic al cache
       this.topicCache.add(topic);
     });
   }
@@ -466,7 +433,6 @@ class MqttService {
         reject
       });
 
-      // Limitar tamaño de cola
       if (this.publishQueue.length > 100) {
         const dropped = this.publishQueue.shift();
         if (dropped) {
@@ -500,12 +466,10 @@ class MqttService {
         item.reject(error);
       }
 
-      // Pequeña pausa entre mensajes para no saturar
       await new Promise(resolve => setTimeout(resolve, 10));
     }
 
     this.processingQueue = false;
-    console.log(`✅ [MQTT] Cola de mensajes procesada`);
   }
 
   /**
@@ -525,7 +489,6 @@ class MqttService {
       qos?: 0 | 1 | 2;
     } = {}
   ): Promise<void> {
-    // Validar valor
     if (typeof value !== 'number' || isNaN(value)) {
       throw new Error('El valor debe ser un número válido');
     }
@@ -533,14 +496,12 @@ class MqttService {
     let payload: string;
     
     if (options.includeTimestamp) {
-      // Formato mínimo con timestamp
       const optimizedMessage: OptimizedMqttMessage = {
         value,
         timestamp: new Date().toISOString()
       };
       payload = JSON.stringify(optimizedMessage);
     } else {
-      // Solo el valor (máxima optimización)
       payload = value.toString();
     }
 
@@ -558,7 +519,7 @@ class MqttService {
    * @private
    */
   private updateAverageLatency(newLatency: number): void {
-    const alpha = 0.1; // Factor de suavizado para media móvil exponencial
+    const alpha = 0.1; 
     if (this.publishMetrics.averageLatency === 0) {
       this.publishMetrics.averageLatency = newLatency;
     } else {
@@ -578,11 +539,10 @@ class MqttService {
     if (!this.client?.connected && status === 'online') return;
 
     try {
-      // Mensaje de estado mínimo
       const statusMessage = {
-        s: status, // 's' en lugar de 'status' para ahorrar bytes
-        t: Date.now(), // timestamp numérico más compacto
-        c: this.client?.options?.clientId?.slice(-8) || 'unknown' // solo últimos 8 chars
+        s: status, 
+        t: Date.now(), 
+        c: this.client?.options?.clientId?.slice(-8) || 'unknown'
       };
 
       const statusTopic = 'acuaponia/status';
@@ -602,7 +562,6 @@ class MqttService {
         });
       }
     } catch (error) {
-      // No loggeamos errores de estado para evitar spam
     }
   }
 
@@ -613,13 +572,11 @@ class MqttService {
   public disconnect(): void {
     console.log('🔄 [MQTT] Iniciando desconexión...');
     
-    // Limpiar timer de reconexión
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
 
-    // Procesar cola pendiente rápidamente
     if (this.publishQueue.length > 0) {
       console.log(`📦 [MQTT] Descartando ${this.publishQueue.length} mensajes en cola`);
       this.publishQueue.forEach(item => {
@@ -628,7 +585,6 @@ class MqttService {
       this.publishQueue = [];
     }
 
-    // Publicar estado offline y desconectar
     this.publishConnectionStatus('offline').finally(() => {
       if (this.client) {
         this.client.end(true);
@@ -641,8 +597,6 @@ class MqttService {
         reconnectAttempts: 0,
         error: null
       });
-      
-      console.log('✅ [MQTT] Desconexión completada');
     });
   }
 
@@ -655,7 +609,6 @@ class MqttService {
   private updateStatus(updates: Partial<MqttConnectionStatus>): void {
     this.status = { ...this.status, ...updates };
     
-    // Notificar a listeners (con manejo de errores)
     this.statusListeners.forEach(listener => {
       try {
         listener(this.status);
@@ -679,10 +632,6 @@ class MqttService {
       }
     });
   }
-
-  // ==========================================
-  // MÉTODOS PÚBLICOS DE INFORMACIÓN Y CONTROL
-  // ==========================================
 
   /**
    * @method getStatus
@@ -743,7 +692,6 @@ class MqttService {
       averageLatency: 0,
       lastPublishTime: null
     };
-    console.log('📊 [MQTT] Métricas reiniciadas');
   }
 
   /**
@@ -752,27 +700,19 @@ class MqttService {
    * @returns {Promise<void>}
    */
   public async resetConnection(): Promise<void> {
-    console.log('🔄 [MQTT] Reiniciando conexión completamente...');
     
     this.disconnect();
     
-    // Limpiar cache y métricas
     this.topicCache.clear();
     this.clearMetrics();
     
-    // Esperar antes de reconectar
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    // Reiniciar estado
     this.status.reconnectAttempts = 0;
     this.status.error = null;
     
     await this.connect();
   }
-
-  // ==========================================
-  // MÉTODOS DE SUSCRIPCIÓN A EVENTOS
-  // ==========================================
 
   /**
    * @method onStatusChange
@@ -826,5 +766,4 @@ class MqttService {
   }
 }
 
-// Exportar instancia singleton
 export const mqttService = MqttService.getInstance();

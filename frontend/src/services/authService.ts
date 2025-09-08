@@ -6,7 +6,7 @@
  * @version 6.0.0 
  * @since 1.0.0
  */
-import api from '../config/api';
+import api from '@/config/api';
 import { User, LoginCredentials, ResetPasswordCredentials } from '../types';
 
 interface LoginResponse {
