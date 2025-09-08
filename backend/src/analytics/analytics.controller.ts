@@ -1,9 +1,9 @@
 /**
  * @file analytics.controller.ts
  * @route backend/src/analytics/
- * @description Controlador para los endpoints del módulo de analíticas - VERSIÓN CORREGIDA.
+ * @description Controlador para los endpoints del módulo de analíticas - SOLUCIÓN FINAL.
  * @author kevin mariano
- * @version 2.0.0
+ * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -37,11 +37,11 @@ export class AnalyticsController {
   ) {
     try {
       const targetUserId = user.role === Role.ADMIN && userId ? userId : user.id;
-      this.logger.log(`Obteniendo rango de datos para usuario: ${targetUserId}`);
+      this.logger.log(`📅 [Analytics] Obteniendo rango de datos para usuario: ${targetUserId}`);
       
       return await this.analyticsService.getDataDateRange(targetUserId);
     } catch (error) {
-      this.logger.error('Error en getDataDateRange:', error);
+      this.logger.error('❌ [Analytics] Error en getDataDateRange:', error);
       throw new BadRequestException('Error al obtener el rango de fechas de los datos');
     }
   }
@@ -59,13 +59,13 @@ export class AnalyticsController {
     @CurrentUser() user: User
   ) {
     try {
-      this.logger.log(`Usuario ${user.id} solicitando KPIs con filtros:`, JSON.stringify(filters));
+      this.logger.log(`📊 [Analytics] Usuario ${user.id} solicitando KPIs:`, JSON.stringify(filters));
       
       this.validateBasicFilters(filters);
 
       return await this.analyticsService.getKpis(filters, user);
     } catch (error) {
-      this.logger.error('Error en getKpis:', error);
+      this.logger.error('❌ [Analytics] Error en getKpis:', error);
       if (error instanceof BadRequestException) {
         throw error;
       }
@@ -86,13 +86,13 @@ export class AnalyticsController {
     @CurrentUser() user: User
   ) {
     try {
-      this.logger.log(`Usuario ${user.id} solicitando series temporales con filtros:`, JSON.stringify(filters));
+      this.logger.log(`📈 [Analytics] Usuario ${user.id} solicitando series temporales:`, JSON.stringify(filters));
       
       this.validateBasicFilters(filters);
 
       return await this.analyticsService.getTimeSeries(filters, user);
     } catch (error) {
-      this.logger.error('Error en getTimeSeries:', error);
+      this.logger.error('❌ [Analytics] Error en getTimeSeries:', error);
       if (error instanceof BadRequestException) {
         throw error;
       }
@@ -113,13 +113,13 @@ export class AnalyticsController {
     @CurrentUser() user: User
   ) {
     try {
-      this.logger.log(`Usuario ${user.id} solicitando resumen de alertas con filtros:`, JSON.stringify(filters));
+      this.logger.log(`🚨 [Analytics] Usuario ${user.id} solicitando resumen de alertas:`, JSON.stringify(filters));
       
       this.validateBasicFilters(filters);
 
       return await this.analyticsService.getAlertsSummary(filters, user);
     } catch (error) {
-      this.logger.error('Error en getAlertsSummary:', error);
+      this.logger.error('❌ [Analytics] Error en getAlertsSummary:', error);
       if (error instanceof BadRequestException) {
         throw error;
       }
@@ -136,17 +136,30 @@ export class AnalyticsController {
    */
   @Get('correlations')
   async getCorrelations(
-    @Query() filters: CorrelationFiltersDto, 
+    @Query() rawFilters: any, 
     @CurrentUser() user: User
   ) {
     try {
-      this.logger.log(`Usuario ${user.id} solicitando correlaciones con filtros:`, JSON.stringify(filters));
+      this.logger.log(`🔗 [Analytics] Usuario ${user.id} solicitando correlaciones RAW:`, JSON.stringify(rawFilters));
       
-      this.validateCorrelationFilters(filters);
+      const filters: CorrelationFiltersDto = {
+        userId: rawFilters.userId || undefined,
+        tankId: rawFilters.tankId || undefined,
+        sensorId: rawFilters.sensorId || undefined,
+        range: rawFilters.range || 'week',
+        startDate: rawFilters.startDate || undefined,
+        endDate: rawFilters.endDate || undefined,
+        sensorTypeX: rawFilters.sensorTypeX || SensorType.TEMPERATURE,
+        sensorTypeY: rawFilters.sensorTypeY || SensorType.PH,
+      };
+
+      this.logger.log(`🧹 [Analytics] Filtros procesados:`, JSON.stringify(filters));
+      
+      this.validateCorrelationFiltersManual(filters);
 
       return await this.analyticsService.getCorrelations(filters, user);
     } catch (error) {
-      this.logger.error('Error en getCorrelations:', error);
+      this.logger.error('❌ [Analytics] Error en getCorrelations:', error);
       if (error instanceof BadRequestException) {
         throw error;
       }
@@ -185,33 +198,30 @@ export class AnalyticsController {
   }
 
   /**
-   * @method validateCorrelationFilters
-   * @description Valida filtros específicos para correlaciones.
+   * @method validateCorrelationFiltersManual
+   * @description Valida filtros específicos para correlaciones de forma manual.
    * @private
    * @param {CorrelationFiltersDto} filters - Filtros de correlación a validar
    * @throws {BadRequestException} Si los filtros son inválidos
    */
-  private validateCorrelationFilters(filters: CorrelationFiltersDto): void {
+  private validateCorrelationFiltersManual(filters: CorrelationFiltersDto): void {
     this.validateBasicFilters(filters);
 
-    if (!filters.sensorTypeX) {
-      filters.sensorTypeX = SensorType.TEMPERATURE;
-    }
-
-    if (!filters.sensorTypeY) {
-      filters.sensorTypeY = SensorType.PH;
-    }
-
     if (!Object.values(SensorType).includes(filters.sensorTypeX as SensorType)) {
-      throw new BadRequestException(`Tipo de sensor X inválido: ${filters.sensorTypeX}`);
+      this.logger.error(`❌ [Analytics] Tipo de sensor X inválido: ${filters.sensorTypeX}`);
+      throw new BadRequestException(`Tipo de sensor X inválido: ${filters.sensorTypeX}. Valores válidos: ${Object.values(SensorType).join(', ')}`);
     }
 
     if (!Object.values(SensorType).includes(filters.sensorTypeY as SensorType)) {
-      throw new BadRequestException(`Tipo de sensor Y inválido: ${filters.sensorTypeY}`);
+      this.logger.error(`❌ [Analytics] Tipo de sensor Y inválido: ${filters.sensorTypeY}`);
+      throw new BadRequestException(`Tipo de sensor Y inválido: ${filters.sensorTypeY}. Valores válidos: ${Object.values(SensorType).join(', ')}`);
     }
 
     if (filters.sensorTypeX === filters.sensorTypeY) {
+      this.logger.error(`❌ [Analytics] Tipos de sensor iguales: X=${filters.sensorTypeX}, Y=${filters.sensorTypeY}`);
       throw new BadRequestException('Los tipos de sensor X e Y deben ser diferentes para realizar una correlación');
     }
+
+    this.logger.log(`✅ [Analytics] Validación de correlación exitosa: X=${filters.sensorTypeX}, Y=${filters.sensorTypeY}`);
   }
 }

@@ -1,15 +1,15 @@
 /**
  * @file correlation-filters.dto.ts
  * @route backend/src/analytics/dto/
- * @description DTO para los filtros de las consultas de correlación - VERSIÓN CORREGIDA.
+ * @description DTO para los filtros de las consultas de correlación - SOLUCIÓN FINAL.
  * @author kevin mariano
- * @version 2.0.0
+ * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
 import { IsEnum, IsOptional, IsString, IsDateString } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { SensorType } from '@prisma/client';
 
 export class CorrelationFiltersDto {
@@ -67,9 +67,16 @@ export class CorrelationFiltersDto {
    * @example SensorType.TEMPERATURE
    */
   @IsOptional()
-  @IsEnum(SensorType, { message: 'El tipo de sensor X debe ser válido' })
-  @Transform(({ value }) => value === '' || value === 'undefined' ? SensorType.TEMPERATURE : value)
-  sensorTypeX?: SensorType = SensorType.TEMPERATURE;
+  @Transform(({ value }) => {
+    if (!value || value === 'undefined' || value === 'null' || value === '') {
+      return SensorType.TEMPERATURE;
+    }
+    return value;
+  })
+  @IsEnum(SensorType, { 
+    message: 'El tipo de sensor X debe ser uno de: TEMPERATURE, PH, OXYGEN' 
+  })
+  sensorTypeX?: SensorType;
 
   /**
    * @description Tipo de sensor para el eje Y.
@@ -77,7 +84,14 @@ export class CorrelationFiltersDto {
    * @example SensorType.PH
    */
   @IsOptional()
-  @IsEnum(SensorType, { message: 'El tipo de sensor Y debe ser válido' })
-  @Transform(({ value }) => value === '' || value === 'undefined' ? SensorType.PH : value)
-  sensorTypeY?: SensorType = SensorType.PH;
+  @Transform(({ value }) => {
+    if (!value || value === 'undefined' || value === 'null' || value === '') {
+      return SensorType.PH;
+    }
+    return value;
+  })
+  @IsEnum(SensorType, { 
+    message: 'El tipo de sensor Y debe ser uno de: TEMPERATURE, PH, OXYGEN' 
+  })
+  sensorTypeY?: SensorType;
 }

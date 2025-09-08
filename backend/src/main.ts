@@ -1,7 +1,7 @@
 /**
  * @file main.ts
  * @route backend/src
- * @description 
+ * @description Configuración principal de la aplicación con ValidationPipe corregido para Analytics.
  * @author kevin mariano
  * @version 1.0.0
  * @since 1.0.0
@@ -32,6 +32,12 @@ async function bootstrap() {
       whitelist: true,
       transform: true,
       forbidNonWhitelisted: true,
+      transformOptions: {
+        enableImplicitConversion: true, 
+      },
+      skipMissingProperties: false,
+      skipNullProperties: false,
+      skipUndefinedProperties: false,
     }),
   );
 
