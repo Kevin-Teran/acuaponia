@@ -1,9 +1,11 @@
 /**
  * @file tankService.ts
+ * @route frontend/src/services
  * @description Servicio para gestionar las operaciones CRUD de los tanques.
  * @author kevin mariano
- * @version 2.1.0 
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 import api from '@/config/api';

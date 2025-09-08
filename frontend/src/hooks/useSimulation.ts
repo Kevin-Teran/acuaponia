@@ -1,5 +1,6 @@
 /**
  * @file useSimulation.ts
+ * @route frontend/src/hooks/
  * @description Hook para gestionar la lógica de la página de simulación de datos de sensores.
  * @author Kevin Mariano 
  * @version 1.0.0

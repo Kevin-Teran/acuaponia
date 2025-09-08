@@ -1,10 +1,13 @@
 /**
  * @file dataService.ts
+ * @route frontend/src/services
  * @description Servicio frontend mejorado para gestión de datos y simulaciones (sin cambios en BD).
- * @author Kevin Mariano 
- * @version 3.0.0
+ * @author kevin mariano
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
+
 import api from '@/config/api';
 import { ManualEntryDto } from '@/types';
 

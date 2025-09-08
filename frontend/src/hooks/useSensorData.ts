@@ -1,5 +1,6 @@
 /**
  * @file useSensorData.ts
+ * @route frontend/src/hooks/
  * @description
  * Hook personalizado de React para encapsular la lógica de obtención y manejo
  * de los datos históricos de los sensores. Provee el estado de carga, los datos,

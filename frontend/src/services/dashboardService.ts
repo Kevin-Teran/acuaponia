@@ -1,6 +1,6 @@
 /**
  * @file dashboardService.ts
- * @route 
+ * @route frontend/src/services
  * @description Servicio para manejar la comunicación con el backend del Dashboard.
  * Incluye fetch de datos y manejo de filtros.
  * @author Kevin Mariano 

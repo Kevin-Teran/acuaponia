@@ -1,10 +1,12 @@
 /**
  * @file mqttService.ts
+ * @route frontend/src/services
  * @description Servicio optimizado para gestionar la conexión y comunicación MQTT en el frontend.
  * Implementa payload simplificado y manejo eficiente de conexiones.
- * @author Kevin Mariano 
- * @version 4.0.0 
+ * @author kevin mariano
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 import mqtt, { MqttClient, IClientOptions } from 'mqtt';
 

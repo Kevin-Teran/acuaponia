@@ -1,8 +1,14 @@
 /**
  * @file socketService.ts
+ * @route frontend/src/services
  * @description Servicio Singleton para gestionar la conexión WebSocket. Se encarga de conectar,
  * desconectar y manejar los listeners para eventos en tiempo real.
+ * @author kevin mariano
+ * @version 1.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
  */
+
  import { io, Socket } from 'socket.io-client';
  import { SensorData, Report } from '@/types';
  

@@ -24,6 +24,7 @@ import { SettingsModule } from './settings/settings.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { PredictionsModule } from './predictions/predictions.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     SettingsModule,
     DashboardModule, 
     AnalyticsModule,
+    PredictionsModule,
   ],
   providers: [
     {

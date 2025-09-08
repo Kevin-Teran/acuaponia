@@ -1,9 +1,11 @@
 /**
  * @file reportService.ts
+ * @route frontend/src/services
  * @description Servicio para la creación y gestión de reportes.
  * @author kevin mariano
- * @version 1.2.0
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 import api from '@/config/api';

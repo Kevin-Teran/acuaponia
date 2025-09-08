@@ -1,10 +1,12 @@
 /**
  * @file useInfrastructure.ts
+ * @route frontend/src/hooks/
  * @description Hook unificado para cargar tanques, sensores y usuarios de forma optimizada y correcta.
  * @author Kevin Mariano 
- * @version 6.0.0
+ * @version 1.0.0
  * @since 1.0.0
  */
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';

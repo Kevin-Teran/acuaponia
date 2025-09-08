@@ -8,6 +8,7 @@
  * @version 1.2.0
  * @since 1.0.0
  */
+
 'use client';
 
 import React, { useState, useEffect } from 'react';

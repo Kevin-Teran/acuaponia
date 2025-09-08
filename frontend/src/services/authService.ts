@@ -1,10 +1,12 @@
 /**
  * @file authService.ts
+ * @route frontend/src/services
  * @description Servicio de frontend para gestionar la autenticación con la API.
  * Versión final, corregida y sin código de backend.
- * @author Kevin Mariano
- * @version 6.0.0 
+ * @author kevin mariano
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 import api from '@/config/api';
 import { User, LoginCredentials, ResetPasswordCredentials } from '../types';

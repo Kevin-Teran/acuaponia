@@ -1,7 +1,7 @@
 /**
  * @file analyticsService.ts
  * @route frontend/src/services/
- * @description Servicio para interactuar con el módulo de analíticas del backend - VERSIÓN CORREGIDA.
+ * @description Servicio para interactuar con el módulo de analíticas del backend.
  * @author kevin mariano
  * @version 2.0.0
  * @since 1.0.0

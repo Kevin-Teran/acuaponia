@@ -1,6 +1,6 @@
 /**
  * @file useDashboard.ts
- * @route 
+ * @route frontend/src/hooks/
  * @description Hook para obtener todos los datos necesarios para el dashboard.
  * @author Kevin Mariano
  * @version 1.0.0
@@ -11,8 +11,6 @@ import { useState, useCallback } from 'react';
 import api from '@/config/api';
 import { SensorType, UserFromApi as User } from '@/types';
 import { SummaryData, RealtimeData, HistoricalDataPoint } from '@/types/dashboard';
-
-// (El resto de las interfaces no cambian)
 
 export const useDashboard = () => {
   const [summaryData, setSummaryData] = useState<SummaryData | null>(null);

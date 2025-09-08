@@ -1,10 +1,12 @@
 /**
  * @file userService.ts
+ * @route frontend/src/services
  * @description Servicio para interactuar con la API de usuarios del backend.
  * Este archivo centraliza todas las llamadas HTTP relacionadas con la gestión de usuarios.
- * @author Kevin Mariano
+ * @author kevin mariano
  * @version 2.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 import api from '../config/api';

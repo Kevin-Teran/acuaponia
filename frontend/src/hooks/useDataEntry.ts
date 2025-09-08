@@ -1,11 +1,13 @@
 /**
  * @file useDataEntry.ts
+ * @route frontend/src/hooks/
  * @description Hook optimizado para la recolección de datos, con estado MQTT real,
  * escucha de WebSockets y optimización de re-renders.
- * @author Kevin Mariano (Actualizado por Gemini)
- * @version 13.0.0
+ * @author Kevin Mariano 
+ * @version 1.0.0
  * @since 1.0.0
  */
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Tank, Sensor, UserFromApi as User, SensorType, ManualEntryDto, SensorData, Role } from '@/types';
 import * as tankService from '@/services/tankService';
@@ -14,7 +16,7 @@ import * as userService from '@/services/userService';
 import * as dataService from '@/services/dataService';
 import { EmitterStatus } from '@/services/dataService';
 import { socketService } from '@/services/socketService';
-import { mqttService } from '@/services/mqttService'; // Importamos el servicio MQTT del frontend
+import { mqttService } from '@/services/mqttService';
 import { useAuth } from '@/context/AuthContext';
 import Swal from 'sweetalert2';
 
