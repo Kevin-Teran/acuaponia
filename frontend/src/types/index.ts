@@ -588,21 +588,6 @@ export interface DashboardData {
 }
 
 /**
- * @typedef {object} AnalyticsFilters
- * @description Define la estructura de los filtros utilizados en las consultas de analíticas.
- * Corresponde al DTO 'AnalyticsFiltersDto' del backend.
- */
- export interface AnalyticsFilters {
-  userId?: string;
-  tankId?: string;
-  sensorId?: string;
-  sensorType?: SensorType;
-  range?: 'day' | 'week' | 'month' | 'year' | 'custom';
-  startDate?: string;
-  endDate?: string;
-}
-
-/**
  * @typedef {object} CorrelationFilters
  * @description Define la estructura de los filtros para la consulta de correlación.
  * Corresponde al DTO 'CorrelationFiltersDto' del backend.
@@ -628,19 +613,6 @@ export interface KpiData {
   min: number | null;
   count: number;
   stdDev: number | null;
-}
-
-/**
- * @typedef {object} TimeSeriesData
- * @description Estructura de un punto de dato para las series temporales de analíticas.
- */
-export interface TimeSeriesData {
-  timestamp: string;
-  value: number;
-  sensor: {
-    name: string;
-    type: SensorType;
-  };
 }
 
 /**
@@ -670,7 +642,6 @@ export interface CorrelationDataPoint {
   lastDataPoint: string | null;
 }
 
-
 /**
  * @typedef {object} Kpi
  * @description Estructura para las métricas KPI de analíticas.
@@ -686,4 +657,229 @@ export interface CorrelationDataPoint {
   min: number | null;
   count: number;
   stdDev: number | null;
+}
+
+/**
+ * @typedef {object} TimeSeriesData
+ * @description Estructura para datos de series temporales.
+ * @property {string} timestamp - Marca de tiempo de la lectura
+ * @property {number} value - Valor del sensor
+ * @property {object} sensor - Información del sensor
+ * @property {string} sensor.name - Nombre del sensor
+ * @property {SensorType} sensor.type - Tipo de sensor
+ */
+export interface TimeSeriesData {
+  timestamp: string;
+  value: number;
+  sensor: {
+    name: string;
+    type: SensorType;
+  };
+}
+
+/**
+ * @typedef {object} AlertSummary
+ * @description Estructura para el resumen de alertas agrupadas.
+ * @property {Array} alertsByType - Alertas agrupadas por tipo
+ * @property {Array} alertsBySeverity - Alertas agrupadas por severidad
+ */
+export interface AlertSummary {
+  alertsByType: Array<{
+    type: string;
+    _count: { type: number };
+  }>;
+  alertsBySeverity: Array<{
+    severity: string;
+    _count: { severity: number };
+  }>;
+}
+
+/**
+ * @typedef {object} CorrelationData
+ * @description Estructura para datos de correlación entre sensores.
+ * @property {number} x - Valor del sensor X
+ * @property {number} y - Valor del sensor Y
+ */
+export interface CorrelationData {
+  x: number;
+  y: number;
+}
+
+/**
+ * @enum {string} AlertType
+ * @description Tipos de alertas disponibles en el sistema.
+ */
+export enum AlertType {
+  /** Alerta de temperatura fuera de rango */
+  TEMPERATURE_OUT_OF_RANGE = 'TEMPERATURE_OUT_OF_RANGE',
+  /** Alerta de pH fuera de rango */
+  PH_OUT_OF_RANGE = 'PH_OUT_OF_RANGE',
+  /** Alerta de oxígeno fuera de rango */
+  OXYGEN_OUT_OF_RANGE = 'OXYGEN_OUT_OF_RANGE',
+  /** Alerta de sensor desconectado */
+  SENSOR_DISCONNECTED = 'SENSOR_DISCONNECTED',
+  /** Alerta de fallo del sistema */
+  SYSTEM_FAILURE = 'SYSTEM_FAILURE',
+}
+
+/**
+ * @enum {string} AlertSeverity
+ * @description Niveles de severidad para las alertas.
+ */
+export enum AlertSeverity {
+  /** Información general */
+  INFO = 'INFO',
+  /** Advertencia - requiere atención */
+  WARNING = 'WARNING',
+  /** Error - requiere acción inmediata */
+  ERROR = 'ERROR',
+  /** Crítico - fallo del sistema */
+  CRITICAL = 'CRITICAL',
+}
+
+/**
+ * @typedef {object} Alert
+ * @description Estructura completa de una alerta del sistema.
+ * @property {string} id - Identificador único de la alerta
+ * @property {AlertType} type - Tipo de alerta
+ * @property {AlertSeverity} severity - Severidad de la alerta
+ * @property {string} message - Mensaje descriptivo de la alerta
+ * @property {string} userId - ID del usuario asociado
+ * @property {string} [tankId] - ID del tanque asociado (opcional)
+ * @property {string} [sensorId] - ID del sensor asociado (opcional)
+ * @property {boolean} resolved - Indica si la alerta fue resuelta
+ * @property {string} createdAt - Fecha de creación
+ * @property {string} [resolvedAt] - Fecha de resolución (opcional)
+ * @property {object} [metadata] - Información adicional (opcional)
+ */
+export interface Alert {
+  id: string;
+  type: AlertType;
+  severity: AlertSeverity;
+  message: string;
+  userId: string;
+  tankId?: string;
+  sensorId?: string;
+  resolved: boolean;
+  createdAt: string;
+  resolvedAt?: string;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * @typedef {object} CreateAlertDto
+ * @description DTO para crear una nueva alerta.
+ * @property {AlertType} type - Tipo de alerta
+ * @property {AlertSeverity} severity - Severidad de la alerta
+ * @property {string} message - Mensaje descriptivo
+ * @property {string} userId - ID del usuario
+ * @property {string} [tankId] - ID del tanque (opcional)
+ * @property {string} [sensorId] - ID del sensor (opcional)
+ * @property {object} [metadata] - Información adicional (opcional)
+ */
+export interface CreateAlertDto {
+  type: AlertType;
+  severity: AlertSeverity;
+  message: string;
+  userId: string;
+  tankId?: string;
+  sensorId?: string;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * @typedef {object} UpdateAlertDto
+ * @description DTO para actualizar una alerta existente.
+ * @property {boolean} [resolved] - Estado de resolución
+ * @property {string} [resolvedAt] - Fecha de resolución
+ * @property {object} [metadata] - Información adicional actualizada
+ */
+export interface UpdateAlertDto {
+  resolved?: boolean;
+  resolvedAt?: string;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * @typedef {object} AnalyticsDateRange
+ * @description Estructura para el rango de fechas de datos disponibles.
+ * @property {string | null} firstDataPoint - Primera fecha con datos
+ * @property {string | null} lastDataPoint - Última fecha con datos
+ */
+export interface AnalyticsDateRange {
+  firstDataPoint: string | null;
+  lastDataPoint: string | null;
+}
+
+/**
+ * @typedef {object} CorrelationAnalysis
+ * @description Análisis estadístico de correlación entre parámetros.
+ * @property {CorrelationData[]} data - Puntos de correlación
+ * @property {number} coefficient - Coeficiente de correlación de Pearson (-1 a 1)
+ * @property {string} strength - Interpretación de la fuerza ('Muy Débil', 'Débil', 'Moderada', 'Fuerte', 'Muy Fuerte')
+ * @property {SensorType} sensorTypeX - Tipo de sensor del eje X
+ * @property {SensorType} sensorTypeY - Tipo de sensor del eje Y
+ * @property {number} dataPoints - Cantidad de puntos analizados
+ */
+export interface CorrelationAnalysis {
+  data: CorrelationData[];
+  coefficient: number;
+  strength: 'Muy Débil' | 'Débil' | 'Moderada' | 'Fuerte' | 'Muy Fuerte';
+  sensorTypeX: SensorType;
+  sensorTypeY: SensorType;
+  dataPoints: number;
+}
+
+/**
+ * @typedef {object} AnalyticsFilters
+ * @description Filtros disponibles para consultas de analíticas.
+ * @property {string} [userId] - ID del usuario
+ * @property {string} [tankId] - ID del tanque
+ * @property {string} [sensorId] - ID del sensor específico
+ * @property {SensorType} [sensorType] - Tipo de sensor
+ * @property {string} [range] - Rango de tiempo predefinido
+ * @property {string} [startDate] - Fecha de inicio personalizada
+ * @property {string} [endDate] - Fecha de fin personalizada
+ */
+export interface AnalyticsFilters {
+  userId?: string;
+  tankId?: string;
+  sensorId?: string;
+  sensorType?: SensorType;
+  range?: 'day' | 'week' | 'month' | 'year';
+  startDate?: string;
+  endDate?: string;
+}
+
+/**
+ * @typedef {object} SystemHealth
+ * @description Estado general de salud del sistema.
+ * @property {number} totalSensors - Total de sensores registrados
+ * @property {number} activeSensors - Sensores activos
+ * @property {number} inactiveSensors - Sensores inactivos
+ * @property {number} errorSensors - Sensores con errores
+ * @property {number} totalTanks - Total de tanques registrados
+ * @property {number} activeTanks - Tanques activos
+ * @property {number} totalUsers - Total de usuarios registrados
+ * @property {number} activeUsers - Usuarios activos
+ * @property {number} totalAlerts - Total de alertas
+ * @property {number} unresolvedAlerts - Alertas sin resolver
+ * @property {number} criticalAlerts - Alertas críticas
+ * @property {string} lastDataReceived - Última vez que se recibieron datos
+ * @property {number} uptime - Tiempo de actividad del sistema en segundos
+ */
+export interface SystemHealth {
+  totalSensors: number;
+  activeSensors: number;
+  inactiveSensors: number;
+  errorSensors: number;
+  totalTanks: number;
+  activeTanks: number;
+  totalUsers: number;
+  activeUsers: number;
+  totalAlerts: number;
+  unresolvedAlerts: number;
+  criticalAlerts: number;
+  lastDataReceived: string;
+  uptime: number;
 }
