@@ -1,17 +1,16 @@
 /**
  * @file DashboardFilters.tsx
  * @route frontend/src/components/dashboard/
- * @description Componente de filtros para el dashboard.
+ * @description Componente de filtros con todas las correcciones: selector de admin, sin "Todos los Tanques" y estilos de focus unificados.
  * @author Kevin Mariano
- * @version 1.1.0
- * @since 1.0.00
+ * @version 1.0.0
+ * @since 1.0.0
  * @copyright SENA 2025
  */
 
 import React from 'react';
-import { Role, SensorType, Tank, UserFromApi as User } from '@/types';
-import { Users, Container, Cpu } from 'lucide-react';
-import { cn } from '@/utils/cn'; 
+import { Role, Tank, UserFromApi as User } from '@/types';
+import { cn } from '@/utils/cn';
 
 interface DashboardFiltersProps {
   filters: any;
@@ -22,128 +21,135 @@ interface DashboardFiltersProps {
   loading: boolean;
 }
 
-const allowedSensorTypes = [
-  { value: SensorType.TEMPERATURE, label: 'Temperatura' },
-  { value: SensorType.PH, label: 'pH' },
-  { value: SensorType.OXYGEN, label: 'Oxígeno Disuelto' },
-];
-
-export const DashboardFilters = ({
+export const DashboardFilters: React.FC<DashboardFiltersProps> = ({
   filters,
   onFiltersChange,
   usersList,
   tanksList,
   currentUserRole,
   loading,
-}: DashboardFiltersProps) => {
+}) => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    onFiltersChange({ ...filters, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === 'userId') {
+      onFiltersChange({ ...filters, userId: value, tankId: undefined });
+    } else {
+      onFiltersChange({ ...filters, [name]: value || undefined });
+    }
   };
-  
+
   const today = new Date().toISOString().split('T')[0];
+  const isAdmin = currentUserRole === Role.ADMIN;
+
+  const inputBaseClasses = "w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 disabled:opacity-50";
+  const inputFocusClasses = "focus:ring-2 focus:ring-blue-500 focus:border-blue-500";
 
   return (
-    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md mb-6 transition-colors duration-300">
-      {/* El layout de la grilla ahora es dinámico */}
-      <div className={cn(
-        "grid grid-cols-1 md:grid-cols-2 gap-4 items-end",
-        currentUserRole === Role.ADMIN ? "lg:grid-cols-5" : "lg:grid-cols-4"
-      )}>
-        
-        {currentUserRole === Role.ADMIN && (
-          <div className="flex flex-col">
-            <label htmlFor="userId" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center">
-              {/* Icono con color */}
-              <Users className="w-4 h-4 mr-2 text-blue-500" />
-              Usuario
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+      <div className="p-6">
+        <div
+          className={cn(
+            "grid grid-cols-1 sm:grid-cols-2 gap-4",
+            isAdmin ? "lg:grid-cols-5" : "lg:grid-cols-4"
+          )}
+        >
+          {isAdmin && (
+            <div className="space-y-1">
+              <label htmlFor="userId" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Usuario
+              </label>
+              <select
+                id="userId"
+                name="userId"
+                value={filters.userId || ''}
+                onChange={handleInputChange}
+                disabled={loading || usersList.length === 0}
+                className={cn(inputBaseClasses, inputFocusClasses)}
+              >
+                {usersList.map(user => (
+                  <option key={user.id} value={user.id}>{user.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Selector de Tanque */}
+          <div className="space-y-1">
+            <label htmlFor="tankId" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Tanque
             </label>
             <select
-              id="userId"
-              name="userId"
-              value={filters.userId || ''}
+              id="tankId"
+              name="tankId"
+              value={filters.tankId || ''}
               onChange={handleInputChange}
-              disabled={loading || usersList.length === 0}
-              className="form-select rounded-lg"
+              disabled={loading || tanksList.length === 0}
+              className={cn(inputBaseClasses, inputFocusClasses)}
             >
-              {usersList.map(user => (
-                <option key={user.id} value={user.id}>{user.name}</option>
-              ))}
+              {tanksList.length > 0 ? (
+                tanksList.map(tank => (
+                  <option key={tank.id} value={tank.id}>{tank.name}</option>
+                ))
+              ) : (
+                <option value="">No hay tanques</option>
+              )}
             </select>
           </div>
-        )}
 
-        <div className="flex flex-col">
-          <label htmlFor="tankId" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center">
-            {/* Icono con color */}
-            <Container className="w-4 h-4 mr-2 text-sky-500" />
-            Tanque
-          </label>
-          <select
-            id="tankId"
-            name="tankId"
-            value={filters.tankId || ''}
-            onChange={handleInputChange}
-            disabled={loading || tanksList.length === 0}
-            className="form-select rounded-lg"
-          >
-            {tanksList.map(tank => (
-              <option key={tank.id} value={tank.id}>{tank.name}</option>
-            ))}
-          </select>
-        </div>
+          {/* Selector de Tipo de Sensor */}
+          <div className="space-y-1">
+            <label htmlFor="sensorType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Tipo de Sensor
+            </label>
+            <select
+              id="sensorType"
+              name="sensorType"
+              value={filters.sensorType || ''}
+              onChange={handleInputChange}
+              disabled={loading}
+              className={cn(inputBaseClasses, inputFocusClasses)}
+            >
+              <option value="">Todos los Sensores</option>
+              <option value="TEMPERATURE">Temperatura</option>
+              <option value="PH">pH</option>
+              <option value="OXYGEN">Oxígeno</option>
+            </select>
+          </div>
 
-        <div className="flex flex-col">
-          <label htmlFor="sensorType" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center">
-            {/* Icono con color */}
-            <Cpu className="w-4 h-4 mr-2 text-orange-500" />
-            Sensor
-          </label>
-          <select
-            id="sensorType"
-            name="sensorType"
-            value={filters.sensorType || ''}
-            onChange={handleInputChange}
-            disabled={loading}
-            className="form-select rounded-lg"
-          >
-            <option value="">Todos los Sensores</option>
-            {allowedSensorTypes.map(type => (
-              <option key={type.value} value={type.value}>{type.label}</option>
-            ))}
-          </select>
-        </div>
+          {/* Fecha de Inicio */}
+          <div className="space-y-1">
+            <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Fecha Inicio
+            </label>
+            <input
+              type="date"
+              id="startDate"
+              name="startDate"
+              value={filters.startDate || ''}
+              onChange={handleInputChange}
+              disabled={loading}
+              max={filters.endDate || today}
+              className={cn(inputBaseClasses, inputFocusClasses)}
+            />
+          </div>
 
-        <div className="flex flex-col">
-          <label htmlFor="startDate" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Fecha Inicio
-          </label>
-          <input
-            type="date"
-            id="startDate"
-            name="startDate"
-            value={filters.startDate || ''}
-            onChange={handleInputChange}
-            disabled={loading}
-            max={filters.endDate || today}
-            className="form-input rounded-lg"
-          />
-        </div>
-
-        <div className="flex flex-col">
-          <label htmlFor="endDate" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Fecha Fin
-          </label>
-          <input
-            type="date"
-            id="endDate"
-            name="endDate"
-            value={filters.endDate || ''}
-            onChange={handleInputChange}
-            disabled={loading}
-            min={filters.startDate || ''}
-            max={today}
-            className="form-input rounded-lg"
-          />
+          {/* Fecha de Fin */}
+          <div className="space-y-1">
+            <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Fecha Fin
+            </label>
+            <input
+              type="date"
+              id="endDate"
+              name="endDate"
+              value={filters.endDate || today}
+              onChange={handleInputChange}
+              disabled={loading}
+              min={filters.startDate || ''}
+              max={today}
+              className={cn(inputBaseClasses, inputFocusClasses)}
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -1,12 +1,15 @@
 /**
  * @file index.ts
  * @route frontend/src/components/dashboard/
- * @description Barrel export para componentes del dashboard.
+ * @description Archivo barril para exportar todos los componentes del dashboard.
  * @author Kevin Mariano
  * @version 1.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
  */
 
-export { DashboardFilters } from './DashboardFilters';
-export { SummaryCards } from './SummaryCards';
-export { GaugeChart } from './GaugeChart';
-export { LineChart } from './LineChart';
+export * from './AdminStatCards';
+export * from './DashboardFilters';
+export * from './GaugeChart';
+export * from './LineChart';
+export * from './SummaryCards';
