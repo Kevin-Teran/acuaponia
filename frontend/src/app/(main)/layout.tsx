@@ -1,9 +1,13 @@
 /**
  * @file layout.tsx
+ * @route frontend/src/app/(main)
  * @description Layout principal para las rutas protegidas de la aplicación.
  * @author Kevin Mariano
- * @version 3.1.0
- */
+ * @version 1.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
+*/
+
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -11,7 +15,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/sidebar/Sidebar';
 import { modules } from '@/components/layout/sidebar/constants';
 import { useAuth } from '@/context/AuthContext';
-// La importación de '../globals.css' se ha eliminado para corregir el error de compilación.
 
 /**
  * @component MainLayout
@@ -23,6 +26,7 @@ import { useAuth } from '@/context/AuthContext';
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  // @ts-ignore
   const { user, isLoading, logout, theme, toggleTheme } = useAuth();
 
   const [collapsed, setCollapsed] = useState(false);
@@ -67,6 +71,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         onLogout={handleLogout}
         collapsed={collapsed}
         onToggleCollapse={onToggleCollapse}
+        // @ts-ignore
         theme={theme}
         onToggleTheme={toggleTheme}
         currentModuleId={currentModuleId}

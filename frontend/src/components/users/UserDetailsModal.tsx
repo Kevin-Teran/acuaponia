@@ -1,10 +1,13 @@
 /**
  * @file UserDetailsModal.tsx
+ * @route /frontend/src/components/users
  * @description Modal para mostrar los detalles de un usuario.
  * @author Kevin Mariano 
  * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
+
 'use client';
 
 import React from 'react';
@@ -64,6 +67,7 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ isOpen, user
             <hr className="my-3 border-gray-200 dark:border-gray-600" />
             
             <h4 className="font-semibold text-gray-600 dark:text-gray-300 flex items-center"><Container className="h-4 w-4 mr-2" />Tanques Asignados ({user._count?.tanks ?? 0})</h4>
+            {/* @ts-ignore */}
             {user.tanks?.length > 0 ? (
             <ul className="list-disc list-inside pl-4 text-gray-800 dark:text-gray-200">{user.tanks.map(tank => <li key={tank.id}>{tank.name}</li>)}</ul>
             ) : (

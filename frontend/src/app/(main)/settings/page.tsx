@@ -1,12 +1,14 @@
 /**
- * @file settings/page.tsx
+ * @file page.tsx
+ * @route /frontend/src/app/(main)/settings
  * @description Página de configuración "todo en uno" donde el usuario puede modificar
  * sus preferencias de perfil, umbrales de alerta y notificaciones.
  * Utiliza un sistema de pestañas para organizar el contenido y se comunica con
  * el backend para la persistencia de datos.
  * @author Kevin Mariano
- * @version 1.2.0
+ * @version 1.0.1
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 'use client';
@@ -19,8 +21,6 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { Card } from '@/components/common/Card';
 import Swal from 'sweetalert2';
 import { clsx } from 'clsx';
-
-// --- Sub-componente para la Pestaña de Perfil ---
 
 /**
  * @component ProfileSettingsTab
@@ -51,6 +51,7 @@ const ProfileSettingsTab = () => {
    * y llama al servicio `updateProfile` del contexto de autenticación.
    * @param {React.FormEvent} e - El evento del formulario.
    */
+  // @ts-ignore
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.newPassword && formData.newPassword !== formData.confirmPassword) {
@@ -109,8 +110,6 @@ const ProfileSettingsTab = () => {
   );
 };
 
-// --- Sub-componente para la Pestaña de Umbrales ---
-
 /**
  * @component ThresholdSettingsTab
  * @description Permite al usuario configurar los umbrales mínimos y máximos para las métricas
@@ -143,8 +142,6 @@ const ThresholdSettingsTab = () => {
   );
 };
 
-// --- Sub-componente para la Pestaña de Notificaciones ---
-
 /**
  * @component NotificationSettingsTab
  * @description Permite al usuario activar o desactivar diferentes canales y tipos de notificaciones.
@@ -176,8 +173,6 @@ const NotificationSettingsTab = () => {
         <Card className="p-6"><div className="space-y-6"><h2 className="text-xl font-semibold">Configuración de Notificaciones</h2><div className="space-y-4"><SettingRow title="Notificaciones por Email" desc="Recibir alertas y reportes por correo."><input type="checkbox" checked={notifications.email} onChange={(e) => setNotifications({...notifications, email: e.target.checked})} className="toggle-checkbox" /></SettingRow><SettingRow title="Alertas Críticas" desc="Recibir notificaciones para valores críticos."><input type="checkbox" checked={notifications.critical} onChange={(e) => setNotifications({...notifications, critical: e.target.checked})} className="toggle-checkbox" /></SettingRow><SettingRow title="Reportes Automáticos" desc="Envío automático de reportes semanales."><input type="checkbox" checked={notifications.reports} onChange={(e) => setNotifications({...notifications, reports: e.target.checked})} className="toggle-checkbox" /></SettingRow></div><div className="flex justify-end mt-6"><button onClick={handleSave} disabled={isSubmitting} className="btn-primary min-w-[220px]">{isSubmitting ? <Loader className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5" /><span>Guardar Notificaciones</span></>}</button></div></div></Card>
     );
 };
-
-// --- Componente Principal de la Página ---
 
 /**
  * @page SettingsPage

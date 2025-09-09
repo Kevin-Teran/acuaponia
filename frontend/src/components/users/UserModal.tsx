@@ -1,10 +1,13 @@
 /**
  * @file UserModal.tsx
+ * @route /frontend/src/components/users
  * @description Modal para crear y editar usuarios, con un diseño moderno y validación.
  * @author Kevin Mariano 
  * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
+
 'use client';
 
 import React, { useState, useEffect } from 'react';

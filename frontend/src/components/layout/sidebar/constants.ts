@@ -1,12 +1,12 @@
 /**
  * @file constants.ts
  * @description Configuración centralizada de los módulos de navegación.
- * CORRECCIÓN: Se ajusta la estructura a 'modules' y se aplican los roles correctos para
- * solucionar el error de renderizado en el layout principal.
  * @author Kevin Mariano
  * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
+
  import {
   LayoutDashboard,
   BarChart3,

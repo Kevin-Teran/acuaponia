@@ -1,11 +1,14 @@
 /**
  * @file AuthContext.tsx
+ * @route frontend/src/context
  * @description Proveedor de contexto para la gestión de la autenticación.
  * Versión final con manejo de estado robusto y la función para actualizar perfil.
  * @author Kevin Mariano 
- * @version 9.0.0 
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
+
 'use client';
 
 import {

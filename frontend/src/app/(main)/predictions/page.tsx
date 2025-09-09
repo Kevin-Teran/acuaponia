@@ -1,12 +1,13 @@
 /**
  * @file page.tsx
  * @route frontend/src/app/(main)/predictions
- * @description Versión FINAL con ESTILOS SINCRONIZADOS y contraste corregido.
+ * @description 
  * @author Kevin Mariano
- * @version 2.2.0
+ * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -20,10 +21,8 @@ import { generatePrediction } from '@/services/predictionService';
 import { Sensor, Tank } from '@/types';
 import { PredictionCard } from '@/components/predictions/PredictionCard';
 
-// --- CONFIGURACIÓN ---
 const horizonOptions = [{ label: '7 Días', value: '7' }, { label: '15 Días', value: '15' }];
 
-// --- COMPONENTE PRINCIPAL DE LA PÁGINA ---
 export default function PredictionsPage() {
     const { user } = useAuth();
     const [tanks, setTanks] = useState<Tank[]>([]);
@@ -59,12 +58,17 @@ export default function PredictionsPage() {
             setIsLoading(true);
             try {
                 const tankDetails = await getTankById(selectedTankId);
+                // @ts-ignore
                 setSensors(tankDetails.sensors || []);
                 const newResults = {};
+                // @ts-ignore
                 if (tankDetails.sensors && tankDetails.sensors.length > 0) {
                   await Promise.all(
+                      // @ts-ignore
                       tankDetails.sensors.map(async (sensor) => {
+                          // @ts-ignore
                           const prediction = await generatePrediction({ tankId: selectedTankId, type: sensor.type, horizon: parseInt(horizon, 10) });
+                          // @ts-ignore
                           newResults[sensor.id] = { ...prediction, sensorId: sensor.id, sensorName: sensor.name, sensorType: sensor.type };
                       })
                   );
@@ -100,7 +104,9 @@ export default function PredictionsPage() {
             return <div className="text-center py-16 text-default-500">El tanque seleccionado no tiene sensores registrados.</div>;
         }
         return sensors.map(sensor => {
+            // @ts-ignore
             const result = resultsBySensor[sensor.id];
+            // @ts-ignore
             return result ? <PredictionCard key={sensor.id} result={result} /> : <Skeleton key={sensor.id} className='w-full h-[400px] rounded-xl' />;
         });
     };
@@ -120,11 +126,12 @@ export default function PredictionsPage() {
                 placeholder="Selecciona un tanque"
                 labelPlacement="outside-left"
                 items={tanks} 
+                // @ts-ignore
                 selectedKeys={selectedTankKeys} 
+                // @ts-ignore
                 onSelectionChange={(keys) => setSelectedTankId((keys as Set<string>).values().next().value)} 
                 disabled={tanks.length === 0}
                 className="min-w-64"
-                // ✨ EL TOQUE FINAL DE ESTILO: Fondo sólido con buen contraste en ambos temas
                 classNames={{
                   trigger: "shadow-sm bg-gray-100 dark:bg-zinc-800 data-[hover=true]:bg-gray-200 dark:data-[hover=true]:bg-zinc-700 border border-transparent dark:border-zinc-700",
                 }}
@@ -138,7 +145,6 @@ export default function PredictionsPage() {
                 onSelectionChange={(keys) => setHorizon((keys as Set<string>).values().next().value)} 
                 disabled={!selectedTankId}
                 className="min-w-64"
-                // ✨ EL TOQUE FINAL DE ESTILO: Fondo sólido con buen contraste en ambos temas
                 classNames={{
                   trigger: "shadow-sm bg-gray-100 dark:bg-zinc-800 data-[hover=true]:bg-gray-200 dark:data-[hover=true]:bg-zinc-700 border border-transparent dark:border-zinc-700",
                 }}

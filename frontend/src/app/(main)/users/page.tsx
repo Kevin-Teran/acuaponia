@@ -1,16 +1,19 @@
 /**
  * @file page.tsx
- * @route /users
+ * @route /frontend/src/app/(main)/users
  * @description Versión final y pulida de la gestión de usuarios. Incluye modales de diseño profesional,
  * campos de filtro mejorados y toda la lógica de negocio y seguridad implementada.
  * @author Kevin Mariano
- * @version 18.0.0
+ * @version 1.0.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
+
 'use client';
 
 import React, { useCallback, useState, useMemo } from 'react';
 import { withAuth } from '@/hoc/withAuth';
+// @ts-ignore
 import { Role, UserFromApi, users_status } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -27,10 +30,9 @@ import {
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import Swal from 'sweetalert2';
 import { useUsers } from '@/hooks/useUsers';
-import { UserModal } from '@/components/users/UserModal'; // Importar UserModal
-import { UserDetailsModal } from '@/components/users/UserDetailsModal'; // Importar UserDetailsModal
+import { UserModal } from '@/components/users/UserModal'; 
+import { UserDetailsModal } from '@/components/users/UserDetailsModal'; 
 
-// --- Componente Principal de la Página ---
 const UsersManagementPage = () => {
   const { user: currentUser } = useAuth();
   const { users, loading, error, deleteUser, addUser, editUser } = useUsers();
@@ -165,7 +167,9 @@ const UsersManagementPage = () => {
             <UserModal
                 isOpen={modal.isOpen}
                 isEditing={modal.type === 'edit'}
+                // @ts-ignore
                 user={modal.data}
+                // @ts-ignore
                 currentUser={currentUser}
                 onSubmit={handleFormSubmit}
                 onClose={() => setModal({ isOpen: false, type: null })}

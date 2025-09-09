@@ -1,11 +1,13 @@
 /**
  * @file globals.css
+ * @route /frontend/src
  * @description Archivo de estilos globales que utiliza Tailwind CSS.
  * Define estilos base, componentes personalizados reutilizables (@layer components)
  * y utilidades de Tailwind para toda la aplicación.
  * @author Kevin Mariano
- * @version 1.2.0
+ * @version 1.0.2
  * @since 1.0.0
+ * @copyright SENA 2025
  */
 
 @tailwind base;
@@ -13,7 +15,6 @@
 @tailwind utilities;
 
 @layer components {
-  /* Estilos base para inputs, selects, etc. */
   .form-input {
     @apply w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-green-500 transition-colors;
   }
@@ -29,7 +30,6 @@
   .btn-secondary {
     @apply px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 transition-colors disabled:opacity-50;
   }
-  /* Estilo para el Toggle Switch con Tailwind CSS */
   .toggle-checkbox {
     @apply appearance-none relative w-11 h-6 bg-gray-300 dark:bg-gray-600 rounded-full cursor-pointer transition-colors duration-200 ease-in-out;
   }
@@ -42,4 +42,25 @@
   .toggle-checkbox:checked::before {
     @apply transform translate-x-5;
   }
+}
+
+/*
+  Estilos para forzar el color del placeholder en los inputs.
+*/
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af; /* text-gray-400 */
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #6b7280; /* text-gray-500 */
+}
+
+/*
+  Forzar el color del texto al escribir en un input en modo oscuro.
+*/
+.dark input,
+.dark textarea,
+.dark select {
+  color: #e5e7eb; /* text-gray-200 - un color claro pero no blanco puro */
 }

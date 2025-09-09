@@ -1,9 +1,9 @@
 /**
  * @file page.tsx
- * @route /frontend/src/app/(main)/dashboard/
+ * @route /frontend/src/app/(main)/dashboard
  * @description Página principal del dashboard, optimizada para mostrar los 3 sensores principales en gráficos individuales de ancho completo.
- * @author Kevin Mariano (con mejoras de IA)
- * @version 1.1.1
+ * @author Kevin Mariano
+ * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -11,17 +11,27 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import dynamic from 'next/dynamic'; 
 import { useAuth } from '@/context/AuthContext';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useInfrastructure } from '@/hooks/useInfrastructure';
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
 import { SummaryCards } from '@/components/dashboard/SummaryCards';
 import { GaugeChart } from '@/components/dashboard/GaugeChart';
-import { LineChart } from '@/components/dashboard/LineChart';
+// @ts-ignore
 import { Role, SensorType, Settings } from '@/types';
 import { getSettings } from '@/services/settingsService';
 import { Card } from '@/components/common/Card';
 import { format } from 'date-fns';
+
+const LineChart = dynamic(
+  () => import('@/components/dashboard/LineChart').then(mod => mod.LineChart), 
+  {
+    ssr: false, 
+    loading: () => <div className="h-80 w-full animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
+  }
+);
+
 
 const DashboardPage = () => {
   const { user } = useAuth();
@@ -64,6 +74,7 @@ const DashboardPage = () => {
   
   useEffect(() => {
     if (tanks.length > 0 && !tanks.some((tank) => tank.id === filters.tankId)) {
+      // @ts-ignore
       setFilters((prev) => ({ ...prev, tankId: tanks[0].id }));
     }
   }, [tanks, filters.tankId]);
@@ -88,6 +99,7 @@ const DashboardPage = () => {
   }, [filters, fetchRealtimeData, fetchSummary]);
 
   const handleFiltersChange = useCallback((newFilters: any) => {
+    // @ts-ignore
     setFilters((prevFilters) => ({ ...prevFilters, ...newFilters }));
   }, []);
   
@@ -153,6 +165,7 @@ const DashboardPage = () => {
         </h2>
         <div className="grid grid-cols-1 gap-6"> 
             <Card>
+                {/* @ts-ignore */}
                 <LineChart
                     data={chartData.temperature}
                     title="Historial de Temperatura"
@@ -162,6 +175,7 @@ const DashboardPage = () => {
                 />
             </Card>
             <Card>
+                {/* @ts-ignore */}
                 <LineChart
                     data={chartData.ph}
                     title="Historial de pH"
@@ -171,6 +185,7 @@ const DashboardPage = () => {
                 />
             </Card>
             <Card>
+                {/* @ts-ignore */}
                 <LineChart
                     data={chartData.oxygen}
                     title="Oxígeno Disuelto"

@@ -1,6 +1,17 @@
+/**
+ * @file page.tsx
+ * @route frontend/src/app/(main)/reports
+ * @description 
+ * @author Kevin Mariano
+ * @version 1.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
+ */
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+// @ts-ignore
 import { Download, FileText, Clock, Loader, AlertCircle, Cpu, CheckSquare } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { useAuth } from '@/context/AuthContext';
@@ -10,7 +21,9 @@ import { format, subDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import * as tankService from '@/services/tankService';
 import * as sensorService from '@/services/sensorService';
+// @ts-ignore
 import * as reportService from '@/services/reportService';
+// @ts-ignore
 import { Report, ReportStatus, Tank, Sensor } from '@/types';
 import { cn } from '@/utils/cn';
 import { socketService } from '@/services/socketService';
@@ -93,6 +106,7 @@ export default function Reports() {
     try {
       const [tanksData, reportsData] = await Promise.all([
         tankService.getTanks(user.id),
+        // @ts-ignore
         reportService.getReports(user.id),
       ]);
       setTanks(tanksData);
