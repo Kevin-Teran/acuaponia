@@ -3,7 +3,7 @@
  * @route frontend/src/app/(main)/dashboard/
  * @description Página principal del dashboard, adaptada para nuevos componentes.
  * @author Kevin Mariano
- * @version 6.0.0
+ * @version 1.0.1
  * @since 1.0.0
  * @copyright SENA 2025
  */

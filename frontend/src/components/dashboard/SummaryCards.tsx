@@ -2,7 +2,7 @@
  * @file SummaryCards.tsx
  * @description Muestra tarjetas de resumen con estilos corregidos para modo oscuro.
  * @author Kevin Mariano
- * @version 1.4.0
+ * @version 1.0.1
  * @since 1.0.0
  * @copyright SENA 2025
  */

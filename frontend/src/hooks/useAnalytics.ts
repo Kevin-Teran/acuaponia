@@ -3,7 +3,7 @@
  * @route frontend/src/hooks/
  * @description Hook personalizado para manejar la lógica de la página de analíticas - VERSIÓN CORREGIDA.
  * @author kevin mariano
- * @version 2.0.0
+ * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */

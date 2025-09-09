@@ -3,7 +3,7 @@
  * @route frontend/src/components/dashboard/
  * @description Tarjetas de estadísticas para admin con colores corregidos para modo oscuro.
  * @author Kevin Mariano
- * @version 2.1.0
+ * @version 1.0.1
  * @since 1.0.0
  * @copyright SENA 2025
  */

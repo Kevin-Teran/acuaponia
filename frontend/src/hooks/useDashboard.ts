@@ -8,6 +8,7 @@
  * @since 1.0.0
  * @copyright SENA 2025
  */
+
 import { useState, useCallback } from 'react';
 import api from '@/config/api';
 import { SensorType, UserFromApi as User } from '@/types';
