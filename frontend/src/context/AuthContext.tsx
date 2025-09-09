@@ -117,7 +117,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   if (loading) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
-        <LoadingSpinner message="Inicializando sesión..." />
+        <LoadingSpinner message="Cargando..." />
       </div>
     );
   }

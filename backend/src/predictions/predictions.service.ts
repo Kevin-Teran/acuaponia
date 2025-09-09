@@ -8,7 +8,7 @@
  * @copyright SENA 2025
  */
 
-import {
+ import {
   Injectable,
   NotFoundException,
   BadRequestException,
@@ -46,7 +46,7 @@ export class PredictionsService {
 
     const tank = await this.prisma.tank.findUnique({
       where: { id: tankId },
-      include: { user: true }, // Incluimos el usuario para obtener su ID
+      include: { user: true },
     });
     if (!tank) throw new NotFoundException(`Tanque con ID "${tankId}" no encontrado.`);
     if (!tank.userId) throw new BadRequestException('El tanque no está asociado a un usuario.');
@@ -68,19 +68,19 @@ export class PredictionsService {
       };
     }
 
-    // ✨ MEJORA: Obtener los umbrales configurados por el usuario para este sensor
-    const thresholds = await this.prisma.threshold.findUnique({
-      where: {
-        userId_sensorType: {
-          userId: tank.userId,
-          sensorType: type,
-        },
-      },
-    });
+    // ✨ MEJORA CORREGIDA: Obtener los umbrales desde el campo `settings` del usuario.
+    // El modelo `Threshold` no existe en `schema.prisma`. Se asume que los umbrales
+    // se almacenan en el campo JSON `settings` del usuario.
+    let thresholds = null;
+    if (tank.user.settings && typeof tank.user.settings === 'object') {
+      const settings = tank.user.settings as any;
+      if (settings.thresholds && settings.thresholds[type]) {
+        thresholds = settings.thresholds[type];
+      }
+    }
 
     let predictionResult = [];
-    // ... (lógica de predicción con clima o estadística, sin cambios)
-     if (
+    if (
       type === SensorType.TEMPERATURE &&
       this.weatherApiKey &&
       tank.location &&
@@ -112,7 +112,6 @@ export class PredictionsService {
     };
   }
 
-  // ... (El resto de las funciones: getWeatherForecast, createWeatherPrediction, etc. se mantienen igual que la versión anterior)
   private async getWeatherForecast(location: string, days: number) {
     const [lat, lon] = location.split(',');
     const url = `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&exclude=current,minutely,hourly,alerts&appid=${this.weatherApiKey}&units=metric`;
