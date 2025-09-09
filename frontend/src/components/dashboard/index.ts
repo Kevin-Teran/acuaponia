@@ -1,6 +1,6 @@
 /**
  * @file index.ts
- * @route 
+ * @route frontend/src/components/dashboard/
  * @description Barrel export para componentes del dashboard.
  * @author Kevin Mariano
  * @version 1.0.0

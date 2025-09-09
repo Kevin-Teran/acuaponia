@@ -1,6 +1,6 @@
 /**
  * @file dashboard.module.ts
- * @route 
+ * @route /backend/src/dashboard
  * @description Módulo para la gestión del dashboard.
  * @author Kevin Mariano
  * @version 1.0.0

@@ -3,7 +3,7 @@
  * @route 
  * @description Servicio completo y robusto para toda la gestión de datos de sensores.
  * Incluye: simulación, persistencia, recepción y guardado desde MQTT, y endpoints de consulta de datos.
- * @author Kevin Mariano (Actualizado por Gemini)
+ * @author Kevin Mariano 
  * @version 1.1.0
  * @since 1.0.0
  * @copyright SENA 2025

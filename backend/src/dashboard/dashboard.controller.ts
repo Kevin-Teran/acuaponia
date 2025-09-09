@@ -1,6 +1,6 @@
 /**
  * @file dashboard.controller.ts
- * @route 
+ * @route /backend/src/dashboard
  * @description Controlador para los endpoints del dashboard.
  * @author Kevin Mariano
  * @version 1.0.0

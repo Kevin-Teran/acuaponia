@@ -1,6 +1,6 @@
 /**
  * @file dashboard.service.ts
- * @route 
+ * @route /backend/src/dashboard
  * @description Servicio para la lógica de negocio del dashboard con datos optimizados.
  * @author Kevin Mariano
  * @version 1.2.0 

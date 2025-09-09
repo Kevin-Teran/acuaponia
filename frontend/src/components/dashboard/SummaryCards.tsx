@@ -1,3 +1,13 @@
+/**
+ * @file SummaryCards.tsx
+ * @route frontend/src/components/dashboard/
+ * @description Componente completo de tarjetas resumen con diseño elegante.
+ * @author Kevin Mariano
+ * @version 1.0.1
+ * @since 1.0.0
+ * @copyright SENA 2025
+ */
+
 import React from 'react';
 import { SummaryData } from '@/types/dashboard';
 import { Skeleton } from '@/components/common/Skeleton';

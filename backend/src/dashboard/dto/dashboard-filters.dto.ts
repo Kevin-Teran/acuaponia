@@ -1,6 +1,6 @@
 /**
  * @file dashboard-filters.dto.ts
- * @route 
+ * @route /backend/src/dashboard/dto
  * @description DTO para filtros del dashboard.
  * @author Kevin Mariano
  * @version 1.0.0

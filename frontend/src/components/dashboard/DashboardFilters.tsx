@@ -11,7 +11,7 @@
 import React from 'react';
 import { Role, SensorType, Tank, UserFromApi as User } from '@/types';
 import { Users, Container, Cpu } from 'lucide-react';
-import { cn } from '@/utils/cn'; // Se importa la utilidad para clases condicionales
+import { cn } from '@/utils/cn'; 
 
 interface DashboardFiltersProps {
   filters: any;

@@ -1,6 +1,6 @@
 /**
  * @file dashboard.ts
- * @route 
+ * @route frontend/src/types
  * @description Tipos específicos para el módulo de dashboard.
  * @author Kevin Mariano
  * @version 1.0.0

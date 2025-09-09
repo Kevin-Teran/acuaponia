@@ -1,10 +1,13 @@
 /**
  * @file AdminStatCards.tsx
+ * @route frontend/src/components/dashboard/
  * @description Muestra tarjetas con estadísticas clave para el administrador.
  * @author kevin mariano
  * @version 1.1.0
  * @since 1.0.0
+ * @copyright SENA 2025
  */
+
 'use client';
 
 import { useEffect, useState } from 'react';

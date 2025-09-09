@@ -1,10 +1,13 @@
 /**
  * @file GaugeChart.tsx
+ * @route frontend/src/components/dashboard/
  * @description Componente para mostrar medidores semicirculares, animados y de alta calidad (AGUJA TRIANGULAR DEFINITIVA).
  * @author Kevin Mariano & Claude & Gemini
- * @version 1.3.0
+ * @version 1.0.1
  * @since 1.0.0
+ * @copyright SENA 2025
  */
+
 import React, { useMemo } from 'react';
 import { RealtimeData, SensorType, Settings } from '@/types';
 import { Skeleton } from '@/components/common/Skeleton';
