@@ -1,79 +1,71 @@
 /**
  * @file socketService.ts
- * @route frontend/src/services
- * @description Servicio Singleton para gestionar la conexión WebSocket. Se encarga de conectar,
- * desconectar y manejar los listeners para eventos en tiempo real.
- * @author kevin mariano
- * @version 1.0.0
+ * @description Servicio para gestionar la conexión de Socket.IO.
+ * SOLUCIÓN: Se inicializa el socket como un singleton para garantizar que nunca sea `undefined`.
+ * @author Kevin Mariano & Gemini AI
+ * @version 2.0.0 (Singleton Fix)
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
- import { io, Socket } from 'socket.io-client';
- import { SensorData, Report } from '@/types';
- 
- class SocketService {
-   private socket: Socket | null = null;
-   private readonly socketUrl: string = process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api', '') || 'http://localhost:5001';
- 
-   /**
-    * @method connect
-    * @description Inicia y gestiona la conexión con el servidor de Socket.IO.
-    * Es idempotente; si ya está conectado, no hace nada.
-    */
-   public connect(): void {
-     if (this.socket?.connected || this.socket?.connecting) {
-       return;
-     }
- 
-     console.log(`🔌 Intentando conectar al servidor de Sockets en: ${this.socketUrl}`);
-     
-     this.socket?.disconnect();
- 
-     this.socket = io(this.socketUrl, {
-       transports: ['websocket'],
-       reconnection: true,
-       reconnectionAttempts: 5,
-     });
- 
-     this.socket.on('connect', () => {
-       console.log(`✅ Conectado al servidor Socket.IO con ID: ${this.socket!.id}`);
-     });
- 
-     this.socket.on('disconnect', (reason: string) => {
-       console.warn(`🔌 Desconectado del servidor Socket.IO: ${reason}`);
-     });
-     
-     this.socket.on('connect_error', (err: Error) => {
-       console.error(`❌ Error de conexión de Socket.IO: ${err.message}`);
-     });
-   }
- 
-   /**
-    * @method disconnect
-    * @description Cierra la conexión de Socket.IO de forma segura.
-    */
-   public disconnect(): void {
-     if (this.socket) {
-       this.socket.disconnect();
-     }
-   }
- 
-   public onSensorData(callback: (data: SensorData) => void): void {
-     this.socket?.on('new_sensor_data', callback);
-   }
- 
-   public offSensorData(callback: (data: SensorData) => void): void {
-     this.socket?.off('new_sensor_data', callback);
-   }
-   
-   public onReportUpdate(callback: (report: Report) => void): void {
-     this.socket?.on('report_status_update', callback);
-   }
- 
-   public offReportUpdate(callback: (report: Report) => void): void {
-     this.socket?.off('report_status_update', callback);
-   }
- }
- 
- export const socketService = new SocketService(); 
+import { io, Socket } from 'socket.io-client';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+/**
+ * @class SocketManager
+ * @description Clase singleton para gestionar la instancia del socket.
+ * Esto asegura que solo haya una conexión y que el objeto `socket`
+ * esté disponible inmediatamente al ser importado, previniendo errores de `undefined`.
+ */
+class SocketManager {
+	private static instance: SocketManager;
+	public socket: Socket;
+
+	// El constructor es privado para forzar el uso del método `getInstance`
+	private constructor() {
+		console.log('🔌 Inicializando conexión de Socket...');
+		this.socket = io(API_URL, {
+			reconnectionAttempts: 5,
+			transports: ['websocket', 'polling'],
+			// `autoConnect` es true por defecto, por lo que se conectará al ser instanciado.
+		});
+
+		this.setupEventListeners();
+	}
+
+	/**
+	 * @method getInstance
+	 * @description Obtiene la instancia única del SocketManager.
+	 * @returns {SocketManager}
+	 */
+	public static getInstance(): SocketManager {
+		if (!SocketManager.instance) {
+			SocketManager.instance = new SocketManager();
+		}
+		return SocketManager.instance;
+	}
+
+	private setupEventListeners() {
+		this.socket.on('connect', () => {
+			console.log('✅ Conectado al servidor de Sockets con ID:', this.socket.id);
+		});
+
+		this.socket.on('disconnect', (reason) => {
+			console.warn('🔌 Desconectado del servidor de Sockets:', reason);
+		});
+
+		this.socket.on('connect_error', (error) => {
+			console.error(
+				'❌ Error de conexión de Socket:',
+				error.message,
+				error.cause,
+			);
+		});
+	}
+}
+
+// Exporta la instancia del socket directamente.
+// Esto garantiza que cualquier archivo que importe `socket` reciba el objeto ya inicializado.
+export const socket = SocketManager.getInstance().socket;
+
