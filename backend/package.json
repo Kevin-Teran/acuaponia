@@ -28,6 +28,7 @@
     "compression": "^1.7.4",
     "cookie-parser": "^1.4.7",
     "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
     "helmet": "^7.1.0",
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",
