@@ -10,62 +10,85 @@
 
 import { io, Socket } from 'socket.io-client';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_URL =
+    process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api', '') ||
+    'http://localhost:5001';
 
-/**
- * @class SocketManager
- * @description Clase singleton para gestionar la instancia del socket.
- * Esto asegura que solo haya una conexión y que el objeto `socket`
- * esté disponible inmediatamente al ser importado, previniendo errores de `undefined`.
- */
 class SocketManager {
-	private static instance: SocketManager;
-	public socket: Socket;
+    private static instance: SocketManager;
+    public socket: Socket;
 
-	// El constructor es privado para forzar el uso del método `getInstance`
-	private constructor() {
-		console.log('🔌 Inicializando conexión de Socket...');
-		this.socket = io(API_URL, {
-			reconnectionAttempts: 5,
-			transports: ['websocket', 'polling'],
-			// `autoConnect` es true por defecto, por lo que se conectará al ser instanciado.
-		});
+    private constructor() {
+        this.socket = io(API_URL, {
+            // SOLUCIÓN CLAVE: Deshabilitar la conexión automática.
+            // La conexión se iniciará manualmente desde AuthContext.
+            autoConnect: false,
+            reconnectionAttempts: 5,
+            transports: ['websocket', 'polling'],
+            withCredentials: true,
+        });
 
-		this.setupEventListeners();
-	}
+        this.setupEventListeners();
+    }
 
-	/**
-	 * @method getInstance
-	 * @description Obtiene la instancia única del SocketManager.
-	 * @returns {SocketManager}
-	 */
-	public static getInstance(): SocketManager {
-		if (!SocketManager.instance) {
-			SocketManager.instance = new SocketManager();
-		}
-		return SocketManager.instance;
-	}
+    public static getInstance(): SocketManager {
+        if (!SocketManager.instance) {
+            SocketManager.instance = new SocketManager();
+        }
+        return SocketManager.instance;
+    }
 
-	private setupEventListeners() {
-		this.socket.on('connect', () => {
-			console.log('✅ Conectado al servidor de Sockets con ID:', this.socket.id);
-		});
+    /**
+     * @method connect
+     * @description Conecta el socket al servidor, adjuntando el token de autenticación.
+     */
+    public connect() {
+        // Evita reconectar si ya está conectado.
+        if (this.socket.connected) {
+            return;
+        }
 
-		this.socket.on('disconnect', (reason) => {
-			console.warn('🔌 Desconectado del servidor de Sockets:', reason);
-		});
+        console.log(`🔌 Intentando conectar al Socket en ${API_URL}...`);
+        // Asegura que el token más reciente se use para la conexión.
+        const token = localStorage.getItem('accessToken');
+        this.socket.auth = {
+            token: token ? `Bearer ${token}` : undefined,
+        };
+        this.socket.connect();
+    }
 
-		this.socket.on('connect_error', (error) => {
-			console.error(
-				'❌ Error de conexión de Socket:',
-				error.message,
-				error.cause,
-			);
-		});
-	}
+    /**
+     * @method disconnect
+     * @description Desconecta el socket del servidor.
+     */
+    public disconnect() {
+        if (this.socket.connected) {
+            console.log('🔌 Desconectando del servidor de Sockets...');
+            this.socket.disconnect();
+        }
+    }
+
+    private setupEventListeners() {
+        this.socket.on('connect', () => {
+            console.log(
+                '✅ Conectado y autenticado al servidor de Sockets con ID:',
+                this.socket.id,
+            );
+        });
+
+        this.socket.on('disconnect', (reason) => {
+            console.warn('🔌 Desconectado del servidor de Sockets:', reason);
+        });
+
+        this.socket.on('connect_error', (error) => {
+            console.error(
+                '❌ Error de conexión de Socket:',
+                error.message,
+                (error as any).data,
+            );
+        });
+    }
 }
 
-// Exporta la instancia del socket directamente.
-// Esto garantiza que cualquier archivo que importe `socket` reciba el objeto ya inicializado.
-export const socket = SocketManager.getInstance().socket;
-
+export const socketManager = SocketManager.getInstance();
+export const socket = socketManager.socket;

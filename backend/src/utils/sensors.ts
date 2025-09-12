@@ -8,7 +8,7 @@
  * @copyright SENA 2025
  */
 
-export type NormalizedType = 'TEMPERATURE' | 'PH' | 'OXYGEN' | 'LEVEL' | 'FLOW' | null;
+export type NormalizedType = 'TEMPERATURE' | 'PH' | 'OXYGEN' | null;
 
 export function normalizeSensorType(type?: string): NormalizedType {
   const t = type?.toUpperCase().trim();
@@ -20,11 +20,9 @@ export function normalizeSensorType(type?: string): NormalizedType {
     t === 'OXYGEN' ||
     t === 'OXIGENO' ||
     t === 'OXIGENO_DISUELTO' ||
-    t === 'OXIGENO_DISUELTO' || // variantes comunes
+    t === 'OXIGENO_DISUELTO' || 
     t === 'OXIGENO_DISUELTO'
   ) return 'OXYGEN';
-  if (t === 'LEVEL' || t === 'NIVEL') return 'LEVEL';
-  if (t === 'FLOW' || t === 'CAUDAL') return 'FLOW';
-
+  
   return null;
 }

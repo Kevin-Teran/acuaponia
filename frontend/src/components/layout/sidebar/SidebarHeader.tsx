@@ -32,7 +32,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = React.memo(({ collaps
             priority
           />
         </div>
-        <h1 className="text-lg font-bold text-gray-900 dark:text-white whitespace-nowrap">Acuaponia</h1>
+        <h1 className="text-lg font-bold text-gray-900 dark:text-white whitespace-nowrap">acuaponía</h1>
       </div>
     )}
     <button

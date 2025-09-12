@@ -1,47 +1,44 @@
 /**
  * @file events.gateway.ts
- * @route 
- * @description Gateway de WebSockets para comunicación en tiempo real.
+ * @route /backend/src/events
+ * @description Gateway de WebSockets protegido con autenticación JWT.
  * Emite eventos a salas específicas por `userId` para sensores y reportes.
- * @author Kevin Mariano (Actualizado por Gemini)
- * @version 1.0.0
+ * @author Kevin Mariano & Gemini AI
+ * @version 3.0.0 (Autenticación Robusta con WsJwtGuard)
  * @since 1.0.0
  * @copyright SENA 2025
  */
+
 import {
   WebSocketGateway,
   WebSocketServer,
-  SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
-  MessageBody,
-  ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
-import { SensorData, Report } from '@prisma/client';
+import { SensorData, Report, User } from '@prisma/client';
+import { JwtService } from '@nestjs/jwt';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
 
-// --- Interfaces para los Payloads de los Eventos ---
-
-// Datos del sensor que se enviarán al frontend
+// Interfaces para los Payloads
 interface SensorDataWithDetails extends SensorData {
-  userId: string; // ID del usuario para dirigir el mensaje a la sala correcta
-  sensor: {
-    hardwareId: string;
-  };
+  userId: string;
+  sensor: { hardwareId: string };
 }
 
-// Datos del reporte que se enviarán al frontend
 interface ReportWithUser extends Report {
-  userId: string; // ID del usuario para dirigir el mensaje
+  userId: string;
 }
-
 
 @WebSocketGateway({
   cors: {
-    origin: '*', // En producción, deberías restringir esto a tu dominio del frontend
+    // SOLUCIÓN: Usar un origen específico en lugar de '*' cuando credentials es true.
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    credentials: true,
   },
-  transports: ['websocket', 'polling'], // Añadir polling como fallback
+  transports: ['websocket', 'polling'],
 })
 export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -49,45 +46,73 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private readonly logger = new Logger(EventsGateway.name);
 
-  handleConnection(client: Socket) {
-    this.logger.log(`🔗 Cliente conectado: ${client.id}`);
+  // Inyectamos los servicios necesarios para la autenticación manual
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  /**
+   * @method handleConnection
+   * @description Maneja la conexión de un nuevo cliente.
+   * Realiza la autenticación del token JWT aquí mismo.
+   */
+  async handleConnection(client: Socket) {
+    try {
+      const token = this.extractTokenFromHandshake(client);
+      if (!token) {
+        throw new Error('No se proporcionó token de autenticación.');
+      }
+
+      const payload = await this.jwtService.verifyAsync(token, {
+        secret: this.configService.get<string>('JWT_SECRET'),
+      });
+
+      const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+      if (!user) {
+        throw new Error('El usuario del token no fue encontrado.');
+      }
+
+      // Adjuntamos el usuario al socket para uso futuro
+      client.data.user = user;
+
+      this.logger.log(`🔗 Cliente conectado y autenticado: ${user.name} (${client.id})`);
+      client.join(user.id);
+      this.logger.log(`🚪 Cliente ${client.id} se unió a la sala: ${user.id}`);
+    } catch (error) {
+      this.logger.error(`Falló la autenticación del socket: ${error.message}`);
+      client.disconnect(true); // Desconectar el socket si la autenticación falla
+    }
   }
 
   handleDisconnect(client: Socket) {
-    this.logger.log(`🔌 Cliente desconectado: ${client.id}`);
-  }
-
-  @SubscribeMessage('joinRoom')
-  handleJoinRoom(@MessageBody() userId: string, @ConnectedSocket() client: Socket): void {
-    if (userId) {
-      client.join(userId);
-      this.logger.log(`🚪 Cliente ${client.id} se unió a la sala del usuario: ${userId}`);
+    const user = client.data.user as User;
+    if (user) {
+      this.logger.log(`🔌 Cliente desconectado: ${user.name} (${client.id})`);
+    } else {
+      this.logger.log(`🔌 Cliente no autenticado desconectado: ${client.id}`);
     }
   }
 
-  /**
-   * @description Emite una actualización de datos de sensor al topic 'new_sensor_data'
-   * en la sala del usuario propietario.
-   * @param data Los datos del sensor, incluyendo el userId.
-   */
+  private extractTokenFromHandshake(client: Socket): string | undefined {
+    const authHeader = client.handshake.auth.token as string;
+    if (!authHeader) return undefined;
+    const [type, token] = authHeader.split(' ') ?? [];
+    return type === 'Bearer' ? token : undefined;
+  }
+
+  // --- Métodos de Broadcast ---
+
   broadcastNewData(data: SensorDataWithDetails) {
     if (data.userId) {
       this.server.to(data.userId).emit('new_sensor_data', data);
-    } else {
-      this.logger.warn(`No se encontró userId para el sensor ${data.sensor.hardwareId}, no se puede emitir evento.`);
     }
   }
 
-  /**
-   * @description Emite una actualización del estado de un reporte al topic 'report_status_update'
-   * en la sala del usuario propietario.
-   * @param report El reporte actualizado, incluyendo el userId.
-   */
   broadcastReportUpdate(report: ReportWithUser) {
     if (report.userId) {
       this.server.to(report.userId).emit('report_status_update', report);
-    } else {
-        this.logger.warn(`No se encontró userId para el reporte ${report.id}, no se puede emitir evento.`);
     }
   }
 }

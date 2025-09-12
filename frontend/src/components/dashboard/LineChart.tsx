@@ -3,7 +3,7 @@
  * @route frontend/src/components/dashboard/LineChart.tsx
  * @description Componente de gráfico de líneas con diseño premium, iconos y colores dinámicos.
  * @author Kevin Mariano & Gemini AI
- * @version 4.1.0 (Layout Spacing Refined)
+ * @version 5.0.0 (Corrección Visual de Estadísticas)
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -74,6 +74,19 @@ const SENSOR_THEMES = {
 		color: '#06b6d4', // cyan-500
 		gradientId: 'oxygenGradient',
 		name: 'Oxígeno',
+	},
+	// Se puede extender a otros tipos de sensores si es necesario.
+	[SensorType.LEVEL]: {
+		icon: BarChart3, // Icono de ejemplo
+		color: '#a855f7', // purple-500
+		gradientId: 'levelGradient',
+		name: 'Nivel',
+	},
+	[SensorType.FLOW]: {
+		icon: Waves, // Icono de ejemplo
+		color: '#f97316', // orange-500
+		gradientId: 'flowGradient',
+		name: 'Flujo',
 	},
 };
 
@@ -253,7 +266,7 @@ export const LineChart: React.FC<LineChartProps> = ({
 								{chartTitle}
 							</h3>
 							<p className='text-sm text-gray-500 dark:text-gray-400'>
-								Mostrando {data.length} puntos de datos muestreados.
+								Mostrando {data.length} puntos de datos.
 							</p>
 						</div>
 					</div>
@@ -373,7 +386,8 @@ export const LineChart: React.FC<LineChartProps> = ({
 				</ResponsiveContainer>
 			</div>
 
-            {/* --- SECCIÓN MODIFICADA --- */}
+            {/* --- SOLUCIÓN: SECCIÓN DE ESTADÍSTICAS CORREGIDA --- */}
+			{/* Los colores ahora son dinámicos y corresponden al tema del sensor actual. */}
 			<div className='mt-8 grid grid-cols-1 divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-800/50 sm:grid-cols-3 sm:divide-x sm:divide-y-0'>
 				<div className='flex flex-col gap-y-2 p-6 text-center'>
 					<p className='text-sm font-medium text-gray-500 dark:text-gray-400'>
@@ -381,7 +395,7 @@ export const LineChart: React.FC<LineChartProps> = ({
 					</p>
 					<p
 						className='text-3xl font-bold tracking-tight'
-						style={{ color: SENSOR_THEMES.TEMPERATURE.color }}
+						style={{ color: theme.color }}
 					>
 						{stats.min.toFixed(2)}
 					</p>
@@ -392,7 +406,7 @@ export const LineChart: React.FC<LineChartProps> = ({
 					</p>
 					<p
 						className='text-3xl font-bold tracking-tight'
-						style={{ color: SENSOR_THEMES.PH.color }}
+						style={{ color: theme.color }}
 					>
 						{stats.avg.toFixed(2)}
 					</p>
@@ -403,7 +417,7 @@ export const LineChart: React.FC<LineChartProps> = ({
 					</p>
 					<p
 						className='text-3xl font-bold tracking-tight'
-						style={{ color: SENSOR_THEMES.OXYGEN.color }}
+						style={{ color: theme.color }}
 					>
 						{stats.max.toFixed(2)}
 					</p>
@@ -412,4 +426,3 @@ export const LineChart: React.FC<LineChartProps> = ({
 		</motion.div>
 	);
 };
-

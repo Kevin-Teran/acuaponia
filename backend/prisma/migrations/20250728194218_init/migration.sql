@@ -31,7 +31,7 @@ CREATE TABLE `sensors` (
     `id` VARCHAR(191) NOT NULL,
     `hardwareId` VARCHAR(191) NOT NULL,
     `name` VARCHAR(191) NOT NULL,
-    `type` ENUM('TEMPERATURE', 'PH', 'OXYGEN', 'LEVEL', 'FLOW') NOT NULL,
+    `type` ENUM('TEMPERATURE', 'PH', 'OXYGEN') NOT NULL,
     `location` VARCHAR(191) NOT NULL,
     `status` ENUM('ACTIVE', 'INACTIVE', 'MAINTENANCE', 'ERROR') NOT NULL DEFAULT 'ACTIVE',
     `calibrationDate` DATETIME(3) NOT NULL,

@@ -8,14 +8,16 @@
  * @copyright SENA 2025
  */
 
-import { Module } from '@nestjs/common';
-import { ReportsController } from './reports.controller';
-import { ReportsService } from './reports.service';
-import { EventsModule } from '../events/events.module'; 
+ import { Module } from '@nestjs/common';
+ import { ReportsService } from './reports.service';
+ import { ReportsController } from './reports.controller';
+ import { PrismaModule } from 'src/prisma/prisma.module';
+ import { EventsModule } from 'src/events/events.module';
 
 @Module({
-  imports: [EventsModule], 
+  imports: [PrismaModule, EventsModule],
   controllers: [ReportsController],
   providers: [ReportsService],
 })
+
 export class ReportsModule {}

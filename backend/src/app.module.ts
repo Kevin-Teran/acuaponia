@@ -37,6 +37,7 @@ import { PredictionsModule } from './predictions/predictions.module';
     UsersModule,
     TanksModule,
     PrismaModule,
+    PrismaModule,
     EventsModule,
     SensorsModule,
     ReportsModule,

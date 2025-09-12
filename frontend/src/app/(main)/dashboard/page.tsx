@@ -1,9 +1,9 @@
 /**
  * @file page.tsx
  * @route frontend/src/app/(main)/dashboard/
- * @description Página principal del dashboard, con lógica de estado, efectos y manejo de fechas corregidos.
+ * @description Página principal del dashboard, con corrección definitiva para la importación de módulos de fecha.
  * @author Kevin Mariano & Gemini AI
- * @version 2.0.0
+ * @version 4.0.0 (Versión Estable)
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -27,7 +27,8 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { Role, SensorType, Settings } from '@/types';
 import { getSettings } from '@/services/settingsService';
 import { Container } from 'lucide-react';
-import { parseISO } from 'date-fns';
+import { parseISO, format as formatDate } from 'date-fns';
+import { fromZonedTime } from 'date-fns-tz';
 
 const LineChart = dynamic(
 	() =>
@@ -39,6 +40,25 @@ const LineChart = dynamic(
 		),
 	},
 );
+
+// --- Constantes ---
+const TIME_ZONE = 'America/Bogota';
+
+/**
+ * @function getInitialDates
+ * @description Calcula las fechas de inicio y fin iniciales en la zona horaria de la aplicación.
+ * @returns {{startDate: string, endDate: string}} - Fechas formateadas como YYYY-MM-DD.
+ */
+const getInitialDates = () => {
+	const nowInAppTimeZone = fromZonedTime(new Date(), TIME_ZONE);
+	const sevenDaysAgo = new Date(nowInAppTimeZone.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+	return {
+		startDate: formatDate(sevenDaysAgo, 'yyyy-MM-dd'),
+		endDate: formatDate(nowInAppTimeZone, 'yyyy-MM-dd'),
+	};
+};
+
 
 const DashboardPage: React.FC = () => {
 	const { user } = useAuth();
@@ -58,14 +78,16 @@ const DashboardPage: React.FC = () => {
 	} = useDashboard();
 
 	const [settings, setSettings] = useState<Settings | null>(null);
-	const [filters, setFilters] = useState({
-		startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-			.toISOString()
-			.split('T')[0],
-		endDate: new Date().toISOString().split('T')[0],
-		userId: user?.id,
-		tankId: undefined as string | undefined,
-		sensorType: undefined as SensorType | undefined,
+
+	const [filters, setFilters] = useState(() => {
+		const { startDate, endDate } = getInitialDates();
+		return {
+			startDate,
+			endDate,
+			userId: user?.id,
+			tankId: undefined as string | undefined,
+			sensorType: undefined as SensorType | undefined,
+		};
 	});
 
 	useEffect(() => {
@@ -74,9 +96,11 @@ const DashboardPage: React.FC = () => {
 			if (user.role === Role.ADMIN) {
 				fetchUsersList();
 			}
-			setFilters((prev) => ({ ...prev, userId: prev.userId || user.id }));
+			if (!filters.userId) {
+				setFilters((prev) => ({ ...prev, userId: user.id }));
+			}
 		}
-	}, [user, fetchUsersList]);
+	}, [user, fetchUsersList, filters.userId]);
 
 	useEffect(() => {
 		if (filters.userId) {
@@ -87,20 +111,23 @@ const DashboardPage: React.FC = () => {
 	useEffect(() => {
 		if (tanks.length > 0) {
 			const currentTankIsValid = tanks.some((t) => t.id === filters.tankId);
-			if (!currentTankIsValid) {
+			if (!filters.tankId || !currentTankIsValid) {
 				setFilters((prev) => ({ ...prev, tankId: tanks[0].id }));
 			}
 		} else {
-			setFilters((prev) => ({ ...prev, tankId: undefined }));
+			if (filters.tankId) {
+				setFilters((prev) => ({ ...prev, tankId: undefined }));
+			}
 		}
 	}, [tanks, filters.tankId]);
 
 	const memoizedFetchData = useCallback(() => {
-		if (filters.tankId && filters.startDate && filters.endDate) {
-			fetchSummary(filters);
-			fetchRealtimeData(filters);
-			fetchHistoricalData(filters);
+		if (!filters.userId || !filters.tankId || !filters.startDate || !filters.endDate) {
+			return;
 		}
+		fetchSummary(filters);
+		fetchRealtimeData(filters);
+		fetchHistoricalData(filters);
 	}, [filters, fetchSummary, fetchRealtimeData, fetchHistoricalData]);
 
 	useEffect(() => {

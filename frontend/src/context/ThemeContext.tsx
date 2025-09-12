@@ -2,9 +2,10 @@
  * @file ThemeContext.tsx
  * @route frontend/src/context
  * @description Proveedor de contexto para gestionar el tema de la aplicación.
- * El estado puede ser 'system', 'light', o 'dark', pero la UI solo alterna entre light y dark.
+ * Inicia con el tema del sistema. Una vez que el usuario elige un tema (claro/oscuro),
+ * su preferencia se guarda en localStorage y persiste en futuras visitas.
  * @author Kevin Mariano
- * @version 1.0.0
+ * @version 4.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -13,18 +14,17 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 
-type ThemeState = 'system' | 'light' | 'dark';
-type EffectiveTheme = 'light' | 'dark';
+type Theme = 'light' | 'dark';
 
 interface ThemeContextProps {
-  effectiveTheme: EffectiveTheme;
+  theme: Theme;
   toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextProps | undefined>(undefined);
 
 /**
- * Hook personalizado para acceder al contexto del tema.
+ * Hook personalizado para acceder al contexto del tema de forma segura.
  * @throws {Error} Si se usa fuera de un ThemeProvider.
  * @returns El contexto del tema.
  */
@@ -36,63 +36,61 @@ export const useTheme = (): ThemeContextProps => {
   return context;
 };
 
-interface ThemeProviderProps {
-  children: ReactNode;
-}
+/**
+ * Función auxiliar para obtener el tema inicial.
+ * Se ejecuta solo en el lado del cliente para evitar errores de hidratación.
+ * @returns {Theme} El tema guardado o el del sistema como fallback.
+ */
+const getInitialTheme = (): Theme => {
+  // Este código solo se ejecuta en el navegador
+  if (typeof window !== 'undefined') {
+    const storedTheme = localStorage.getItem('theme') as Theme | null;
+    // Si el usuario ya eligió un tema, respétalo.
+    if (storedTheme) {
+      return storedTheme;
+    }
+    // Si no, usa el tema del sistema como valor inicial.
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  // Valor por defecto para el renderizado en servidor (no se verá en la UI final).
+  return 'light';
+};
+
 
 /**
- * Proveedor que envuelve la aplicación y proporciona el contexto del tema.
- * @param {ThemeProviderProps} props Las propiedades del proveedor.
+ * Proveedor que envuelve la aplicación y gestiona el estado del tema.
+ * @param {object} props - Propiedades del componente.
+ * @param {ReactNode} props.children - Los componentes hijos que consumirán el contexto.
  * @returns {JSX.Element}
  */
-export const ThemeProvider = ({ children }: ThemeProviderProps): JSX.Element => {
-  const [themeState, setThemeState] = useState<ThemeState>('system');
-  const [effectiveTheme, setEffectiveTheme] = useState<EffectiveTheme>('light');
+export const ThemeProvider = ({ children }: { children: ReactNode }): JSX.Element => {
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
 
-  useEffect(() => {
-    const storedTheme = localStorage.getItem('theme') as ThemeState | null;
-    setThemeState(storedTheme || 'system');
-  }, []);
-
+  /**
+   * Efecto que se aplica cada vez que el estado del tema cambia.
+   * Su única responsabilidad es actualizar la clase en el elemento <html>.
+   */
   useEffect(() => {
     const root = document.documentElement;
-    
-    const applyTheme = () => {
-      let themeToApply: EffectiveTheme;
+    root.classList.remove('light', 'dark');
+    root.classList.add(theme);
+  }, [theme]);
 
-      if (themeState === 'system') {
-        localStorage.removeItem('theme');
-        themeToApply = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      } else {
-        localStorage.setItem('theme', themeState);
-        themeToApply = themeState;
-      }
-      
-      root.classList.remove('light', 'dark');
-      root.classList.add(themeToApply);
-      setEffectiveTheme(themeToApply);
-    };
-
-    applyTheme();
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleSystemChange = (e: MediaQueryListEvent) => {
-      if (!localStorage.getItem('theme')) {
-        applyTheme();
-      }
-    };
-    mediaQuery.addEventListener('change', handleSystemChange);
-    
-    return () => mediaQuery.removeEventListener('change', handleSystemChange);
-  }, [themeState]);
-
+  /**
+   * Función para alternar el tema entre 'light' y 'dark'.
+   * Cada vez que se llama, guarda la nueva preferencia en localStorage.
+   */
   const toggleTheme = useCallback(() => {
-    const newTheme = effectiveTheme === 'light' ? 'dark' : 'light';
-    setThemeState(newTheme);
-  }, [effectiveTheme]);
+    setTheme((prevTheme) => {
+      const newTheme = prevTheme === 'light' ? 'dark' : 'light';
+      // Guardar la elección del usuario inmediatamente.
+      localStorage.setItem('theme', newTheme);
+      return newTheme;
+    });
+  }, []);
 
   return (
-    <ThemeContext.Provider value={{ effectiveTheme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
