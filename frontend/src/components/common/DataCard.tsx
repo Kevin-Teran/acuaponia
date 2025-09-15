@@ -1,10 +1,15 @@
 /**
  * @file DataCard.tsx
+ * @route frontend/src/components/common
  * @description Un componente contenedor que gestiona su propio estado de carga.
  * Esta versión simplificada elimina las dependencias de sub-componentes para
  * evitar errores de importación.
  * @author Kevin Mariano
+ * @version 1.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
  */
+
  'use client';
 
  import React from 'react';

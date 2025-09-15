@@ -1,9 +1,12 @@
 /**
  * @file Modal.tsx
  * @description Componente de modal genérico, accesible y reutilizable.
- * @technical_requirements Maneja su estado de visibilidad a través de props. Se cierra al
- * presionar la tecla 'Escape' o al hacer clic fuera del contenido.
+ * @author Kevin Mariano
+ * @version 1.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
  */
+
  import React, { useEffect } from 'react';
  import { X } from 'lucide-react';
  import { clsx } from 'clsx';

@@ -1,7 +1,7 @@
 /**
  * @file SidebarNav.tsx
  * @route frontend/src/components/layout/sidebar
- * @description 
+ * @description Renderiza la lista de módulos de navegación.
  * @author Kevin Mariano
  * @version 1.0.0
  * @since 1.0.0

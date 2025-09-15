@@ -1,7 +1,7 @@
 /**
  * @file Sidebar.tsx
  * @route frontend/src/components/layout/sidebar
- * @description 
+ * @description Componente principal de la barra lateral.
  * @author Kevin Mariano
  * @version 1.0.0
  * @since 1.0.0

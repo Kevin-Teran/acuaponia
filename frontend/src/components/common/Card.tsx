@@ -1,15 +1,16 @@
 /**
  * @file Card.tsx
+ * @route frontend/src/components/common
  * @description Componentes modulares y reutilizables para construir tarjetas de UI.
- * @version 2.0.0
  * @author Kevin Mariano
- * @technical_requirements Utiliza `clsx` para la combinación dinámica de clases y `React.forwardRef`
- * para una correcta propagación de refs.
+ * @version 1.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
  */
+
  import React from 'react';
  import { clsx } from 'clsx';
  
- // --- Contenedor Principal de la Tarjeta ---
  const Card = React.forwardRef<
    HTMLDivElement,
    React.HTMLAttributes<HTMLDivElement>
@@ -25,7 +26,6 @@
  ));
  Card.displayName = 'Card';
  
- // --- Cabecera de la Tarjeta ---
  const CardHeader = React.forwardRef<
    HTMLDivElement,
    React.HTMLAttributes<HTMLDivElement>
@@ -38,7 +38,6 @@
  ));
  CardHeader.displayName = 'CardHeader';
  
- // --- Título de la Tarjeta ---
  const CardTitle = React.forwardRef<
    HTMLParagraphElement,
    React.HTMLAttributes<HTMLHeadingElement>
@@ -54,7 +53,6 @@
  ));
  CardTitle.displayName = 'CardTitle';
  
- // --- Descripción o Subtítulo de la Tarjeta ---
  const CardDescription = React.forwardRef<
    HTMLParagraphElement,
    React.HTMLAttributes<HTMLParagraphElement>
@@ -67,7 +65,6 @@
  ));
  CardDescription.displayName = 'CardDescription';
  
- // --- Contenido Principal de la Tarjeta ---
  const CardContent = React.forwardRef<
    HTMLDivElement,
    React.HTMLAttributes<HTMLDivElement>
@@ -76,7 +73,6 @@
  ));
  CardContent.displayName = 'CardContent';
  
- // --- Pie de la Tarjeta ---
  const CardFooter = React.forwardRef<
    HTMLDivElement,
    React.HTMLAttributes<HTMLDivElement>
@@ -89,5 +85,4 @@
  ));
  CardFooter.displayName = 'CardFooter';
  
- // --- Exportamos todos los componentes ---
  export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent };

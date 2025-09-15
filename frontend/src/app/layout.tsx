@@ -1,7 +1,8 @@
 /**
  * @file layout.tsx
  * @route frontend/src/app
- * @description 
+ * @description Layout raíz que envuelve toda la aplicación.
+ * Asegura el orden correcto de los proveedores para un funcionamiento sin errores.
  * @author Kevin Mariano
  * @version 1.0.0
  * @since 1.0.0
@@ -24,25 +25,19 @@ export const metadata: Metadata = {
   },
 };
 
-/**
- * @layout RootLayout
- * @description Layout principal que envuelve toda la aplicación.
- * Configura los proveedores de autenticación y tema, estilos globales y fuente.
- * @author Kevin Mariano
- */
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" className={inter.className} suppressHydrationWarning>
-      <body className="flex min-h-screen flex-col bg-gray-100 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
-        <AuthProvider>
-          <ThemeProvider>
-            <main className="flex-grow">{children}</main>
-          </ThemeProvider>
-        </AuthProvider>
+    <html lang="es" suppressHydrationWarning>
+      <body className={inter.className}>
+        <ThemeProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
