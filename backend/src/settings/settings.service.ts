@@ -1,16 +1,16 @@
 /**
  * @file settings.service.ts
- * @route 
+ * @route backend/src/settings
  * @description Servicio que encapsula la lógica de negocio para la gestión de la configuración de usuarios.
  * Utiliza Prisma para interactuar con la base de datos y manejar un campo JSON 'settings' en el modelo de Usuario.
  * @author Kevin Mariano
- * @version 1.1.0
+ * @version 1.0.1
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service'; // ¡Esta es la importación correcta para tu proyecto!
+import { PrismaService } from '../prisma/prisma.service'; 
 
 @Injectable()
 export class SettingsService {
@@ -40,7 +40,6 @@ export class SettingsService {
       throw new NotFoundException('Usuario no encontrado.');
     }
     
-    // Si 'settings' es nulo en la BD, devolvemos un objeto vacío. Es una buena práctica.
     return user.settings || {};
   }
 
@@ -61,8 +60,6 @@ export class SettingsService {
       throw new NotFoundException('Usuario no encontrado.');
     }
 
-    // Fusiona las configuraciones actuales con las nuevas para no sobrescribir datos.
-    // Si user.settings es null, lo trata como un objeto vacío.
     const currentSettings = (user.settings as object) || {};
     const newSettings = { ...currentSettings, ...settings };
 
@@ -71,7 +68,7 @@ export class SettingsService {
       data: { 
         settings: newSettings 
       },
-      select: { settings: true } // Devuelve solo el campo 'settings' actualizado.
+      select: { settings: true } 
     });
   }
 }

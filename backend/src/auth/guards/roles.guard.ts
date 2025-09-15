@@ -4,7 +4,7 @@
  * @description Un guard que protege rutas, permitiendo el acceso solo a usuarios
  * con los roles especificados en el decorador `@Roles`. Es fundamental para la
  * autorización basada en roles (RBAC).
- * @author Sistema de Acuaponía SENA
+ * @author kevin mariano
  * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025

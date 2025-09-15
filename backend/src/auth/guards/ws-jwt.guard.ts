@@ -1,7 +1,7 @@
 /**
  * @file ws-jwt.guard.ts
  * @description Guardia de autenticación JWT para WebSockets.
- * @author Gemini AI & Kevin Mariano
+ * @author Kevin Mariano
  * @version 1.0.0
  * @copyright SENA 2025
  */

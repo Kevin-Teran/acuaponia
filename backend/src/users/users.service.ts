@@ -1,6 +1,6 @@
 /**
  * @file users.service.ts
- * @route 
+ * @route backend/src/users
  * @description Servicio para la gestión de usuarios.
  * Este archivo contiene la lógica de negocio para interactuar con la entidad de usuarios en la base de datos.
  * @author Kevin Mariano

@@ -1,6 +1,6 @@
 /**
  * @file data.controller.ts
- * @route 
+ * @route /backend/src/data
  * @description Controlador para endpoints de datos de sensores.
  * @author Kevin Mariano 
  * @version 1.0.0

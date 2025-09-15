@@ -1,7 +1,7 @@
 /**
  * @file mqtt.module.ts
- * @route 
- * @description Módulo para la gestión de MQTT, corrigiendo dependencias circulares.
+ * @route /backend/src/mqtt
+ * @description Módulo para la gestión de MQTT.
  * @author Kevin Mariano 
  * @version 1.0.0
  * @since 1.0.0

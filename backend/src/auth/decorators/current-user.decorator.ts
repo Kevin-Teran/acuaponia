@@ -1,9 +1,9 @@
 /**
  * @file current-user.decorator.ts
  * @route backend/src/auth/decorators
- * @description Decorador para extraer el usuario autenticado del request
+ * @description Decorador para extraer el usuario autenticado del request.
  * @author Kevin Mariano
- * @version 1.1.2
+ * @version 1.0.9
  * @since 1.0.00
  * @copyright SENA 2025
  */

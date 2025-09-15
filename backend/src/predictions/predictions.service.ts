@@ -3,7 +3,7 @@
  * @route backend/src/predictions
  * @description Lógica de negocio para predicciones. AHORA INCLUYE UMBRALES.
  * @author Kevin Mariano
- * @version 1.4.0
+ * @version 1.0.4
  * @since 1.0.0
  * @copyright SENA 2025
  */

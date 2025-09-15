@@ -1,6 +1,6 @@
 /**
  * @file index.ts
- * @route frontend/src/components/dashboard/
+ * @route frontend/src/components/dashboard
  * @description Archivo barril para exportar todos los componentes del dashboard.
  * @author Kevin Mariano
  * @version 1.0.0

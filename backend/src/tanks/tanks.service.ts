@@ -1,6 +1,6 @@
 /**
  * @file tanks.service.ts
- * @route 
+ * @route backend/src/tanks
  * @description Lógica de negocio para la gestión de tanques con validación de nombres únicos por usuario.
  * @author Kevin Mariano 
  * @version 1.0.0

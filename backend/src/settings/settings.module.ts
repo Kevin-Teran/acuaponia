@@ -1,9 +1,9 @@
 /**
  * @file settings.module.ts
- * @route 
+ * @route backend/src/settings
  * @description Módulo para la gestión de configuraciones.
  * @author Kevin Mariano
- * @version 1.1.0
+ * @version 1.0.1
  * @copyright SENA 2025
  */
  import { Module } from '@nestjs/common';

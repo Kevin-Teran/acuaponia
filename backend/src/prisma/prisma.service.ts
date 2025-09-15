@@ -1,12 +1,12 @@
 /**
  * @file prisma.module.ts
- * @route backend/src/prisma/
+ * @route backend/src/prisma
  * @description Extiende PrismaClient para integrarse con el ciclo de vida de los módulos de NestJS.
  * Permite conectar y desconectar la base de datos de forma segura al iniciar o apagar la aplicación.
  * Los métodos `$connect` y `$disconnect` son heredados directamente de PrismaClient después
  * de ejecutar `prisma generate`.
  * @author Kevin Mariano
- * @version 1.1.0
+ * @version 1.0.1
  * @since 1.0.0
  * @copyright SENA 2025
  */

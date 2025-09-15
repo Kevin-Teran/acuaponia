@@ -1,10 +1,10 @@
 /**
  * @file update-sensor.dto.ts
- * @route 
+ * @route backend/src/sensors/dto
  * @description Data Transfer Object (DTO) para la actualización parcial de un sensor.
  * Define la estructura y las validaciones para los datos que se pueden modificar.
  * @author Kevin Mariano
- * @version 1.1.0
+ * @version 1.0.1
  * @since 1.0.0
  * @copyright SENA 2025
  */

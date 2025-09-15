@@ -1,6 +1,6 @@
 /**
  * @file sensors.module
- * @route 
+ * @route backend/src/sensors
  * @description 
  * @author Kevin Mariano
  * @version 1.0.1

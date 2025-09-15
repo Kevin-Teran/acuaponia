@@ -1,7 +1,7 @@
 /**
  * @file prisma.module.ts
- * @route 
- * @description 
+ * @route backend/src/prisma
+ * @description Módulo que provee el Prisma.
  * @author Kevin Mariano 
  * @version 1.0.0 
  * @since 1.0.0

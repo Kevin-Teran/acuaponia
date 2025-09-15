@@ -1,6 +1,6 @@
 /**
  * @file users.module.ts
- * @route 
+ * @route backend/src/users
  * @description 
  * @author Kevin Mariano
  * @version 1.0.0

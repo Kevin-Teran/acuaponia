@@ -1,6 +1,6 @@
 /**
  * @file update-setting.dto.ts
- * @route 
+ * @route backend/src/settings/dto
  * @description Data Transfer Object (DTO) para la actualización de la configuración de un usuario.
  * Utiliza class-validator para garantizar la integridad y el formato de los datos de entrada.
  * @author Kevin Mariano

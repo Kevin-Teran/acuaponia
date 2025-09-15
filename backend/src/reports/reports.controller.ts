@@ -1,6 +1,6 @@
 /**
  * @file reports.controller.ts
- * @route 
+ * @route backend/src/reports
  * @description 
  * @author Kevin Mariano 
  * @version 1.0.0 

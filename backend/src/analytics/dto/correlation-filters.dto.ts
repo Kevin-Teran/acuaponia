@@ -1,7 +1,7 @@
 /**
  * @file correlation-filters.dto.ts
  * @route backend/src/analytics/dto/
- * @description DTO para los filtros de las consultas de correlación - SOLUCIÓN FINAL.
+ * @description DTO para los filtros de las consultas de correlación.
  * @author kevin mariano
  * @version 1.0.0
  * @since 1.0.0

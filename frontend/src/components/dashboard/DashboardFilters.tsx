@@ -1,6 +1,6 @@
 /**
  * @file DashboardFilters.tsx
- * @route frontend/src/components/dashboard/
+ * @route frontend/src/components/dashboard
  * @description Componente de filtros con todas las correcciones: selector de admin, sin "Todos los Tanques" y estilos de focus unificados.
  * @author Kevin Mariano
  * @version 1.0.0

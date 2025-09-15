@@ -1,6 +1,6 @@
 /**
  * @file tanks.module.ts
- * @route 
+ * @route backend/src/tanks
  * @description 
  * @author Kevin Mariano
  * @version 1.0.0

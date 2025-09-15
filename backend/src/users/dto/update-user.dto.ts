@@ -1,6 +1,6 @@
 /**
  * @file update-user.dto.ts
- * @route 
+ * @route backend/src/users/dto
  * @description DTO para validar los datos al actualizar un usuario. Todos los campos son opcionales.
  * @author Kevin Mariano 
  * @version 1.0.0

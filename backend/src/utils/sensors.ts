@@ -1,6 +1,6 @@
 /**
  * @file sensors.ts
- * @route 
+ * @route backend/src/utils
  * @description 
  * @author Kevin Mariano
  * @version 1.0.0

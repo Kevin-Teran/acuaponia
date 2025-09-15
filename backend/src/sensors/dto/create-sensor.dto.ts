@@ -1,7 +1,7 @@
 /**
  * @file create-sensor.dto.ts
- * @route 
- * @description 
+ * @route backend/src/sensors/dto
+ * @description Define la estructura y validaciones para crear un nuevo sensor.
  * @author Kevin Mariano
  * @version 1.0.1
  * @since 1.0.0

@@ -2,8 +2,8 @@
  * @file dashboard.service.ts
  * @route /backend/src/dashboard
  * @description Servicio para la lógica de negocio del dashboard con datos optimizados.
- * @author Kevin Mariano & Gemini AI
- * @version 4.0.0 
+ * @author Kevin Mariano
+ * @version 1.0.0 
  * @since 1.0.0
  * @copyright SENA 2025
  */

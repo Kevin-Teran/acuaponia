@@ -1,6 +1,6 @@
 /**
  * @file emitter.dto.ts
- * @route 
+ * @route /backend/src/data/dto
  * @description DTO para validar el cuerpo de la petición al iniciar o detener simuladores.
  * Debe contener un array de IDs de sensores.
  * @author Kevin Mariano

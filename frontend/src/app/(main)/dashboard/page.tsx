@@ -1,9 +1,9 @@
 /**
  * @file page.tsx
- * @route frontend/src/app/(main)/dashboard/
+ * @route frontend/src/app/(main)/dashboard
  * @description Página principal del dashboard, con corrección definitiva para la importación de módulos de fecha.
- * @author Kevin Mariano & Gemini AI
- * @version 4.0.0 (Versión Estable)
+ * @author Kevin Mariano 
+ * @version 1.0.3 
  * @since 1.0.0
  * @copyright SENA 2025
  */

@@ -6,7 +6,7 @@
  * de la solicitud de inicio de sesión. Incluye las credenciales del usuario y
  * una opción para mantener la sesión activa.
  * @author kevin mariano
- * @version 1.1.0
+ * @version 1.0.9
  * @since 1.0.0
  * @copyright SENA 2025
  */

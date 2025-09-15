@@ -3,7 +3,7 @@
  * @route backend/src/auth/dto
  * @description  
  * @author Kevin Mariano
- * @version 1.0.0
+ * @version 1.0.9
  * @since 1.0.0
  * @copyright SENA 2025
  */

@@ -3,8 +3,8 @@
  * @route /backend/src/events
  * @description Gateway de WebSockets protegido con autenticación JWT.
  * Emite eventos a salas específicas por `userId` para sensores y reportes.
- * @author Kevin Mariano & Gemini AI
- * @version 3.0.0 (Autenticación Robusta con WsJwtGuard)
+ * @author Kevin Mariano
+ * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */

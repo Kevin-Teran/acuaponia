@@ -1,6 +1,6 @@
 /**
  * @file users.controller.ts
- * @route 
+ * @route backend/src/users
  * @description Controlador para gestionar las peticiones HTTP relacionadas con los usuarios.
  * Expone los endpoints para las operaciones CRUD de usuarios.
  * @author Kevin Mariano

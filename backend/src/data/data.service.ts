@@ -1,6 +1,6 @@
 /**
  * @file data.service.ts
- * @route 
+ * @route /backend/src/data
  * @description Servicio completo y robusto para toda la gestión de datos de sensores.
  * Incluye: simulación, persistencia, recepción y guardado desde MQTT, y endpoints de consulta de datos.
  * @author Kevin Mariano 

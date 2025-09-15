@@ -1,6 +1,6 @@
 /**
  * @file GaugeChart.tsx
- * @route frontend/src/components/dashboard/GaugeChart.tsx
+ * @route frontend/src/components/dashboard
  * @description Componente mejorado para mostrar medidores semicirculares. Ahora centrado y con un diseño más pulido.
  * @author Kevin Mariano 
  * @version 1.0.1

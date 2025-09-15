@@ -1,6 +1,6 @@
 /**
  * @file manual-entry.dto.ts
- * @route 
+ * @route /backend/src/data/dto
  * @description DTO para el registro manual de datos de un sensor.
  * @author Kevin Mariano
  * @version 2.0.0

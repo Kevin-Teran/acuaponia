@@ -13,7 +13,7 @@ import { AnalyticsService } from './analytics.service';
 import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
-  imports: [PrismaModule], // Importamos PrismaModule para el acceso a la base de datos.
+  imports: [PrismaModule], 
   controllers: [AnalyticsController],
   providers: [AnalyticsService],
 })

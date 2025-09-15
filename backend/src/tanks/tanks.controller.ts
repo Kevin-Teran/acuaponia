@@ -1,6 +1,6 @@
 /**
  * @file tanks.controller.ts
- * @route 
+ * @route backend/src/tanks
  * @description Endpoints para la gestión de tanques.
  * @author Kevin Mariano
  * @version 1.0.0

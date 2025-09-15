@@ -1,6 +1,6 @@
 /**
  * @file get-latest-data.dto.ts
- * @route 
+ * @route /backend/src/data/dto
  * @description
  * @author Kevin Mariano
  * @version 1.2.0 

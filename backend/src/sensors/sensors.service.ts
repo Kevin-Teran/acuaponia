@@ -1,6 +1,6 @@
 /**
  * @file sensors.service.ts
- * @route 
+ * @route backend/src/sensors
  * @description Lógica de negocio para la gestión de sensores, con validación de límite por tipo de sensor por tanque.
  * @author Kevin Mariano 
  * @version 2.1.0

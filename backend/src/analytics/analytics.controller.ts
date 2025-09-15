@@ -1,7 +1,7 @@
 /**
  * @file analytics.controller.ts
  * @route backend/src/analytics/
- * @description Controlador para los endpoints del módulo de analíticas - SOLUCIÓN FINAL.
+ * @description Controlador para los endpoints del módulo de analíticas.
  * @author kevin mariano
  * @version 1.0.0
  * @since 1.0.0

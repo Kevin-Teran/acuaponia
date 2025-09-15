@@ -1,6 +1,6 @@
 /**
  * @file find-sensors.dto.ts
- * @route 
+ * @route backend/src/sensors/dto
  * @description 
  * @author Kevin Mariano
  * @version 1.0.1

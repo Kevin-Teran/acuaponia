@@ -1,9 +1,9 @@
 /**
  * @file analytics.service.ts
  * @route backend/src/analytics/
- * @description Servicio para la lógica de negocio de analíticas avanzadas - VERSIÓN CORREGIDA.
+ * @description Servicio para la lógica de negocio de analíticas avanzadas.
  * @author kevin mariano
- * @version 2.0.0
+ * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */

@@ -1,6 +1,6 @@
 /**
  * @file swagger.ts
- * @route 
+ * @route backend/src/utils
  * @description Configuración e inicialización de Swagger para la documentación de la API.
  * @author Kevin Mariano
  * @version 1.0.0

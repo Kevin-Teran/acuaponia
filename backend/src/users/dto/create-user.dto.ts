@@ -1,6 +1,6 @@
 /**
  * @file create-user.dto.ts
- * @route 
+ * @route backend/src/users/dto
  * @description DTO para validar los datos al crear un nuevo usuario.
  * @author Kevin Mariano 
  * @version 1.0.0

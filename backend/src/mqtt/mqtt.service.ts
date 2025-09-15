@@ -1,6 +1,6 @@
 /**
  * @file mqtt.service.ts
- * @route 
+ * @route /backend/src/mqtt
  * @description Servicio backend para gestionar la conexión y comunicación con el broker MQTT.
  * Escucha los topics de los sensores y delega el procesamiento de datos al DataService.
  * @author Kevin Mariano 
@@ -17,7 +17,7 @@ import { ConfigService } from '@nestjs/config';
 export class MqttService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MqttService.name);
   private client: MqttClient;
-  private readonly topicPattern = '+'; // Suscripción a topics de un solo nivel (hardwareId)
+  private readonly topicPattern = '+'; 
 
   constructor(
     @Inject(forwardRef(() => DataService))
@@ -61,7 +61,6 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
       this.subscribeToTopics();
     });
 
-    // --- PUNTO CLAVE DE LA RECEPCIÓN ---
     this.client.on('message', (topic, payload) => {
       this.logger.log(`📨 [MQTT] Mensaje RECIBIDO | Topic: [${topic}] | Payload: "${payload.toString()}"`);
       this.handleSensorMessage(topic, payload.toString());
@@ -97,12 +96,10 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
 
       this.logger.log(`🔧 [MQTT] Procesando | hardwareId: ${hardwareId}, valor: ${value}`);
       
-      // Delega la lógica de negocio y guardado al DataService
       await this.dataService.createFromMqtt(hardwareId, { value });
       this.logger.log(`✅ [MQTT] Mensaje para ${hardwareId} enviado a DataService exitosamente.`);
 
     } catch (error) {
-      // Captura errores si, por ejemplo, el hardwareId no existe en la BD
       this.logger.error(`💥 [MQTT] Error al procesar mensaje para "${topic}": ${error.message}`);
     }
   }

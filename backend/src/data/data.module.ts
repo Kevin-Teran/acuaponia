@@ -1,6 +1,6 @@
 /**
  * @file data.module.ts
- * @route 
+ * @route /backend/src/data
  * @description Módulo para la gestión de datos, corrigiendo dependencias circulares.
  * @author Kevin Mariano
  * @version 1.0.0
