@@ -7,6 +7,7 @@
  * @since 1.0.0
  * @copyright SENA 2025
  */
+
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';

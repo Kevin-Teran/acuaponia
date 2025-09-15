@@ -7,6 +7,7 @@
  * @since 1.0.0
  * @copyright SENA 2025
  */
+
 import { IsOptional, IsString, IsEnum } from 'class-validator';
 import { SensorType } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
