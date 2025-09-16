@@ -28,7 +28,8 @@ import { differenceInDays, parseISO } from 'date-fns';
 import { sensorTypeTranslations } from '@/utils/translations';
 
 const AnalyticsPage = () => {
-  const { user: currentUser, isLoading: isAuthLoading } = useAuth();
+  // SOLUCIÓN: Se cambia 'isLoading' por 'loading' para que coincida con el AuthContext.
+  const { user: currentUser, loading: isAuthLoading } = useAuth();
   const isAdmin = currentUser?.role === Role.ADMIN;
 
   const { tanks, sensors, users, loading: isInfraLoading, fetchDataForUser } = useInfrastructure(isAdmin);
@@ -40,13 +41,13 @@ const AnalyticsPage = () => {
   const [selectedSensorType, setSelectedSensorType] = useState(SensorType.TEMPERATURE);
   const [selectedSensorId, setSelectedSensorId] = useState('ALL');
   const [selectedRange, setSelectedRange] = useState('week');
-  
+
   // Estados de validación
-  const [availableRanges, setAvailableRanges] = useState({ 
-    day: true, 
-    week: false, 
-    month: false, 
-    year: false 
+  const [availableRanges, setAvailableRanges] = useState({
+    day: true,
+    week: false,
+    month: false,
+    year: false
   });
   const [hasInitialData, setHasInitialData] = useState<boolean | null>(null);
   const [dataRangeLoading, setDataRangeLoading] = useState(true);
@@ -182,7 +183,7 @@ const AnalyticsPage = () => {
             )}
 
             <section className="space-y-6">
-              
+
               <div>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
                   <div>
@@ -206,10 +207,10 @@ const AnalyticsPage = () => {
               </div>
 
               <Card className="shadow-md transition-shadow hover:shadow-lg">
-                <TimeSeriesChart 
-                  data={timeSeriesData} 
-                  loading={isAnalyticsLoading.timeSeries} 
-                  sensorType={selectedSensorType} 
+                <TimeSeriesChart
+                  data={timeSeriesData}
+                  loading={isAnalyticsLoading.timeSeries}
+                  sensorType={selectedSensorType}
                 />
               </Card>
             </section>
@@ -217,9 +218,9 @@ const AnalyticsPage = () => {
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
               <section>
                 <Card className="shadow-md transition-shadow hover:shadow-lg">
-                  <ParameterCorrelation 
-                    data={correlationData} 
-                    loading={isAnalyticsLoading.correlation} 
+                  <ParameterCorrelation
+                    data={correlationData}
+                    loading={isAnalyticsLoading.correlation}
                     filters={{
                       userId: selectedUserId,
                       tankId: selectedTankId,

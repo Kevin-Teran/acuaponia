@@ -16,8 +16,9 @@ import * as sensorService from '@/services/sensorService';
 import * as userService from '@/services/userService';
 import * as dataService from '@/services/dataService';
 import { EmitterStatus } from '@/services/dataService';
-import { socketService } from '@/services/socketService';
-import { mqttService } from '@/services/mqttService';
+// SOLUCIÓN: Se corrige la importación de 'socketService' y 'mqttService' para que sean default.
+import socketService from '@/services/socketService';
+import mqttService from '@/services/mqttService';
 import { useAuth } from '@/context/AuthContext';
 import Swal from 'sweetalert2';
 
@@ -40,18 +41,18 @@ export const useDataEntry = () => {
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [selectedTankId, setSelectedTankId] = useState<string>('');
   const [sensors, setSensors] = useState<Sensor[]>([]);
-  
+
   // Estados de UI y control
   const [loading, setLoading] = useState<LoadingState>({ users: true, tanks: true, sensors: true, simulations: true });
   const [error, setError] = useState<string | null>(null);
   const [isSubmittingManual, setIsSubmittingManual] = useState(false);
   const [isTogglingSimulation, setIsTogglingSimulation] = useState<Set<string>>(new Set());
-  
+
   const [manualReadings, setManualReadings] = useState<Record<string, string>>({});
-  
+
   const [activeSimulations, setActiveSimulations] = useState<EmitterStatus[]>([]);
   const [mqttStatus, setMqttStatus] = useState<MqttStatus>('disconnected');
-  
+
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // --- Sincronización y Efectos ---
@@ -106,7 +107,7 @@ export const useDataEntry = () => {
       if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
     };
   }, [syncSimulationStatus]);
-  
+
   // Carga sectorizada de datos
   useEffect(() => {
     const loadUsers = async () => {
@@ -118,12 +119,12 @@ export const useDataEntry = () => {
       try {
         const usersData = await userService.getUsers();
         setUsers(usersData);
-      } catch (err) { setError('No se pudo cargar la lista de usuarios.'); } 
+      } catch (err) { setError('No se pudo cargar la lista de usuarios.'); }
       finally { setLoading(prev => ({ ...prev, users: false })); }
     };
     loadUsers();
   }, [isAdmin, currentUser]);
-  
+
   useEffect(() => {
     if (!selectedUserId) {
         setTanks([]);
@@ -142,7 +143,7 @@ export const useDataEntry = () => {
           setSelectedTankId('');
           setSensors([]);
         }
-      } catch (err) { setError('No se pudieron cargar los tanques.'); } 
+      } catch (err) { setError('No se pudieron cargar los tanques.'); }
       finally { setLoading(prev => ({ ...prev, tanks: false })); }
     };
     loadTanks();
@@ -171,11 +172,11 @@ export const useDataEntry = () => {
     setSelectedUserId(userId);
     setSelectedTankId(''); // Resetea el tanque para forzar recarga
   }, []);
-  
+
   const handleTankChange = useCallback((tankId: string) => {
     setSelectedTankId(tankId);
   }, []);
-  
+
   const handleManualReadingChange = useCallback((sensorId: string, value: string) => {
     setManualReadings(prev => ({ ...prev, [sensorId]: value }));
   }, []);
