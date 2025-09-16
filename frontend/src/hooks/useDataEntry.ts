@@ -16,7 +16,6 @@ import * as sensorService from '@/services/sensorService';
 import * as userService from '@/services/userService';
 import * as dataService from '@/services/dataService';
 import { EmitterStatus } from '@/services/dataService';
-// SOLUCIÓN: Se cambia la importación a 'nombrada' ({ ... }) en lugar de 'default'.
 import { socketService } from '@/services/socketService';
 import { mqttService } from '@/services/mqttService';
 import { useAuth } from '@/context/AuthContext';
@@ -41,19 +40,21 @@ export const useDataEntry = () => {
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [selectedTankId, setSelectedTankId] = useState<string>('');
   const [sensors, setSensors] = useState<Sensor[]>([]);
-
+  
   // Estados de UI y control
   const [loading, setLoading] = useState<LoadingState>({ users: true, tanks: true, sensors: true, simulations: true });
   const [error, setError] = useState<string | null>(null);
   const [isSubmittingManual, setIsSubmittingManual] = useState(false);
   const [isTogglingSimulation, setIsTogglingSimulation] = useState<Set<string>>(new Set());
-
+  
   const [manualReadings, setManualReadings] = useState<Record<string, string>>({});
-
+  
   const [activeSimulations, setActiveSimulations] = useState<EmitterStatus[]>([]);
   const [mqttStatus, setMqttStatus] = useState<MqttStatus>('disconnected');
-
+  
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // --- Sincronización y Efectos ---
 
   const syncSimulationStatus = useCallback(async () => {
     if (!currentUser) return;
@@ -67,16 +68,20 @@ export const useDataEntry = () => {
     }
   }, [currentUser]);
 
+  // Efecto para conexiones (WebSocket y MQTT) y sincronización
   useEffect(() => {
+    // Conectar servicios
     socketService.connect();
     mqttService.connect();
 
+    // Suscribirse a cambios de estado de MQTT
     const unsubscribeMqtt = mqttService.onStatusChange(status => {
       if (status.connected) setMqttStatus('connected');
       else if (status.connecting) setMqttStatus('connecting');
       else setMqttStatus('disconnected');
     });
 
+    // Escuchar actualizaciones de datos por WebSocket
     const handleSensorUpdate = (data: SensorData) => {
       setActiveSimulations(prevSims =>
         prevSims.map(sim =>
@@ -88,9 +93,11 @@ export const useDataEntry = () => {
     };
     socketService.onSensorData(handleSensorUpdate);
 
+    // Sincronización inicial y periódica del estado de los emisores
     syncSimulationStatus();
     syncIntervalRef.current = setInterval(syncSimulationStatus, 15000);
 
+    // Limpieza al desmontar el componente
     return () => {
       socketService.offSensorData(handleSensorUpdate);
       socketService.disconnect();
@@ -99,7 +106,8 @@ export const useDataEntry = () => {
       if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
     };
   }, [syncSimulationStatus]);
-
+  
+  // Carga sectorizada de datos
   useEffect(() => {
     const loadUsers = async () => {
       if (!isAdmin) {
@@ -110,12 +118,12 @@ export const useDataEntry = () => {
       try {
         const usersData = await userService.getUsers();
         setUsers(usersData);
-      } catch (err) { setError('No se pudo cargar la lista de usuarios.'); }
+      } catch (err) { setError('No se pudo cargar la lista de usuarios.'); } 
       finally { setLoading(prev => ({ ...prev, users: false })); }
     };
     loadUsers();
   }, [isAdmin, currentUser]);
-
+  
   useEffect(() => {
     if (!selectedUserId) {
         setTanks([]);
@@ -134,7 +142,7 @@ export const useDataEntry = () => {
           setSelectedTankId('');
           setSensors([]);
         }
-      } catch (err) { setError('No se pudieron cargar los tanques.'); }
+      } catch (err) { setError('No se pudieron cargar los tanques.'); } 
       finally { setLoading(prev => ({ ...prev, tanks: false })); }
     };
     loadTanks();
@@ -157,15 +165,17 @@ export const useDataEntry = () => {
     loadSensors();
   }, [selectedTankId]);
 
+  // --- Handlers Optimizados ---
+
   const handleUserChange = useCallback((userId: string) => {
     setSelectedUserId(userId);
-    setSelectedTankId('');
+    setSelectedTankId(''); // Resetea el tanque para forzar recarga
   }, []);
-
+  
   const handleTankChange = useCallback((tankId: string) => {
     setSelectedTankId(tankId);
   }, []);
-
+  
   const handleManualReadingChange = useCallback((sensorId: string, value: string) => {
     setManualReadings(prev => ({ ...prev, [sensorId]: value }));
   }, []);
@@ -201,7 +211,7 @@ export const useDataEntry = () => {
       } else {
         await dataService.startEmitters([sensorId]);
       }
-      await syncSimulationStatus();
+      await syncSimulationStatus(); // Sincroniza solo el estado de los emisores
     } catch (error) {
       Swal.fire('Error', 'No se pudo cambiar el estado de la simulación.', 'error');
     } finally {

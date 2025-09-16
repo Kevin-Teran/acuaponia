@@ -14,8 +14,10 @@ import { ConfigModule } from '@nestjs/config';
 import { DataModule } from './data/data.module';
 import { MqttModule } from './mqtt/mqtt.module';
 import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
+import { EmailModule } from './email/email.module';
 import { TanksModule } from './tanks/tanks.module';
+import { UsersModule } from './users/users.module';
+import { AlertsModule } from './alerts/alerts.module';
 import { EventsModule } from './events/events.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SensorsModule } from './sensors/sensors.module';
@@ -35,10 +37,12 @@ import { PredictionsModule } from './predictions/predictions.module';
     DataModule,
     MqttModule,
     UsersModule,
+    EmailModule, 
     TanksModule,
     PrismaModule,
     PrismaModule,
     EventsModule,
+    AlertsModule, 
     SensorsModule,
     ReportsModule,
     SettingsModule,

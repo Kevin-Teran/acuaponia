@@ -1,9 +1,11 @@
 /**
  * @file LineChart.tsx
  * @route frontend/src/components/dashboard
- * @description Componente de gráfico de líneas con diseño premium, iconos y colores dinámicos.
+ * @description Componente de gráfico de líneas con sistema de muestreo inteligente, formateo 
+ * automático del eje X con formato de 12 horas, márgenes optimizados y línea dinámica 
+ * con colores basados en umbrales de sensores.
  * @author Kevin Mariano
- * @version 1.0.0 
+ * @version 2.3.0 
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -33,7 +35,16 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Settings, SensorType } from '@/types';
-import { format, differenceInDays, differenceInHours, differenceInMinutes, parseISO } from 'date-fns';
+import { 
+    format, 
+    differenceInDays, 
+    differenceInHours, 
+    differenceInMinutes, 
+    parseISO,
+    isSameDay,
+    startOfDay,
+    endOfDay
+} from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
 
@@ -58,25 +69,16 @@ interface SampledDataPoint extends ChartDataPoint {
     originalIndex: number;
 }
 
+interface ProcessedDataPoint extends ChartDataPoint {
+    status: 'optimal' | 'low' | 'high';
+    color: string;
+}
+
 // --- Constantes y Configuración ---
 const TIME_ZONE = 'America/Bogota';
-
-/**
- * @constant MAX_VISIBLE_POINTS
- * @description Límite máximo de puntos visibles en el gráfico para mantener rendimiento
- */
 const MAX_VISIBLE_POINTS = 150;
-
-/**
- * @constant MIN_POINTS_FOR_SAMPLING
- * @description Mínimo de puntos necesarios para activar el muestreo inteligente
- */
 const MIN_POINTS_FOR_SAMPLING = 50;
 
-/**
- * @enum TimeRangeType
- * @description Tipos de rangos temporales para determinar el formato del eje X
- */
 enum TimeRangeType {
     MINUTES = 'MINUTES',
     HOURS = 'HOURS', 
@@ -85,6 +87,12 @@ enum TimeRangeType {
     MONTHS = 'MONTHS',
     YEARS = 'YEARS'
 }
+
+const STATUS_COLORS = {
+    optimal: '#22c55e', // verde
+    low: '#3b82f6',     // azul
+    high: '#ef4444',    // rojo
+};
 
 const SENSOR_THEMES = {
     [SensorType.TEMPERATURE]: {
@@ -120,50 +128,40 @@ const SENSOR_THEMES = {
 };
 
 // --- Funciones de Utilidad ---
-
-/**
- * @function determineTimeRangeType
- * @description Determina el tipo de rango temporal basado en las fechas de inicio y fin
- * @param {Date} startDate - Fecha de inicio
- * @param {Date} endDate - Fecha de fin
- * @returns {TimeRangeType} Tipo de rango temporal
- */
 const determineTimeRangeType = (startDate: Date, endDate: Date): TimeRangeType => {
     const diffInMinutes = differenceInMinutes(endDate, startDate);
     const diffInHours = differenceInHours(endDate, startDate);
     const diffInDays = differenceInDays(endDate, startDate);
 
-    if (diffInMinutes <= 120) { // Menos de 2 horas
+    if (diffInMinutes <= 120) {
         return TimeRangeType.MINUTES;
-    } else if (diffInHours <= 48) { // Menos de 2 días
+    } else if (diffInHours <= 48) {
         return TimeRangeType.HOURS;
-    } else if (diffInDays <= 14) { // Menos de 2 semanas
+    } else if (diffInDays <= 14) {
         return TimeRangeType.DAYS;
-    } else if (diffInDays <= 90) { // Menos de 3 meses
+    } else if (diffInDays <= 90) {
         return TimeRangeType.WEEKS;
-    } else if (diffInDays <= 730) { // Menos de 2 años
+    } else if (diffInDays <= 730) {
         return TimeRangeType.MONTHS;
     } else {
         return TimeRangeType.YEARS;
     }
 };
 
-/**
- * @function getTickFormatter
- * @description Obtiene el formateador apropiado para los ticks del eje X según el tipo de rango
- * @param {TimeRangeType} rangeType - Tipo de rango temporal
- * @returns {function} Función formateadora
- */
-const getTickFormatter = (rangeType: TimeRangeType) => {
+const getTickFormatter = (rangeType: TimeRangeType, startDate?: Date, endDate?: Date) => {
     const formatters = {
         [TimeRangeType.MINUTES]: (tick: string) => 
-            formatInTimeZone(new Date(tick), TIME_ZONE, 'HH:mm:ss', { locale: es }),
+            formatInTimeZone(new Date(tick), TIME_ZONE, 'h:mm:ss a', { locale: es }),
         
-        [TimeRangeType.HOURS]: (tick: string) => 
-            formatInTimeZone(new Date(tick), TIME_ZONE, 'HH:mm', { locale: es }),
+        [TimeRangeType.HOURS]: (tick: string) => {
+            if (startDate && endDate && !isSameDay(startDate, endDate)) {
+                return formatInTimeZone(new Date(tick), TIME_ZONE, 'dd/MM h a', { locale: es });
+            }
+            return formatInTimeZone(new Date(tick), TIME_ZONE, 'h:mm a', { locale: es });
+        },
         
         [TimeRangeType.DAYS]: (tick: string) => 
-            formatInTimeZone(new Date(tick), TIME_ZONE, 'dd/MM', { locale: es }),
+            formatInTimeZone(new Date(tick), TIME_ZONE, 'dd/MM h a', { locale: es }),
         
         [TimeRangeType.WEEKS]: (tick: string) => 
             formatInTimeZone(new Date(tick), TIME_ZONE, 'dd MMM', { locale: es }),
@@ -178,14 +176,14 @@ const getTickFormatter = (rangeType: TimeRangeType) => {
     return formatters[rangeType];
 };
 
-/**
- * @function intelligentSampling
- * @description Aplica muestreo inteligente a los datos para mantener un número óptimo de puntos
- * conservando la representatividad visual de los datos
- * @param {ChartDataPoint[]} data - Datos originales
- * @param {number} maxPoints - Número máximo de puntos a conservar
- * @returns {ChartDataPoint[]} Datos muestreados
- */
+const getValueStatus = (value: number, thresholds: any): 'optimal' | 'low' | 'high' => {
+    if (!thresholds) return 'optimal';
+    
+    if (value < thresholds.min) return 'low';
+    if (value > thresholds.max) return 'high';
+    return 'optimal';
+};
+
 const intelligentSampling = (data: ChartDataPoint[], maxPoints: number): ChartDataPoint[] => {
     if (data.length <= maxPoints) {
         return data;
@@ -194,22 +192,18 @@ const intelligentSampling = (data: ChartDataPoint[], maxPoints: number): ChartDa
     const sampledData: SampledDataPoint[] = [];
     const step = data.length / maxPoints;
     
-    // Siempre incluir el primer punto
     sampledData.push({ ...data[0], originalIndex: 0 });
     
-    // Muestreo inteligente: seleccionar puntos representativos
     for (let i = 1; i < maxPoints - 1; i++) {
         const targetIndex = Math.round(i * step);
         const actualIndex = Math.min(targetIndex, data.length - 1);
         
-        // Buscar variaciones significativas en el rango local
         const windowStart = Math.max(0, actualIndex - Math.floor(step / 2));
         const windowEnd = Math.min(data.length - 1, actualIndex + Math.floor(step / 2));
         
         let selectedIndex = actualIndex;
         let maxVariation = 0;
         
-        // Buscar el punto con mayor variación en la ventana
         for (let j = windowStart; j <= windowEnd; j++) {
             const prevValue = j > 0 ? data[j - 1].value : data[j].value;
             const nextValue = j < data.length - 1 ? data[j + 1].value : data[j].value;
@@ -224,11 +218,9 @@ const intelligentSampling = (data: ChartDataPoint[], maxPoints: number): ChartDa
         sampledData.push({ ...data[selectedIndex], originalIndex: selectedIndex });
     }
     
-    // Siempre incluir el último punto
     const lastIndex = data.length - 1;
     sampledData.push({ ...data[lastIndex], originalIndex: lastIndex });
     
-    // Remover duplicados basados en originalIndex y ordenar por tiempo
     const uniqueSampled = sampledData
         .filter((item, index, arr) => 
             arr.findIndex(other => other.originalIndex === item.originalIndex) === index
@@ -238,23 +230,15 @@ const intelligentSampling = (data: ChartDataPoint[], maxPoints: number): ChartDa
     return uniqueSampled.map(({ originalIndex, ...rest }) => rest);
 };
 
-/**
- * @function getTickInterval
- * @description Calcula el intervalo apropiado para los ticks del eje X
- * @param {number} dataLength - Cantidad de datos
- * @param {TimeRangeType} rangeType - Tipo de rango temporal
- * @returns {number | string} Intervalo de ticks
- */
 const getTickInterval = (dataLength: number, rangeType: TimeRangeType): number | string => {
-    const maxTicks = 8; // Máximo número de ticks visibles
+    const maxTicks = 8;
     
     if (dataLength <= maxTicks) {
-        return 0; // Mostrar todos los ticks
+        return 0;
     }
     
     const interval = Math.ceil(dataLength / maxTicks);
     
-    // Ajustes específicos por tipo de rango
     switch (rangeType) {
         case TimeRangeType.MINUTES:
             return Math.max(interval, 2);
@@ -267,24 +251,55 @@ const getTickInterval = (dataLength: number, rangeType: TimeRangeType): number |
     }
 };
 
-// --- Componentes Internos ---
+const generateDateRangeLabel = (from: Date, to: Date, rangeType: TimeRangeType): string => {
+    const isSameDayRange = isSameDay(from, to);
+    
+    if (isSameDayRange) {
+        const dateStr = format(from, 'd MMM yyyy', { locale: es });
+        const startTime = format(from, 'h:mm a', { locale: es });
+        const endTime = format(to, 'h:mm a', { locale: es });
+        return `${dateStr} (${startTime} - ${endTime})`;
+    }
+    
+    switch (rangeType) {
+        case TimeRangeType.MINUTES:
+        case TimeRangeType.HOURS:
+            const startDateTime = format(from, 'd MMM, h:mm a', { locale: es });
+            const endDateTime = format(to, 'd MMM, h:mm a', { locale: es });
+            return `${startDateTime} - ${endDateTime}`;
+            
+        case TimeRangeType.DAYS:
+        case TimeRangeType.WEEKS:
+            const startDate = format(from, 'd MMM', { locale: es });
+            const endDate = format(to, 'd MMM yyyy', { locale: es });
+            return `${startDate} - ${endDate}`;
+            
+        default:
+            const startMonth = format(from, 'MMM yyyy', { locale: es });
+            const endMonth = format(to, 'MMM yyyy', { locale: es });
+            return `${startMonth} - ${endMonth}`;
+    }
+};
 
-/**
- * @component CustomTooltip
- * @description Tooltip personalizado que muestra información detallada del punto de datos
- */
+// --- Componentes Internos ---
 const CustomTooltip = ({ active, payload, label, themeColor, rangeType }: any) => {
     if (active && payload && payload.length) {
         let formattedLabel: string;
         
-        // Formato detallado según el tipo de rango
         switch (rangeType) {
             case TimeRangeType.MINUTES:
+                formattedLabel = formatInTimeZone(
+                    new Date(label),
+                    TIME_ZONE,
+                    'd MMM yyyy, h:mm:ss a',
+                    { locale: es }
+                );
+                break;
             case TimeRangeType.HOURS:
                 formattedLabel = formatInTimeZone(
                     new Date(label),
                     TIME_ZONE,
-                    'd MMM yyyy, HH:mm:ss',
+                    'd MMM yyyy, h:mm a',
                     { locale: es }
                 );
                 break;
@@ -293,7 +308,7 @@ const CustomTooltip = ({ active, payload, label, themeColor, rangeType }: any) =
                 formattedLabel = formatInTimeZone(
                     new Date(label),
                     TIME_ZONE,
-                    'EEEE, d MMM yyyy, HH:mm',
+                    'EEEE, d MMM yyyy, h:mm a',
                     { locale: es }
                 );
                 break;
@@ -327,10 +342,6 @@ const CustomTooltip = ({ active, payload, label, themeColor, rangeType }: any) =
     return null;
 };
 
-/**
- * @component TrendIndicator
- * @description Indicador visual de la tendencia de los datos
- */
 const TrendIndicator = ({ data }: { data: ChartDataPoint[] }) => {
     const trend = useMemo(() => {
         if (data.length < 2) return null;
@@ -363,10 +374,6 @@ const TrendIndicator = ({ data }: { data: ChartDataPoint[] }) => {
     );
 };
 
-/**
- * @component EmptyState
- * @description Estado vacío cuando no hay datos disponibles
- */
 const EmptyState = ({ title }: { title: string }) => (
     <div className='flex h-full min-h-[400px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center dark:border-gray-700 dark:bg-gray-800/50'>
         <motion.div
@@ -385,22 +392,11 @@ const EmptyState = ({ title }: { title: string }) => (
     </div>
 );
 
-/**
- * @component LoadingState
- * @description Estado de carga del componente
- */
 const LoadingState = () => (
     <div className='flex h-full min-h-[480px] w-full animate-pulse items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800/50' />
 );
 
 // --- Componente Principal ---
-
-/**
- * @component LineChart
- * @description Componente principal del gráfico de líneas con muestreo inteligente
- * @param {LineChartProps} props - Propiedades del componente
- * @returns {React.ReactElement} Elemento del gráfico
- */
 export const LineChart: React.FC<LineChartProps> = ({
     data,
     title,
@@ -414,11 +410,16 @@ export const LineChart: React.FC<LineChartProps> = ({
     const theme = SENSOR_THEMES[sensorType] || SENSOR_THEMES.TEMPERATURE;
     const IconComponent = theme.icon;
 
-    /**
-     * @memo processedData
-     * @description Procesa los datos aplicando muestreo inteligente y configuración del eje X
-     */
-    const { processedData, stats, xAxisConfig, rangeType, dataInfo } = useMemo(() => {
+    const thresholds = useMemo(() => {
+        if (!settings || !settings.thresholds) return null;
+        return (
+            settings.thresholds[
+                sensorType.toLowerCase() as keyof typeof settings.thresholds
+            ] || null
+        );
+    }, [settings, sensorType]);
+
+    const { processedData, stats, xAxisConfig, rangeType, dataInfo, dominantColor } = useMemo(() => {
         if (!data || data.length === 0) {
             return {
                 processedData: [],
@@ -434,25 +435,44 @@ export const LineChart: React.FC<LineChartProps> = ({
                     displayed: 0, 
                     samplingRatio: 0,
                     timeSpan: 'Sin datos'
-                }
+                },
+                dominantColor: theme.color
             };
         }
 
-        // Determinar el tipo de rango temporal
         const firstDate = parseISO(data[0].time);
         const lastDate = parseISO(data[data.length - 1].time);
         const detectedRangeType = dateRange 
             ? determineTimeRangeType(dateRange.from, dateRange.to)
             : determineTimeRangeType(firstDate, lastDate);
 
-        // Aplicar muestreo inteligente si es necesario
         const shouldSample = data.length > MIN_POINTS_FOR_SAMPLING;
         const sampledData = shouldSample 
             ? intelligentSampling(data, MAX_VISIBLE_POINTS)
             : data;
 
-        // Calcular estadísticas
-        const values = data.map((d) => d.value); // Usar datos originales para estadísticas
+        const processedDataWithStatus: ProcessedDataPoint[] = sampledData.map(point => {
+            const status = getValueStatus(point.value, thresholds);
+            return {
+                ...point,
+                status,
+                color: STATUS_COLORS[status]
+            };
+        });
+
+        const statusCounts = processedDataWithStatus.reduce((acc, point) => {
+            acc[point.status] = (acc[point.status] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+
+        const dominantStatus = Object.keys(statusCounts).length > 0 
+            ? Object.entries(statusCounts)
+                .reduce((a, b) => a[1] > b[1] ? a : b)[0] as keyof typeof STATUS_COLORS
+            : 'optimal';
+        
+        const calculatedDominantColor = STATUS_COLORS[dominantStatus] || theme.color;
+
+        const values = data.map((d) => d.value);
         const min = Math.min(...values);
         const max = Math.max(...values);
         const avg = values.reduce((a, b) => a + b, 0) / values.length;
@@ -463,11 +483,9 @@ export const LineChart: React.FC<LineChartProps> = ({
             `dataMax + ${padding}`
         ];
 
-        // Configurar eje X
-        const tickFormatter = getTickFormatter(detectedRangeType);
+        const tickFormatter = getTickFormatter(detectedRangeType, firstDate, lastDate);
         const tickInterval = getTickInterval(sampledData.length, detectedRangeType);
 
-        // Información de los datos
         const samplingRatio = data.length > 0 ? (sampledData.length / data.length) * 100 : 0;
         const timeSpanLabels = {
             [TimeRangeType.MINUTES]: 'Minutos',
@@ -479,7 +497,7 @@ export const LineChart: React.FC<LineChartProps> = ({
         };
 
         return {
-            processedData: sampledData,
+            processedData: processedDataWithStatus,
             stats: { min, max, avg, yDomain },
             xAxisConfig: { 
                 tickFormatter, 
@@ -492,71 +510,54 @@ export const LineChart: React.FC<LineChartProps> = ({
                 displayed: sampledData.length,
                 samplingRatio: Math.round(samplingRatio),
                 timeSpan: timeSpanLabels[detectedRangeType]
-            }
+            },
+            dominantColor: calculatedDominantColor
         };
-    }, [data, dateRange]);
+    }, [data, dateRange, thresholds, theme.color]);
 
-    /**
-     * @memo thresholds
-     * @description Obtiene los umbrales de configuración para el sensor
-     */
-    const thresholds = useMemo(() => {
-        if (!settings || !settings.thresholds) return null;
-        return (
-            settings.thresholds[
-                sensorType.toLowerCase() as keyof typeof settings.thresholds
-            ] || null
-        );
-    }, [settings, sensorType]);
-
-    /**
-     * @memo chartTitle
-     * @description Genera el título del gráfico basado en el contexto
-     */
     const chartTitle = useMemo(() => {
         if (isLive) {
             return `Tiempo Real: ${title}`;
         }
         
         if (dateRange) {
-            const startFormat = rangeType === TimeRangeType.MINUTES || rangeType === TimeRangeType.HOURS 
-                ? 'd MMM, HH:mm' 
-                : 'd MMM';
-            const endFormat = rangeType === TimeRangeType.MINUTES || rangeType === TimeRangeType.HOURS
-                ? 'd MMM, HH:mm'
-                : 'd MMM';
-                
-            const startStr = format(dateRange.from, startFormat, { locale: es });
-            const endStr = format(dateRange.to, endFormat, { locale: es });
-            
-            return `${title} (${startStr} - ${endStr})`;
+            const dateLabel = generateDateRangeLabel(dateRange.from, dateRange.to, rangeType);
+            return `${title} (${dateLabel})`;
         }
         
         return `Histórico ${title}`;
     }, [title, isLive, dateRange, rangeType]);
 
-    // Estados de carga y vacío
     if (loading) return <LoadingState />;
     if (!data || data.length === 0) return <EmptyState title={title} />;
+
+    // --- NUEVA LÓGICA: Determinar el estado y color para cada estadística ---
+    const minStatus = thresholds ? getValueStatus(stats.min, thresholds) : 'optimal';
+    const avgStatus = thresholds ? getValueStatus(stats.avg, thresholds) : 'optimal';
+    const maxStatus = thresholds ? getValueStatus(stats.max, thresholds) : 'optimal';
+
+    const minColor = STATUS_COLORS[minStatus];
+    const avgColor = STATUS_COLORS[avgStatus];
+    const maxColor = STATUS_COLORS[maxStatus];
+    // --- FIN DE LA NUEVA LÓGICA ---
 
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className='w-full'
+            className='w-full p-4'
         >
-            {/* Encabezado del gráfico */}
-            <div className='mb-6'>
-                <div className='flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center'>
+            <div className='mb-8 px-4'>
+                <div className='flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center'>
                     <div className='flex items-center gap-4'>
                         <div
-                            className='flex h-12 w-12 items-center justify-center rounded-lg'
-                            style={{ backgroundColor: `${theme.color}20` }}
+                            className='flex h-12 w-12 items-center justify-center rounded-xl'
+                            style={{ backgroundColor: `${dominantColor}20` }}
                         >
                             <IconComponent
                                 className='h-6 w-6'
-                                style={{ color: theme.color }}
+                                style={{ color: dominantColor }}
                             />
                         </div>
                         <div>
@@ -571,7 +572,7 @@ export const LineChart: React.FC<LineChartProps> = ({
                     </div>
                     <div className='flex items-center gap-4'>
                         {isLive && (
-                            <div className='flex items-center gap-2 text-xs font-semibold uppercase text-green-600 dark:text-green-400'>
+                            <div className='flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold uppercase text-green-600 dark:bg-green-900/20 dark:text-green-400'>
                                 <span className='relative flex h-3 w-3'>
                                     <span className='absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75'></span>
                                     <span className='relative inline-flex h-3 w-3 rounded-full bg-green-500'></span>
@@ -584,17 +585,16 @@ export const LineChart: React.FC<LineChartProps> = ({
                 </div>
             </div>
 
-            {/* Gráfico principal */}
-            <div className='h-80 w-full'>
+            <div className='h-96 w-full rounded-2xl bg-white px-4 py-6 dark:bg-gray-800/50'>
                 <ResponsiveContainer>
                     <AreaChart
                         data={processedData}
-                        margin={{ top: 5, right: 30, left: -10, bottom: 20 }}
+                        margin={{ top: 10, right: 50, left: 20, bottom: 50 }}
                     >
                         <defs>
-                            <linearGradient id={theme.gradientId} x1='0' y1='0' x2='0' y2='1'>
-                                <stop offset='0%' stopColor={theme.color} stopOpacity={0.4} />
-                                <stop offset='75%' stopColor={theme.color} stopOpacity={0.05} />
+                            <linearGradient id={`${theme.gradientId}_dynamic`} x1='0' y1='0' x2='0' y2='1'>
+                                <stop offset='0%' stopColor={dominantColor} stopOpacity={0.4} />
+                                <stop offset='75%' stopColor={dominantColor} stopOpacity={0.05} />
                             </linearGradient>
                         </defs>
                         <CartesianGrid
@@ -609,9 +609,9 @@ export const LineChart: React.FC<LineChartProps> = ({
                             interval={xAxisConfig.interval}
                             domain={xAxisConfig.domain}
                             type='category'
-                            angle={rangeType === TimeRangeType.MINUTES ? -45 : 0}
-                            textAnchor={rangeType === TimeRangeType.MINUTES ? 'end' : 'middle'}
-                            height={rangeType === TimeRangeType.MINUTES ? 60 : 40}
+                            angle={rangeType === TimeRangeType.MINUTES || (rangeType === TimeRangeType.HOURS && !isSameDay(parseISO(processedData[0]?.time || ''), parseISO(processedData[processedData.length - 1]?.time || ''))) ? -45 : 0}
+                            textAnchor={rangeType === TimeRangeType.MINUTES || (rangeType === TimeRangeType.HOURS && !isSameDay(parseISO(processedData[0]?.time || ''), parseISO(processedData[processedData.length - 1]?.time || ''))) ? 'end' : 'middle'}
+                            height={rangeType === TimeRangeType.MINUTES || (rangeType === TimeRangeType.HOURS && !isSameDay(parseISO(processedData[0]?.time || ''), parseISO(processedData[processedData.length - 1]?.time || ''))) ? 80 : 60}
                         />
                         <YAxis
                             type='number'
@@ -627,14 +627,13 @@ export const LineChart: React.FC<LineChartProps> = ({
                             allowDataOverflow={true}
                         />
                         <Tooltip
-                            content={<CustomTooltip themeColor={theme.color} rangeType={rangeType} />}
+                            content={<CustomTooltip themeColor={dominantColor} rangeType={rangeType} />}
                             cursor={{
-                                stroke: theme.color,
+                                stroke: dominantColor,
                                 strokeWidth: 1,
                                 strokeDasharray: '4 4',
                             }}
                         />
-                        {/* Líneas de referencia de umbrales */}
                         {thresholds && (
                             <>
                                 <ReferenceLine
@@ -663,71 +662,117 @@ export const LineChart: React.FC<LineChartProps> = ({
                                 />
                             </>
                         )}
-                        {/* Área de fondo */}
                         <Area
                             type='monotone'
                             dataKey='value'
                             stroke='transparent'
-                            fill={`url(#${theme.gradientId})`}
+                            fill={`url(#${theme.gradientId}_dynamic)`}
                             name={title}
                         />
-                        {/* Línea principal */}
                         <Line
                             type='monotone'
                             dataKey='value'
                             name={title}
-                            stroke={theme.color}
-                            strokeWidth={2.5}
-                            dot={processedData.length <= 20} // Mostrar puntos solo si hay pocos datos
+                            stroke={dominantColor}
+                            strokeWidth={3}
+                            dot={processedData.length <= 20}
                             activeDot={{
-                                r: 6,
-                                fill: theme.color,
-                                stroke: 'var(--card-background)',
+                                r: 7,
+                                fill: dominantColor,
+                                stroke: '#ffffff',
                                 strokeWidth: 2,
+                                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))'
                             }}
                             connectNulls
-                            animationDuration={1000}
+                            animationDuration={1200}
                         />
                     </AreaChart>
                 </ResponsiveContainer>
             </div>
 
-            {/* Sección de estadísticas */}
-            <div className='mt-8 grid grid-cols-1 divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-800/50 sm:grid-cols-3 sm:divide-x sm:divide-y-0'>
-                <div className='flex flex-col gap-y-2 p-6 text-center'>
-                    <p className='text-sm font-medium text-gray-500 dark:text-gray-400'>
-                        Mínimo
-                    </p>
-                    <p
-                        className='text-3xl font-bold tracking-tight'
-                        style={{ color: theme.color }}
-                    >
-                        {stats.min.toFixed(2)}
-                    </p>
+            {thresholds && (
+                <div className='mt-8 flex flex-wrap justify-center gap-6 rounded-xl bg-gray-50 px-6 py-4 dark:bg-gray-800/30'>
+                    <div className='flex items-center gap-3'>
+                        <div className='h-3 w-8 rounded-full bg-blue-500'></div>
+                        <span className='text-sm font-medium text-gray-600 dark:text-gray-400'>
+                            Bajo (&lt; {thresholds.min})
+                        </span>
+                    </div>
+                    <div className='flex items-center gap-3'>
+                        <div className='h-3 w-8 rounded-full bg-green-500'></div>
+                        <span className='text-sm font-medium text-gray-600 dark:text-gray-400'>
+                            Óptimo ({thresholds.min} - {thresholds.max})
+                        </span>
+                    </div>
+                    <div className='flex items-center gap-3'>
+                        <div className='h-3 w-8 rounded-full bg-red-500'></div>
+                        <span className='text-sm font-medium text-gray-600 dark:text-gray-400'>
+                            Alto (&gt; {thresholds.max})
+                        </span>
+                    </div>
                 </div>
-                <div className='flex flex-col gap-y-2 p-6 text-center'>
-                    <p className='text-sm font-medium text-gray-500 dark:text-gray-400'>
-                        Promedio
-                    </p>
-                    <p
-                        className='text-3xl font-bold tracking-tight'
-                        style={{ color: theme.color }}
-                    >
-                        {stats.avg.toFixed(2)}
-                    </p>
-                </div>
-                <div className='flex flex-col gap-y-2 p-6 text-center'>
-                    <p className='text-sm font-medium text-gray-500 dark:text-gray-400'>
-                        Máximo
-                    </p>
-                    <p
-                        className='text-3xl font-bold tracking-tight'
-                        style={{ color: theme.color }}
-                    >
-                        {stats.max.toFixed(2)}
-                    </p>
+            )}
+
+            {/* --- SECCIÓN MODIFICADA CON COLORES DINÁMICOS --- */}
+            <div className='mt-8 px-4'>
+                <div className='grid grid-cols-1 divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white shadow-sm dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-800/50 sm:grid-cols-3 sm:divide-x sm:divide-y-0'>
+                    {/* Mínimo */}
+                    <div className='flex items-center justify-between p-6'>
+                        <div className='flex items-center gap-3'>
+                            <div 
+                                className='h-3 w-3 rounded-full'
+                                style={{ backgroundColor: minColor }}
+                            />
+                            <p className='text-base font-semibold text-gray-700 dark:text-gray-300'>
+                                Mínimo
+                            </p>
+                        </div>
+                        <p 
+                            className='text-3xl font-bold tracking-tight'
+                            style={{ color: minColor }}
+                        >
+                            {stats.min.toFixed(2)}
+                        </p>
+                    </div>
+                    {/* Promedio */}
+                    <div className='flex items-center justify-between p-6'>
+                        <div className='flex items-center gap-3'>
+                            <div 
+                                className='h-3 w-3 rounded-full'
+                                style={{ backgroundColor: avgColor }}
+                            />
+                            <p className='text-base font-semibold text-gray-700 dark:text-gray-300'>
+                                Promedio
+                            </p>
+                        </div>
+                        <p 
+                            className='text-3xl font-bold tracking-tight'
+                            style={{ color: avgColor }}
+                        >
+                            {stats.avg.toFixed(2)}
+                        </p>
+                    </div>
+                    {/* Máximo */}
+                    <div className='flex items-center justify-between p-6'>
+                        <div className='flex items-center gap-3'>
+                            <div 
+                                className='h-3 w-3 rounded-full'
+                                style={{ backgroundColor: maxColor }}
+                            />
+                            <p className='text-base font-semibold text-gray-700 dark:text-gray-300'>
+                                Máximo
+                            </p>
+                        </div>
+                        <p 
+                            className='text-3xl font-bold tracking-tight'
+                            style={{ color: maxColor }}
+                        >
+                            {stats.max.toFixed(2)}
+                        </p>
+                    </div>
                 </div>
             </div>
+            {/* --- FIN DE LA SECCIÓN MODIFICADA --- */}
         </motion.div>
     );
 };

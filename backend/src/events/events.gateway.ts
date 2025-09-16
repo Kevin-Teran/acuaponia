@@ -12,6 +12,7 @@
 import {
   WebSocketGateway,
   WebSocketServer,
+  SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
@@ -102,7 +103,6 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return type === 'Bearer' ? token : undefined;
   }
 
-  // --- Métodos de Broadcast ---
 
   broadcastNewData(data: SensorDataWithDetails) {
     if (data.userId) {
@@ -113,6 +113,18 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   broadcastReportUpdate(report: ReportWithUser) {
     if (report.userId) {
       this.server.to(report.userId).emit('report_status_update', report);
+    }
+  }
+  /**
+   * Emite un evento de nueva alerta a una lista específica de IDs de usuario (administradores).
+   * @param adminIds - Un array de IDs de los usuarios administradores.
+   * @param alertPayload - El objeto de la alerta que se enviará.
+   */
+   broadcastNewAlertToAdmins(adminIds: string[], alertPayload: any) {
+    if (adminIds && adminIds.length > 0) {
+      this.logger.log(`📢 Transmitiendo nueva alerta a las salas de los administradores: ${adminIds.join(', ')}`);
+      // El método 'to' puede recibir un array de nombres de salas (que son nuestros user.id)
+      this.server.to(adminIds).emit('new-alert', alertPayload);
     }
   }
 }
