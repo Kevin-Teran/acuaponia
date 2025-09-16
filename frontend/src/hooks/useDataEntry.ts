@@ -16,9 +16,9 @@ import * as sensorService from '@/services/sensorService';
 import * as userService from '@/services/userService';
 import * as dataService from '@/services/dataService';
 import { EmitterStatus } from '@/services/dataService';
-// SOLUCIÓN: Se corrige la importación de 'socketService' y 'mqttService' para que sean default.
-import socketService from '@/services/socketService';
-import mqttService from '@/services/mqttService';
+// SOLUCIÓN: Se cambia la importación a 'nombrada' ({ ... }) en lugar de 'default'.
+import { socketService } from '@/services/socketService';
+import { mqttService } from '@/services/mqttService';
 import { useAuth } from '@/context/AuthContext';
 import Swal from 'sweetalert2';
 
@@ -55,8 +55,6 @@ export const useDataEntry = () => {
 
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // --- Sincronización y Efectos ---
-
   const syncSimulationStatus = useCallback(async () => {
     if (!currentUser) return;
     try {
@@ -69,20 +67,16 @@ export const useDataEntry = () => {
     }
   }, [currentUser]);
 
-  // Efecto para conexiones (WebSocket y MQTT) y sincronización
   useEffect(() => {
-    // Conectar servicios
     socketService.connect();
     mqttService.connect();
 
-    // Suscribirse a cambios de estado de MQTT
     const unsubscribeMqtt = mqttService.onStatusChange(status => {
       if (status.connected) setMqttStatus('connected');
       else if (status.connecting) setMqttStatus('connecting');
       else setMqttStatus('disconnected');
     });
 
-    // Escuchar actualizaciones de datos por WebSocket
     const handleSensorUpdate = (data: SensorData) => {
       setActiveSimulations(prevSims =>
         prevSims.map(sim =>
@@ -94,11 +88,9 @@ export const useDataEntry = () => {
     };
     socketService.onSensorData(handleSensorUpdate);
 
-    // Sincronización inicial y periódica del estado de los emisores
     syncSimulationStatus();
     syncIntervalRef.current = setInterval(syncSimulationStatus, 15000);
 
-    // Limpieza al desmontar el componente
     return () => {
       socketService.offSensorData(handleSensorUpdate);
       socketService.disconnect();
@@ -108,7 +100,6 @@ export const useDataEntry = () => {
     };
   }, [syncSimulationStatus]);
 
-  // Carga sectorizada de datos
   useEffect(() => {
     const loadUsers = async () => {
       if (!isAdmin) {
@@ -166,11 +157,9 @@ export const useDataEntry = () => {
     loadSensors();
   }, [selectedTankId]);
 
-  // --- Handlers Optimizados ---
-
   const handleUserChange = useCallback((userId: string) => {
     setSelectedUserId(userId);
-    setSelectedTankId(''); // Resetea el tanque para forzar recarga
+    setSelectedTankId('');
   }, []);
 
   const handleTankChange = useCallback((tankId: string) => {
@@ -212,7 +201,7 @@ export const useDataEntry = () => {
       } else {
         await dataService.startEmitters([sensorId]);
       }
-      await syncSimulationStatus(); // Sincroniza solo el estado de los emisores
+      await syncSimulationStatus();
     } catch (error) {
       Swal.fire('Error', 'No se pudo cambiar el estado de la simulación.', 'error');
     } finally {
