@@ -5,7 +5,7 @@
  * automático del eje X con formato de 12 horas, márgenes optimizados y línea dinámica 
  * con colores basados en umbrales de sensores.
  * @author Kevin Mariano
- * @version 2.3.0 
+ * @version 1.0.0 
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -48,7 +48,6 @@ import {
 import { es } from 'date-fns/locale';
 import { formatInTimeZone } from 'date-fns-tz';
 
-// --- Interfaces y Tipos ---
 interface ChartDataPoint {
     time: string;
     value: number;
@@ -74,7 +73,6 @@ interface ProcessedDataPoint extends ChartDataPoint {
     color: string;
 }
 
-// --- Constantes y Configuración ---
 const TIME_ZONE = 'America/Bogota';
 const MAX_VISIBLE_POINTS = 150;
 const MIN_POINTS_FOR_SAMPLING = 50;
@@ -89,9 +87,9 @@ enum TimeRangeType {
 }
 
 const STATUS_COLORS = {
-    optimal: '#22c55e', // verde
-    low: '#3b82f6',     // azul
-    high: '#ef4444',    // rojo
+    optimal: '#22c55e', 
+    low: '#3b82f6',     
+    high: '#ef4444',    
 };
 
 const SENSOR_THEMES = {
@@ -127,7 +125,6 @@ const SENSOR_THEMES = {
     },
 };
 
-// --- Funciones de Utilidad ---
 const determineTimeRangeType = (startDate: Date, endDate: Date): TimeRangeType => {
     const diffInMinutes = differenceInMinutes(endDate, startDate);
     const diffInHours = differenceInHours(endDate, startDate);
@@ -281,7 +278,6 @@ const generateDateRangeLabel = (from: Date, to: Date, rangeType: TimeRangeType):
     }
 };
 
-// --- Componentes Internos ---
 const CustomTooltip = ({ active, payload, label, themeColor, rangeType }: any) => {
     if (active && payload && payload.length) {
         let formattedLabel: string;
@@ -396,7 +392,6 @@ const LoadingState = () => (
     <div className='flex h-full min-h-[480px] w-full animate-pulse items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800/50' />
 );
 
-// --- Componente Principal ---
 export const LineChart: React.FC<LineChartProps> = ({
     data,
     title,
@@ -531,7 +526,6 @@ export const LineChart: React.FC<LineChartProps> = ({
     if (loading) return <LoadingState />;
     if (!data || data.length === 0) return <EmptyState title={title} />;
 
-    // --- NUEVA LÓGICA: Determinar el estado y color para cada estadística ---
     const minStatus = thresholds ? getValueStatus(stats.min, thresholds) : 'optimal';
     const avgStatus = thresholds ? getValueStatus(stats.avg, thresholds) : 'optimal';
     const maxStatus = thresholds ? getValueStatus(stats.max, thresholds) : 'optimal';
@@ -539,7 +533,6 @@ export const LineChart: React.FC<LineChartProps> = ({
     const minColor = STATUS_COLORS[minStatus];
     const avgColor = STATUS_COLORS[avgStatus];
     const maxColor = STATUS_COLORS[maxStatus];
-    // --- FIN DE LA NUEVA LÓGICA ---
 
     return (
         <motion.div
@@ -713,7 +706,6 @@ export const LineChart: React.FC<LineChartProps> = ({
                 </div>
             )}
 
-            {/* --- SECCIÓN MODIFICADA CON COLORES DINÁMICOS --- */}
             <div className='mt-8 px-4'>
                 <div className='grid grid-cols-1 divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white shadow-sm dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-800/50 sm:grid-cols-3 sm:divide-x sm:divide-y-0'>
                     {/* Mínimo */}
@@ -772,7 +764,6 @@ export const LineChart: React.FC<LineChartProps> = ({
                     </div>
                 </div>
             </div>
-            {/* --- FIN DE LA SECCIÓN MODIFICADA --- */}
         </motion.div>
     );
 };
