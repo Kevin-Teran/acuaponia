@@ -1,10 +1,9 @@
 /**
  * @file useDashboard.ts
  * @route frontend/src/hooks/
- * @description Hook definitivo para el dashboard. Fusiona la carga de datos inicial vía HTTP
- * con actualizaciones en tiempo real a través de WebSockets para una experiencia fluida.
- * @author Kevin Mariano & Gemini AI
- * @version 6.0.0 (Live & Final)
+ * @description Hook corregido para el dashboard con actualizaciones en tiempo real funcionando
+ * @author Kevin Mariano & Claude AI
+ * @version 6.1.0 (Live Fix)
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -21,7 +20,6 @@ import {
 	RealtimeData,
 	HistoricalData,
 	UserForList,
-	SensorData,
 	SensorType,
 	RealtimeSensorData,
 } from '@/types';
@@ -29,7 +27,6 @@ import { socket } from '@/services/socketService';
 import { DashboardFiltersDto } from '@/types/dashboard';
 
 // --- Tipos y Constantes ---
-
 interface LoadingState {
 	summary: boolean;
 	realtime: boolean;
@@ -54,143 +51,208 @@ export const useDashboard = () => {
 	});
 	const [error, setError] = useState<string | null>(null);
 
-	// --- SOLUCIÓN: Lógica de Sockets para Datos en Vivo ---
+	// --- CORRECCIÓN: Escuchar el evento correcto del socket ---
 	useEffect(() => {
 		/**
-		 * @function handleNewData
-		 * @description Callback que se ejecuta cuando llega un nuevo dato por el socket.
-		 * Actualiza los estados de tiempo real e histórico sin necesidad de una nueva petición HTTP.
-		 * @param {SensorData} newData - El nuevo dato del sensor recibido.
+		 * @function handleNewSensorData
+		 * @description Maneja los nuevos datos de sensores que llegan por WebSocket
 		 */
-		const handleNewData = (newData: SensorData) => {
-			console.log('⚡️ Nuevo dato recibido vía Socket:', newData);
+		const handleNewSensorData = (newSensorData: any) => {
+			console.log('⚡️ Nuevo dato de sensor recibido:', newSensorData);
 
-			const sensorType = newData.sensor.type;
+			// Verificar que el dato tenga la estructura esperada
+			if (!newSensorData || !newSensorData.sensor) {
+				console.warn('Datos de sensor inválidos recibidos:', newSensorData);
+				return;
+			}
 
-			// 1. Actualizar Medidores en Tiempo Real (GaugeChart)
-			setRealtimeData((prev) => {
+			const sensorType = newSensorData.sensor.type as SensorType;
+			const sensorId = newSensorData.sensor.id;
+
+			// 1. Actualizar datos en tiempo real (para GaugeChart)
+			setRealtimeData(prev => {
 				const currentTypeData = prev[sensorType] || [];
-				let sensorFound = false;
+				
+				// Buscar si ya existe el sensor y actualizarlo, o agregarlo si no existe
+				const existingSensorIndex = currentTypeData.findIndex(
+					(sensor: RealtimeSensorData) => sensor.sensorId === sensorId
+				);
 
-				// Intenta actualizar un sensor existente
-				const updatedTypeData = currentTypeData.map(
-					(sensor: RealtimeSensorData) => {
-						if (sensor.sensorId === newData.sensor.id) {
-							sensorFound = true;
+				let updatedTypeData;
+				if (existingSensorIndex >= 0) {
+					// Actualizar sensor existente
+					updatedTypeData = currentTypeData.map((sensor: RealtimeSensorData, index) => {
+						if (index === existingSensorIndex) {
 							return {
 								...sensor,
-								value: newData.value,
-								timestamp: newData.timestamp,
+								value: newSensorData.value,
+								timestamp: newSensorData.timestamp,
 							};
 						}
 						return sensor;
-					},
-				);
-
-				// Si el sensor no estaba en la lista, lo añadimos
-				if (!sensorFound) {
-					updatedTypeData.push({
-						sensorId: newData.sensor.id,
-						sensorName: newData.sensor.name,
-						tankName: newData.sensor.tank.name,
-						value: newData.value,
-						timestamp: newData.timestamp,
-						hardwareId: newData.sensor.hardwareId,
-						type: newData.sensor.type,
 					});
+				} else {
+					// Agregar nuevo sensor
+					const newSensorItem: RealtimeSensorData = {
+						sensorId: sensorId,
+						sensorName: newSensorData.sensor.name,
+						tankName: newSensorData.sensor.tank?.name || 'Tanque desconocido',
+						value: newSensorData.value,
+						timestamp: newSensorData.timestamp,
+						hardwareId: newSensorData.sensor.hardwareId,
+						type: sensorType,
+					};
+					updatedTypeData = [...currentTypeData, newSensorItem];
 				}
 
-				return { ...prev, [sensorType]: updatedTypeData };
+				return {
+					...prev,
+					[sensorType]: updatedTypeData,
+				};
 			});
 
-			// 2. Actualizar Gráficos (LineChart)
-			setHistoricalData((prev) => {
-				// Solo actualiza si el tipo de sensor existe en el estado
-				if (!prev[sensorType]) return prev;
+			// 2. Actualizar datos históricos (para LineChart) solo si ya existe el tipo de sensor
+			setHistoricalData(prev => {
+				if (!prev[sensorType]) {
+					// No actualizar si el tipo de sensor no está siendo mostrado actualmente
+					return prev;
+				}
 
 				const currentData = prev[sensorType] || [];
 				const newDataPoint = {
-					time: new Date(newData.timestamp).toISOString(),
-					value: newData.value,
+					time: new Date(newSensorData.timestamp).toISOString(),
+					value: newSensorData.value,
 				};
 
-				// Añadimos el nuevo punto y nos aseguramos de no exceder el límite
-				const updatedData = [...currentData, newDataPoint];
+				// Agregar el nuevo punto y limitar el número de puntos
+				const updatedData = [...currentData, newDataPoint]
+					.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
+				// Mantener solo los últimos MAX_LIVE_DATA_POINTS puntos
 				if (updatedData.length > MAX_LIVE_DATA_POINTS) {
-					updatedData.shift(); // Elimina el punto más antiguo
+					updatedData.splice(0, updatedData.length - MAX_LIVE_DATA_POINTS);
 				}
 
-				return { ...prev, [sensorType]: updatedData };
+				return {
+					...prev,
+					[sensorType]: updatedData,
+				};
 			});
 		};
 
-		// Suscribirse al evento
-		socket.on('newData', handleNewData);
-
-		// Limpieza: Desuscribirse al desmontar el componente para evitar fugas de memoria
-		return () => {
-			socket.off('newData', handleNewData);
+		/**
+		 * @function handleReportUpdate
+		 * @description Maneja las actualizaciones de reportes
+		 */
+		const handleReportUpdate = (reportData: any) => {
+			console.log('📊 Actualización de reporte recibida:', reportData);
+			// Aquí puedes manejar actualizaciones de reportes si es necesario
 		};
-	}, []); // El array vacío asegura que esto se ejecute solo una vez.
+
+		/**
+		 * @function handleNewAlert
+		 * @description Maneja las nuevas alertas
+		 */
+		const handleNewAlert = (alertData: any) => {
+			console.log('🚨 Nueva alerta recibida:', alertData);
+			// Actualizar el contador de alertas recientes si es necesario
+			setSummaryData(prev => {
+				if (prev) {
+					return {
+						...prev,
+						recentAlerts: prev.recentAlerts + 1,
+					};
+				}
+				return prev;
+			});
+		};
+
+		// CORRECCIÓN: Verificar conexión del socket antes de suscribirse
+		if (socket.connected) {
+			console.log('🔌 Socket ya conectado, suscribiendo a eventos...');
+			subscribeToEvents();
+		} else {
+			console.log('🔌 Socket no conectado, esperando conexión...');
+			socket.on('connect', () => {
+				console.log('🔌 Socket conectado, suscribiendo a eventos...');
+				subscribeToEvents();
+			});
+		}
+
+		function subscribeToEvents() {
+			// Suscribirse a los eventos con los nombres correctos del gateway
+			socket.on('new_sensor_data', handleNewSensorData);
+			socket.on('report_status_update', handleReportUpdate);
+			socket.on('new-alert', handleNewAlert);
+		}
+
+		// Cleanup: Desuscribirse de todos los eventos
+		return () => {
+			socket.off('new_sensor_data', handleNewSensorData);
+			socket.off('report_status_update', handleReportUpdate);
+			socket.off('new-alert', handleNewAlert);
+			socket.off('connect');
+		};
+	}, []); // Array vacío para que solo se ejecute una vez
 
 	// --- Funciones para Obtener Datos Iniciales (HTTP) ---
-
 	const fetchSummary = useCallback(async (filters: DashboardFiltersDto) => {
 		try {
-			setLoading((prev) => ({ ...prev, summary: true }));
+			setLoading(prev => ({ ...prev, summary: true }));
 			const data = await getSummary(filters);
 			setSummaryData(data);
+			setError(null); // Limpiar errores previos
 		} catch (err) {
 			setError('Error al cargar el resumen de datos.');
-			console.error(err);
+			console.error('Error en fetchSummary:', err);
 		} finally {
-			setLoading((prev) => ({ ...prev, summary: false }));
+			setLoading(prev => ({ ...prev, summary: false }));
 		}
 	}, []);
 
 	const fetchRealtimeData = useCallback(async (filters: DashboardFiltersDto) => {
 		try {
-			setLoading((prev) => ({ ...prev, realtime: true }));
+			setLoading(prev => ({ ...prev, realtime: true }));
 			const data = await getRealtimeData(filters);
 			setRealtimeData(data);
+			setError(null);
 		} catch (err) {
 			setError('Error al cargar los datos en tiempo real.');
-			console.error(err);
+			console.error('Error en fetchRealtimeData:', err);
 		} finally {
-			setLoading((prev) => ({ ...prev, realtime: false }));
+			setLoading(prev => ({ ...prev, realtime: false }));
 		}
 	}, []);
 
-	const fetchHistoricalData = useCallback(
-		async (filters: DashboardFiltersDto) => {
-			if (!filters.startDate || !filters.endDate) {
-				console.warn('fetchHistoricalData requiere startDate y endDate');
-				return;
-			}
-			try {
-				setLoading((prev) => ({ ...prev, historical: true }));
-				const data = await getHistoricalData(filters);
-				setHistoricalData(data);
-			} catch (err) {
-				setError('Error al cargar los datos históricos.');
-				console.error(err);
-			} finally {
-				setLoading((prev) => ({ ...prev, historical: false }));
-			}
-		},
-		[],
-	);
+	const fetchHistoricalData = useCallback(async (filters: DashboardFiltersDto) => {
+		if (!filters.startDate || !filters.endDate) {
+			console.warn('fetchHistoricalData requiere startDate y endDate');
+			return;
+		}
+		try {
+			setLoading(prev => ({ ...prev, historical: true }));
+			const data = await getHistoricalData(filters);
+			setHistoricalData(data);
+			setError(null);
+		} catch (err) {
+			setError('Error al cargar los datos históricos.');
+			console.error('Error en fetchHistoricalData:', err);
+		} finally {
+			setLoading(prev => ({ ...prev, historical: false }));
+		}
+	}, []);
 
 	const fetchUsersList = useCallback(async () => {
 		try {
-			setLoading((prev) => ({ ...prev, users: true }));
+			setLoading(prev => ({ ...prev, users: true }));
 			const data = await getUsersListForAdmin();
 			setUsersList(data);
+			setError(null);
 		} catch (err) {
 			setError('Error al cargar la lista de usuarios.');
-			console.error(err);
+			console.error('Error en fetchUsersList:', err);
 		} finally {
-			setLoading((prev) => ({ ...prev, users: false }));
+			setLoading(prev => ({ ...prev, users: false }));
 		}
 	}, []);
 
@@ -207,4 +269,3 @@ export const useDashboard = () => {
 		fetchUsersList,
 	};
 };
-

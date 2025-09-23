@@ -108,21 +108,42 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
   }
 
   async createFromMqtt(hardwareId: string, data: { value: number; timestamp?: string }): Promise<SensorData> {
+    // CORRECCIÓN: Incluir más información del sensor y tanque para el WebSocket
     const sensor = await this.prisma.sensor.findUnique({
       where: { hardwareId },
-      include: { tank: { select: { userId: true } } },
+      include: { 
+        tank: { 
+          select: { 
+            id: true,
+            name: true,
+            userId: true 
+          } 
+        } 
+      },
     });
-
+  
     if (!sensor) {
+      this.logger.error(`❌ [DataService] Sensor no encontrado para hardwareId: "${hardwareId}"`);
+      
+      // Debug: Mostrar sensores disponibles solo si es necesario
+      const availableSensors = await this.prisma.sensor.findMany({
+        select: { hardwareId: true, name: true, type: true }
+      });
+      this.logger.log(`🔍 [DataService] Sensores disponibles: ${availableSensors.map(s => s.hardwareId).join(', ')}`);
+      
       throw new NotFoundException(`Sensor con hardwareId "${hardwareId}" no fue encontrado.`);
     }
-
+  
+    this.logger.log(`✅ [DataService] Sensor encontrado: ${sensor.name} (${sensor.type}) del tanque ${sensor.tank.name}`);
+  
+    // Actualizar estado del emitter si está activo
     const activeEmitter = this.activeEmitters.get(sensor.id);
     if (activeEmitter) {
       activeEmitter.currentValue = data.value;
       activeEmitter.messagesCount++;
     }
-
+  
+    // CORRECCIÓN: Llamar al método corregido con información completa del sensor
     return this.createAndBroadcastEntry({
       sensorId: sensor.id,
       tankId: sensor.tankId,
@@ -130,6 +151,18 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
       value: data.value,
       timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
       userId: sensor.tank.userId,
+      // NUEVO: Pasar información completa del sensor para el WebSocket
+      sensorInfo: {
+        id: sensor.id,
+        name: sensor.name,
+        type: sensor.type,
+        hardwareId: sensor.hardwareId,
+        tank: {
+          id: sensor.tank.id,
+          name: sensor.tank.name,
+          userId: sensor.tank.userId,
+        }
+      }
     });
   }
 
@@ -138,8 +171,17 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
     for (const entry of entries) {
       const sensor = await this.prisma.sensor.findUnique({
         where: { id: entry.sensorId },
-        include: { tank: { select: { userId: true } } },
+        include: { 
+          tank: { 
+            select: { 
+              id: true,
+              name: true,
+              userId: true 
+            } 
+          } 
+        },
       });
+      
       if (sensor) {
         const data = await this.createAndBroadcastEntry({
           sensorId: entry.sensorId,
@@ -148,6 +190,18 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
           value: entry.value,
           timestamp: entry.timestamp || new Date(),
           userId: sensor.tank.userId,
+          // CORRECCIÓN: Incluir información del sensor para WebSocket
+          sensorInfo: {
+            id: sensor.id,
+            name: sensor.name,
+            type: sensor.type,
+            hardwareId: sensor.hardwareId,
+            tank: {
+              id: sensor.tank.id,
+              name: sensor.tank.name,
+              userId: sensor.tank.userId,
+            }
+          }
         });
         createdData.push(data);
       }
@@ -291,17 +345,71 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private async createAndBroadcastEntry(data: { sensorId: string; tankId: string; type: SensorType; value: number; timestamp: Date; userId: string }): Promise<SensorData> {
-    const { userId, ...createData } = data;
+  private async createAndBroadcastEntry(data: { 
+    sensorId: string; 
+    tankId: string; 
+    type: SensorType; 
+    value: number; 
+    timestamp: Date; 
+    userId: string;
+    sensorInfo?: any; // Información adicional del sensor para WebSocket
+  }): Promise<SensorData> {
+    const { userId, sensorInfo, ...createData } = data;
+    
+    // Crear el registro en la base de datos
     const createdData = await this.prisma.sensorData.create({
       data: createData,
-      include: { sensor: { select: { id: true, name: true, type: true, hardwareId: true } } },
+      include: { 
+        sensor: { 
+          select: { 
+            id: true, 
+            name: true, 
+            type: true, 
+            hardwareId: true,
+            tank: {
+              select: {
+                id: true,
+                name: true,
+                userId: true
+              }
+            }
+          } 
+        } 
+      },
     });
+  
+    // Actualizar última lectura del sensor
     await this.prisma.sensor.update({ 
       where: { id: data.sensorId }, 
       data: { lastReading: data.value, lastUpdate: data.timestamp } 
     });
-    this.eventsGateway.broadcastNewData({ ...createdData, userId });
+  
+    // CORRECCIÓN: Preparar datos para WebSocket con estructura completa
+    const dataForWebSocket = {
+      id: createdData.id,
+      value: createdData.value,
+      timestamp: createdData.timestamp,
+      type: createdData.type,
+      userId: userId,
+      sensor: sensorInfo || {
+        id: createdData.sensor.id,
+        name: createdData.sensor.name,
+        type: createdData.sensor.type,
+        hardwareId: createdData.sensor.hardwareId,
+        tank: {
+          id: createdData.sensor.tank.id,
+          name: createdData.sensor.tank.name,
+          userId: createdData.sensor.tank.userId,
+        }
+      }
+    };
+  
+    this.logger.log(`💾 [DataService] Datos guardados | ID: ${createdData.id}, Valor: ${data.value}, Tipo: ${data.type}`);
+    
+    // Emitir via WebSocket
+    this.eventsGateway.broadcastNewData(dataForWebSocket);
+    this.logger.log(`📡 [DataService] Datos enviados via WebSocket a usuario ${userId}`);
+  
     return createdData;
   }
   

@@ -4,7 +4,7 @@
  * SOLUCIÓN: Define y exporta las funciones que el hook `useDashboard` necesita,
  * corrigiendo los errores 'is not a function'.
  * @author Kevin Mariano & Gemini AI
- * @version 2.0.0 (Function Fix)
+ * @version 2.0.0 
  * @since 1.0.0
  * @copyright SENA 2025
  */
