@@ -27,6 +27,8 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { PredictionsModule } from './predictions/predictions.module';
+import { AiAssistantModule } from './ai-assistant/ai-assistant.module';
+
 
 @Module({
   imports: [
@@ -49,6 +51,7 @@ import { PredictionsModule } from './predictions/predictions.module';
     DashboardModule, 
     AnalyticsModule,
     PredictionsModule,
+    AiAssistantModule,
   ],
   providers: [
     {
