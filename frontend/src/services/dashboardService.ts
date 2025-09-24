@@ -11,12 +11,11 @@
 
 import api from '@/config/api';
 import {
-	SummaryData,
 	RealtimeData,
 	HistoricalData,
 	UserForList,
 } from '@/types';
-import { DashboardFiltersDto } from '@/types/dashboard';
+import { DashboardFiltersDto, DashboardSummary } from '@/types/dashboard';
 
 /**
  * @function getSummary
@@ -26,7 +25,7 @@ import { DashboardFiltersDto } from '@/types/dashboard';
  */
 export const getSummary = async (
 	filters: DashboardFiltersDto,
-): Promise<SummaryData> => {
+): Promise<DashboardSummary> => {
 	const { data } = await api.get('/dashboard/summary', { params: filters });
 	return data;
 };

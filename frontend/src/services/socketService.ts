@@ -1,7 +1,7 @@
 /**
  * @file socketService.ts
  * @description Servicio corregido para gestionar la conexión de Socket.IO con reconexión automática
- * @author Kevin Mariano & Claude AI
+ * @author Kevin Mariano
  * @version 2.1.0 (Connection Fix)
  * @since 1.0.0
  * @copyright SENA 2025

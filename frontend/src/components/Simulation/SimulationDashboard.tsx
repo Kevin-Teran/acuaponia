@@ -15,7 +15,7 @@ import { useDataEntry } from '@/hooks/useDataEntry';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/common/Card';
 import { Badge } from '@nextui-org/react';
 import { Loader2, AlertTriangle, CheckCircle2, XCircle, BarChart3, Activity, Clock, Thermometer, Beaker, Wind } from 'lucide-react';
-import { SimulationSummaryByTank, SimulationSummary } from '@/types/dashboard';
+import { SimulationSummaryByTank, SimulationSummary, SimulationMetrics } from '@/types/dashboard';
 import { EmitterStatus } from '@/services/dataService';
 
 // --- Helper Functions ---
@@ -140,7 +140,7 @@ export const SimulationDashboard: React.FC = () => {
                                     count > 0 && (
                                         <div key={type} className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">{getSensorIcon(type)}<span className="text-sm">{type}</span></div>
-                                            <Badge color="outline">{count}</Badge>
+                                            <Badge color="secondary">{count}</Badge>
                                         </div>
                                     )
                                 )}

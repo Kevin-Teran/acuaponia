@@ -144,8 +144,9 @@ export interface User {
  * lastLogin: '2025-01-15T09:30:00.000Z'
  * };
  */
-export type UserFromApi = Pick<User, 'id' | 'name' | 'email' | 'role' | 'status'> & {
+ export type UserFromApi = Pick<User, 'id' | 'name' | 'email' | 'role' | 'status'> & {
   _count: { tanks: number };
+  tanks?: Tank[];
   lastLogin?: string;
   createdAt: string;
 };

@@ -15,16 +15,9 @@ import {
 	getHistoricalData,
 	getUsersListForAdmin,
 } from '@/services/dashboardService';
-import {
-    RealtimeData,
-    HistoricalData,
-    UserForList,
-    SensorType,
-    RealtimeSensorData,
-} from '@/types';
-import { DashboardFiltersDto, DashboardSummary } from '@/types/dashboard';
+import { DashboardFilters, DashboardSummary, RealtimeData, HistoricalData, RealtimeSensorData } from '@/types/dashboard';
+import { UserFromApi, SensorType } from '@/types';
 import { socket } from '@/services/socketService';
-import { DashboardFiltersDto } from '@/types/dashboard';
 
 // --- Tipos y Constantes ---
 interface LoadingState {
@@ -39,9 +32,10 @@ const MAX_LIVE_DATA_POINTS = 100;
 
 export const useDashboard = () => {
 	// --- Estados del Hook ---
-	const [summaryData, setSummaryData] = useState<DashboardSummary | null>(null);	const [realtimeData, setRealtimeData] = useState<RealtimeData>({});
+	const [summaryData, setSummaryData] = useState<DashboardSummary | null>(null);	
+	const [realtimeData, setRealtimeData] = useState<RealtimeData>({});
 	const [historicalData, setHistoricalData] = useState<HistoricalData>({});
-	const [usersList, setUsersList] = useState<UserForList[]>([]);
+	const [usersList, setUsersList] = useState<UserFromApi[]>([]);
 	const [loading, setLoading] = useState<LoadingState>({
 		summary: true,
 		realtime: true,
@@ -195,7 +189,7 @@ export const useDashboard = () => {
 	}, []); // Array vacío para que solo se ejecute una vez
 
 	// --- Funciones para Obtener Datos Iniciales (HTTP) ---
-	const fetchSummary = useCallback(async (filters: DashboardFiltersDto) => {
+	const fetchSummary = useCallback(async (filters: DashboardFilters) => {
 		try {
 			setLoading(prev => ({ ...prev, summary: true }));
 			const data = await getSummary(filters);
@@ -209,7 +203,7 @@ export const useDashboard = () => {
 		}
 	}, []);
 
-	const fetchRealtimeData = useCallback(async (filters: DashboardFiltersDto) => {
+	const fetchRealtimeData = useCallback(async (filters: DashboardFilters) => {
 		try {
 			setLoading(prev => ({ ...prev, realtime: true }));
 			const data = await getRealtimeData(filters);
@@ -223,7 +217,7 @@ export const useDashboard = () => {
 		}
 	}, []);
 
-	const fetchHistoricalData = useCallback(async (filters: DashboardFiltersDto) => {
+	const fetchHistoricalData = useCallback(async (filters: DashboardFilters) => {
 		if (!filters.startDate || !filters.endDate) {
 			console.warn('fetchHistoricalData requiere startDate y endDate');
 			return;

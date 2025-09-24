@@ -3,14 +3,14 @@
  * @route frontend/src/hooks/
  * @description Hook optimizado para la recolección de datos, con estado MQTT real,
  * escucha de WebSockets y optimización de re-renders.
- * @author Kevin Mariano 
+ * @author Kevin Mariano
  * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Tank, Sensor, UserFromApi as User, SensorType, ManualEntryDto, SensorData, Role } from '@/types';
+import { Tank, Sensor, UserFromApi as User, SensorData, Role } from '@/types';
 import * as tankService from '@/services/tankService';
 import * as sensorService from '@/services/sensorService';
 import * as userService from '@/services/userService';
@@ -40,18 +40,18 @@ export const useDataEntry = () => {
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [selectedTankId, setSelectedTankId] = useState<string>('');
   const [sensors, setSensors] = useState<Sensor[]>([]);
-  
+
   // Estados de UI y control
   const [loading, setLoading] = useState<LoadingState>({ users: true, tanks: true, sensors: true, simulations: true });
   const [error, setError] = useState<string | null>(null);
   const [isSubmittingManual, setIsSubmittingManual] = useState(false);
   const [isTogglingSimulation, setIsTogglingSimulation] = useState<Set<string>>(new Set());
-  
+
   const [manualReadings, setManualReadings] = useState<Record<string, string>>({});
-  
+
   const [activeSimulations, setActiveSimulations] = useState<EmitterStatus[]>([]);
   const [mqttStatus, setMqttStatus] = useState<MqttStatus>('disconnected');
-  
+
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // --- Sincronización y Efectos ---
@@ -106,7 +106,7 @@ export const useDataEntry = () => {
       if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
     };
   }, [syncSimulationStatus]);
-  
+
   // Carga sectorizada de datos
   useEffect(() => {
     const loadUsers = async () => {
@@ -118,12 +118,12 @@ export const useDataEntry = () => {
       try {
         const usersData = await userService.getUsers();
         setUsers(usersData);
-      } catch (err) { setError('No se pudo cargar la lista de usuarios.'); } 
+      } catch (err) { setError('No se pudo cargar la lista de usuarios.'); }
       finally { setLoading(prev => ({ ...prev, users: false })); }
     };
     loadUsers();
   }, [isAdmin, currentUser]);
-  
+
   useEffect(() => {
     if (!selectedUserId) {
         setTanks([]);
@@ -142,7 +142,7 @@ export const useDataEntry = () => {
           setSelectedTankId('');
           setSensors([]);
         }
-      } catch (err) { setError('No se pudieron cargar los tanques.'); } 
+      } catch (err) { setError('No se pudieron cargar los tanques.'); }
       finally { setLoading(prev => ({ ...prev, tanks: false })); }
     };
     loadTanks();
@@ -171,11 +171,11 @@ export const useDataEntry = () => {
     setSelectedUserId(userId);
     setSelectedTankId(''); // Resetea el tanque para forzar recarga
   }, []);
-  
+
   const handleTankChange = useCallback((tankId: string) => {
     setSelectedTankId(tankId);
   }, []);
-  
+
   const handleManualReadingChange = useCallback((sensorId: string, value: string) => {
     setManualReadings(prev => ({ ...prev, [sensorId]: value }));
   }, []);
@@ -236,6 +236,16 @@ export const useDataEntry = () => {
     return units[type] || '';
   }, []);
 
+  // Lógica para determinar si un sensor está activo
+  const isSimulationActive = useCallback((sensorId: string) => {
+    return activeSimulations.some(sim => sim.sensorId === sensorId);
+  }, [activeSimulations]);
+
+  // Lógica para obtener el estado de un sensor
+  const getSimulationStatus = useCallback((sensorId: string) => {
+    return activeSimulations.find(sim => sim.sensorId === sensorId);
+  }, [activeSimulations]);
+
   return {
     users, tanks, sensors, activeSimulations, mqttStatus,
     selectedUserId, selectedTankId, manualReadings,
@@ -275,7 +285,9 @@ export const useDataEntry = () => {
   
       return summary;
     },
-    simulationMetrics: { /* Debes obtener estas métricas de algún servicio */ },
+    isSimulationActive,
+    getSimulationStatus,
+    simulationMetrics: { systemUptime: 0 }, // Aquí se debe conectar a un servicio real
     lastSyncTime: Date.now(),
   };
 };

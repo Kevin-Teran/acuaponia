@@ -3,7 +3,7 @@
  * @route frontend/src/context
  * @description Proveedor de contexto para la gestión de la autenticación.
  * Versión corregida con integración de WebSocket para datos en tiempo real.
- * @author Kevin Mariano & Claude AI
+ * @author Kevin Mariano 
  * @version 1.1.0 (Socket Integration)
  * @since 1.0.0
  * @copyright SENA 2025
@@ -149,31 +149,48 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // NUEVO: Efecto para monitorear el estado del socket (solo en desarrollo)
   useEffect(() => {
+    // Definimos la función de limpieza
+    const cleanup = () => {
+      // Limpia los listeners y el estado del socket si es necesario
+      console.log('🔌 Limpiando listeners de socket...');
+    };
+
     if (process.env.NODE_ENV === 'development') {
       const socket = socketManager.socket;
-      
-      const logConnectionEstablished = (data: any) => {
-        console.log('✅ [AuthContext] Socket - Conexión establecida:', data);
-      };
-      
-      const logConnectionError = (error: any) => {
-        console.error('❌ [AuthContext] Socket - Error de conexión:', error);
-      };
-      
-      const logNewSensorData = (data: any) => {
-        console.log('📊 [AuthContext] Socket - Nuevos datos de sensor recibidos:', data);
+
+      const handleConnect = () => {
+        console.log('✅ Socket conectado:', socket.id);
       };
 
-      socket.on('connection_established', logConnectionEstablished);
-      socket.on('connection_error', logConnectionError);
-      socket.on('new_sensor_data', logNewSensorData);
+      const handleDisconnect = (reason: any) => {
+        console.log('❌ Socket desconectado:', reason);
+      };
 
+      const handleReconnect = (attempt: any) => {
+        console.log(`🔄 Reconectando (intento ${attempt})...`);
+      };
+
+      const handleError = (error: any) => {
+        console.error('🔥 Error de Socket:', error);
+      };
+
+      socket.on('connect', handleConnect);
+      socket.on('disconnect', handleDisconnect);
+      socket.on('reconnect', handleReconnect);
+      socket.on('connect_error', handleError);
+
+      // La función de limpieza que se devuelve siempre
       return () => {
-        socket.off('connection_established', logConnectionEstablished);
-        socket.off('connection_error', logConnectionError);
-        socket.off('new_sensor_data', logNewSensorData);
+        socket.off('connect', handleConnect);
+        socket.off('disconnect', handleDisconnect);
+        socket.off('reconnect', handleReconnect);
+        socket.off('connect_error', handleError);
+        cleanup(); // Llama a la limpieza definida arriba
       };
     }
+
+    // Si no es un entorno de desarrollo, aún así devolvemos una función de limpieza vacía
+    return cleanup;
   }, []);
 
   if (loading) {

@@ -2,7 +2,7 @@
  * @file events.gateway.ts
  * @route /backend/src/events
  * @description Gateway de WebSockets completo y corregido con tipos apropiados.
- * @author Kevin Mariano & Claude AI
+ * @author Kevin Mariano
  * @version 1.1.1 (Types Fix)
  * @since 1.0.0
  * @copyright SENA 2025

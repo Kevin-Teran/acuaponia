@@ -33,6 +33,7 @@ export interface RealtimeSensorData {
   value: number;
   timestamp: string;
   hardwareId: string;
+  type: SensorType;
 }
 
 export interface HistoricalDataPoint {
@@ -41,6 +42,10 @@ export interface HistoricalDataPoint {
   sensorName: string;
   sensorType: SensorType;
   tankName: string;
+}
+
+export interface HistoricalData {
+  [key: string]: Array<{ time: string; value: number }>;
 }
 
 export interface TankOverview {
@@ -90,4 +95,8 @@ export interface SimulationSummary {
   totalMessages: number;
   byTank: Record<string, SimulationSummaryByTank>;
   byType: Record<string, number>;
+}
+
+export interface SimulationMetrics {
+  systemUptime: number;
 }

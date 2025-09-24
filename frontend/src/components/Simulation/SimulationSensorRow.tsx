@@ -13,10 +13,8 @@
 import React from 'react';
 import { useDataEntry } from '@/hooks/useDataEntry';
 import { Sensor } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardContent } from '@/components/ui/card';
+import { Button, Badge, Checkbox } from '@nextui-org/react';
+import { Card, CardContent } from '@/components/common/Card';
 import { Play, Square, Loader2, Thermometer, Beaker, Wind, Activity } from 'lucide-react';
 
 interface SimulationSensorRowProps {
@@ -62,7 +60,7 @@ export const SimulationSensorRow: React.FC<SimulationSensorRowProps> = ({
   const unit = getUnitForSensorType(sensor.type as any);
 
   const handleToggle = async () => {
-    await toggleSimulation(sensor);
+    await toggleSimulation(sensor.id);
   };
 
   return (
@@ -73,7 +71,7 @@ export const SimulationSensorRow: React.FC<SimulationSensorRowProps> = ({
           <div className="flex items-center gap-3">
             <Checkbox
               checked={isSelected}
-              onCheckedChange={() => onSelect(sensor.id)}
+              onValueChange={() => onSelect(sensor.id)}
               disabled={isToggling}
             />
             <div className="flex items-center gap-2">
@@ -86,14 +84,14 @@ export const SimulationSensorRow: React.FC<SimulationSensorRowProps> = ({
               </div>
             </div>
           </div>
-
+  
           {/* Estado y controles */}
           <div className="flex items-center gap-3">
             {/* Estado de la simulación */}
             {isActive && simulationStatus ? (
               <div className="text-right">
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="bg-green-100 text-green-800">
+                  <Badge color="secondary" className="bg-green-100 text-green-800">
                     Activa
                   </Badge>
                   <span className="font-mono text-sm">
@@ -108,13 +106,13 @@ export const SimulationSensorRow: React.FC<SimulationSensorRowProps> = ({
                 </div>
               </div>
             ) : (
-              <Badge variant="outline">Inactiva</Badge>
+              <Badge variant="flat">Inactiva</Badge>
             )}
-
+  
             {/* Botón de control */}
             <Button
               size="sm"
-              variant={isActive ? "destructive" : "default"}
+              color={isActive ? "danger" : "default"}
               onClick={handleToggle}
               disabled={isToggling}
               className="min-w-[100px]"
@@ -138,7 +136,7 @@ export const SimulationSensorRow: React.FC<SimulationSensorRowProps> = ({
             </Button>
           </div>
         </div>
-
+  
         {/* Información adicional si está activa */}
         {isActive && simulationStatus && (
           <div className="mt-3 pt-3 border-t border-border">
