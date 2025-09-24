@@ -23,8 +23,7 @@ export const ForgotPasswordForm: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
-    const { effectiveTheme, toggleTheme } = useTheme();
-
+    const { theme, toggleTheme } = useTheme();
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!email.trim()) {
@@ -60,7 +59,7 @@ export const ForgotPasswordForm: React.FC = () => {
                     className="rounded-full bg-gray-200/50 p-2 transition-all hover:bg-gray-300 dark:bg-gray-700/50 dark:hover:bg-gray-600"
                     aria-label="Cambiar tema"
                 >
-                    {effectiveTheme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+                    {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
                 </button>
             </div>
 

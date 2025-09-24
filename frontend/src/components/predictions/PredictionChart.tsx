@@ -1,71 +1,108 @@
 /**
  * @file PredictionChart.tsx
  * @route frontend/src/components/predictions
- * @description Gráfica con umbrales visibles y línea de predicción punteada.
+ * @description Gráfico de línea para la predicción de sensores con umbrales.
  * @author Kevin Mariano
- * @version 1.1.0
+ * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Threshold } from '@/types';
+import { cn } from '@/utils/cn';
 
-interface PredictionChartProps {
-  data: { time: string; value: number }[];
-  thresholds?: Threshold | null;
-  lineColor?: string;
+interface ChartDataPoint {
+    time: string;
+    value: number;
 }
 
-/**
- * @description Calcula el dominio (min/max) del eje Y para asegurar que todos los datos y umbrales sean visibles.
- */
-const getChartDomain = (data: { value: number }[], thresholds?: Threshold | null): [number, number] => {
-  const dataValues = data.map(d => d.value);
-  let allValues = [...dataValues];
+interface PredictionThresholds {
+    minCritical: number;
+    maxCritical: number;
+    minWarning: number;
+    maxWarning: number;
+}
 
-  if (thresholds) {
-    allValues = [...allValues, thresholds.minCritical, thresholds.maxCritical];
-  }
+interface PredictionChartProps {
+    data: ChartDataPoint[];
+    thresholds: PredictionThresholds;
+}
 
-  const min = Math.min(...allValues);
-  const max = Math.max(...allValues);
-  
-  // Añadimos un pequeño margen (padding) para que no queden pegados a los bordes
-  const padding = (max - min) * 0.1 || 1; // || 1 para evitar padding de 0
-
-  return [Math.floor(min - padding), Math.ceil(max + padding)];
+const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-default-50 p-2 rounded-lg shadow-md border border-default-200">
+                <p className="text-sm font-semibold text-foreground">{`Fecha: ${label}`}</p>
+                <p className="text-sm text-primary-500">{`Valor: ${payload[0].value.toFixed(2)}`}</p>
+            </div>
+        );
+    }
+    return null;
 };
 
-export const PredictionChart = ({ data, thresholds, lineColor = '#006FEE' }: PredictionChartProps) => {
-  const domain = getChartDomain(data, thresholds);
-  
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart
-        data={data}
-        margin={{ top: 5, right: 30, left: -10, bottom: 5 }}
-      >
-        <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-        <XAxis dataKey="time" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-        <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} domain={domain} />
-        <Tooltip
-          contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.9)', borderColor: '#334155', borderRadius: '0.5rem' }}
-          labelStyle={{ color: '#cbd5e1' }}
-        />
-        
-        {/* Líneas de Umbrales */}
-        {thresholds && (
-          <>
-            <ReferenceLine y={thresholds.maxCritical} stroke="#F31260" strokeDasharray="4 4" strokeWidth={2} />
-            <ReferenceLine y={thresholds.maxWarning} stroke="#F5A524" strokeDasharray="4 4" strokeWidth={2} />
-            <ReferenceLine y={thresholds.minWarning} stroke="#F5A524" strokeDasharray="4 4" strokeWidth={2} />
-            <ReferenceLine y={thresholds.minCritical} stroke="#F31260" strokeDasharray="4 4" strokeWidth={2} />
-          </>
-        )}
-        
-        {/* Línea de predicción punteada */}
-        <Line type="monotone" dataKey="value" name="Predicción" stroke={lineColor} strokeWidth={3} strokeDasharray="5 5" dot={false} />
-      </LineChart>
-    </ResponsiveContainer>
-  );
+export const PredictionChart: React.FC<PredictionChartProps> = ({ data, thresholds }) => {
+    return (
+        <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+                data={data}
+                margin={{ top: 5, right: 20, left: -20, bottom: 5 }}
+            >
+                <CartesianGrid strokeDasharray="3 3" className="stroke-default-200" />
+                <XAxis dataKey="time" className="text-xs" />
+                <YAxis className="text-xs" />
+                <Tooltip content={<CustomTooltip />} />
+
+                {/* Líneas de Referencia para Umbrales */}
+                {thresholds && (
+                    <>
+                        <ReferenceLine 
+                            y={thresholds.maxCritical} 
+                            stroke="#f31260" 
+                            strokeDasharray="3 3" 
+                            label={{ 
+                                value: 'Crítico Alto', 
+                                position: 'right', 
+                                fill: '#f31260',
+                                className: 'text-xs font-semibold'
+                            }} 
+                        />
+                        <ReferenceLine 
+                            y={thresholds.maxWarning} 
+                            stroke="#f5a524" 
+                            strokeDasharray="3 3" 
+                            label={{ 
+                                value: 'Alerta Alta', 
+                                position: 'right', 
+                                fill: '#f5a524',
+                                className: 'text-xs font-semibold'
+                            }} 
+                        />
+                        <ReferenceLine 
+                            y={thresholds.minWarning} 
+                            stroke="#f5a524" 
+                            strokeDasharray="3 3" 
+                            label={{ 
+                                value: 'Alerta Baja', 
+                                position: 'right', 
+                                fill: '#f5a524',
+                                className: 'text-xs font-semibold'
+                            }} 
+                        />
+                        <ReferenceLine 
+                            y={thresholds.minCritical} 
+                            stroke="#f31260" 
+                            strokeDasharray="3 3" 
+                            label={{ 
+                                value: 'Crítico Bajo', 
+                                position: 'right', 
+                                fill: '#f31260',
+                                className: 'text-xs font-semibold'
+                            }} 
+                        />
+                    </>
+                )}
+
+                <Line type="monotone" dataKey="value" stroke="#39A900" strokeWidth={2} dot={{ r: 3 }} />
+            </LineChart>
+        </ResponsiveContainer>
+    );
 };

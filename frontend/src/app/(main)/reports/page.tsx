@@ -26,7 +26,7 @@ import * as reportService from '@/services/reportService';
 // @ts-ignore
 import { Report, ReportStatus, Tank, Sensor } from '@/types';
 import { cn } from '@/utils/cn';
-import { socketService } from '@/services/socketService';
+import { socketManager } from '@/services/socketService';
 
 /**
  * @typedef {object} ReportFilters
@@ -132,11 +132,11 @@ export default function Reports() {
         );
     };
 
-    socketService.connect();
-    socketService.onReportUpdate(handleReportUpdate);
+    socketManager.connect();
+    socketManager.socket.on('report_status_update', handleReportUpdate);
 
     return () => {
-      socketService.offReportUpdate(handleReportUpdate);
+      socketManager.socket.off('report_status_update', handleReportUpdate);
     };
   }, []);
 

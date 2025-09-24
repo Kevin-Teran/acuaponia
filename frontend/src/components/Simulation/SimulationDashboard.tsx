@@ -1,16 +1,22 @@
 /**
  * @file SimulationDashboard.tsx
+ * @route frontend/src/components/Simulation
  * @description Panel lateral con métricas y resúmenes de las simulaciones activas.
- * @author Kevin Mariano 
- * @version 5.0.0
+ * @author Kevin Mariano
+ * @version 1.1.0
+ * @since 1.0.0
+ * @copyright SENA 2025
  */
+
 'use client';
 
 import React from 'react';
 import { useDataEntry } from '@/hooks/useDataEntry';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/common/Card';
+import { Badge } from '@nextui-org/react';
 import { Loader2, AlertTriangle, CheckCircle2, XCircle, BarChart3, Activity, Clock, Thermometer, Beaker, Wind } from 'lucide-react';
+import { SimulationSummaryByTank, SimulationSummary } from '@/types/dashboard';
+import { EmitterStatus } from '@/services/dataService';
 
 // --- Helper Functions ---
 const getSensorIcon = (type: string) => {
@@ -33,13 +39,13 @@ const formatUptime = (seconds: number) => {
 
 // --- Sub-Components ---
 const MqttStatus: React.FC = () => {
-    const { mqttConnectionStatus } = useDataEntry();
+    const { mqttStatus } = useDataEntry();
     const statusConfig = {
         connected: { icon: <CheckCircle2 className="h-4 w-4 text-green-500" />, text: 'Conectado' },
         connecting: { icon: <Loader2 className="h-4 w-4 text-yellow-500 animate-spin" />, text: 'Conectando' },
         disconnected: { icon: <XCircle className="h-4 w-4 text-red-500" />, text: 'Desconectado' },
     };
-    const { icon, text } = statusConfig[mqttConnectionStatus] || { icon: <AlertTriangle className="h-4 w-4 text-gray-500" />, text: 'Desconocido' };
+    const { icon, text } = statusConfig[mqttStatus] || { icon: <AlertTriangle className="h-4 w-4 text-gray-500" />, text: 'Desconocido' };
 
     return (
         <div className="flex items-center gap-1">
@@ -52,7 +58,7 @@ const MqttStatus: React.FC = () => {
 // --- Main Component ---
 export const SimulationDashboard: React.FC = () => {
     const { getActiveSimulationsSummary, simulationMetrics, lastSyncTime } = useDataEntry();
-    const summary = getActiveSimulationsSummary();
+    const summary = getActiveSimulationsSummary() as SimulationSummary;
 
     return (
         <div className="space-y-6">
@@ -104,10 +110,10 @@ export const SimulationDashboard: React.FC = () => {
                                     <div key={tankId} className="space-y-2">
                                         <div className="flex items-center justify-between">
                                             <h4 className="font-medium text-sm">{tankInfo.tankName}</h4>
-                                            <Badge variant="secondary">{tankInfo.count} activa{tankInfo.count !== 1 ? 's' : ''}</Badge>
+                                            <Badge color="secondary">{tankInfo.count} activa{tankInfo.count !== 1 ? 's' : ''}</Badge>
                                         </div>
                                         <div className="space-y-2">
-                                            {tankInfo.simulations.map((sim) => (
+                                            {tankInfo.simulations.map((sim: EmitterStatus) => (
                                                 <div key={sim.sensorId} className="flex items-center justify-between text-xs bg-muted/50 p-2 rounded">
                                                     <div className="flex items-center gap-2">{getSensorIcon(sim.type)}<span>{sim.sensorName}</span></div>
                                                     <div className="text-right">
@@ -134,7 +140,7 @@ export const SimulationDashboard: React.FC = () => {
                                     count > 0 && (
                                         <div key={type} className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">{getSensorIcon(type)}<span className="text-sm">{type}</span></div>
-                                            <Badge variant="outline">{count}</Badge>
+                                            <Badge color="outline">{count}</Badge>
                                         </div>
                                     )
                                 )}

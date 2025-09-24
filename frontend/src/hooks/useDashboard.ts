@@ -16,13 +16,13 @@ import {
 	getUsersListForAdmin,
 } from '@/services/dashboardService';
 import {
-	SummaryData,
-	RealtimeData,
-	HistoricalData,
-	UserForList,
-	SensorType,
-	RealtimeSensorData,
+    RealtimeData,
+    HistoricalData,
+    UserForList,
+    SensorType,
+    RealtimeSensorData,
 } from '@/types';
+import { DashboardFiltersDto, DashboardSummary } from '@/types/dashboard';
 import { socket } from '@/services/socketService';
 import { DashboardFiltersDto } from '@/types/dashboard';
 
@@ -39,8 +39,7 @@ const MAX_LIVE_DATA_POINTS = 100;
 
 export const useDashboard = () => {
 	// --- Estados del Hook ---
-	const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
-	const [realtimeData, setRealtimeData] = useState<RealtimeData>({});
+	const [summaryData, setSummaryData] = useState<DashboardSummary | null>(null);	const [realtimeData, setRealtimeData] = useState<RealtimeData>({});
 	const [historicalData, setHistoricalData] = useState<HistoricalData>({});
 	const [usersList, setUsersList] = useState<UserForList[]>([]);
 	const [loading, setLoading] = useState<LoadingState>({

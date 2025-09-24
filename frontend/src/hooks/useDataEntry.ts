@@ -16,7 +16,7 @@ import * as sensorService from '@/services/sensorService';
 import * as userService from '@/services/userService';
 import * as dataService from '@/services/dataService';
 import { EmitterStatus } from '@/services/dataService';
-import { socketService } from '@/services/socketService';
+import { socketManager } from '@/services/socketService';
 import { mqttService } from '@/services/mqttService';
 import { useAuth } from '@/context/AuthContext';
 import Swal from 'sweetalert2';
@@ -71,7 +71,7 @@ export const useDataEntry = () => {
   // Efecto para conexiones (WebSocket y MQTT) y sincronización
   useEffect(() => {
     // Conectar servicios
-    socketService.connect();
+    socketManager.connect();
     mqttService.connect();
 
     // Suscribirse a cambios de estado de MQTT
@@ -91,7 +91,7 @@ export const useDataEntry = () => {
         )
       );
     };
-    socketService.onSensorData(handleSensorUpdate);
+    socketManager.onSensorData(handleSensorUpdate);
 
     // Sincronización inicial y periódica del estado de los emisores
     syncSimulationStatus();
@@ -99,8 +99,8 @@ export const useDataEntry = () => {
 
     // Limpieza al desmontar el componente
     return () => {
-      socketService.offSensorData(handleSensorUpdate);
-      socketService.disconnect();
+      socketManager.offSensorData(handleSensorUpdate);
+      socketManager.disconnect();
       mqttService.disconnect();
       unsubscribeMqtt();
       if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
@@ -245,5 +245,37 @@ export const useDataEntry = () => {
     startMultipleSimulations: (ids: string[]) => batchOperation('start', ids),
     stopMultipleSimulations: (ids: string[]) => batchOperation('stop', ids),
     getUnitForSensorType,
+    getActiveSimulationsSummary: () => {
+      const summary: any = {
+        totalActive: 0,
+        totalMessages: 0,
+        byTank: {},
+        byType: {},
+      };
+  
+      activeSimulations.forEach(sim => {
+        summary.totalActive++;
+        summary.totalMessages += sim.messagesCount;
+  
+        if (!summary.byTank[sim.tankId]) {
+          summary.byTank[sim.tankId] = {
+            tankName: sim.tankName,
+            count: 0,
+            simulations: [],
+          };
+        }
+        summary.byTank[sim.tankId].count++;
+        summary.byTank[sim.tankId].simulations.push(sim);
+  
+        if (!summary.byType[sim.type]) {
+          summary.byType[sim.type] = 0;
+        }
+        summary.byType[sim.type]++;
+      });
+  
+      return summary;
+    },
+    simulationMetrics: { /* Debes obtener estas métricas de algún servicio */ },
+    lastSyncTime: Date.now(),
   };
 };

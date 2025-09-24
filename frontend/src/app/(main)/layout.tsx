@@ -17,17 +17,16 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/sidebar/Sidebar';
 import { modules } from '@/components/layout/sidebar/constants';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import LoadingScreen from './loading'; // Importamos el componente de carga
+import LoadingScreen from './loading'; 
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, loading: authLoading, logout, theme, toggleTheme } = useAuth();
-
+  const { user, loading: authLoading, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
-  
-  // **SOLUCIÓN PARA CARGA CONSISTENTE**
   const [isNavigating, setIsNavigating] = useState(false);
 
   useEffect(() => {
@@ -36,7 +35,6 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     }
   }, [authLoading, user, router]);
   
-  // Cuando la ruta cambie, significa que la navegación ha terminado.
   useEffect(() => {
     setIsNavigating(false);
   }, [pathname]);
@@ -55,10 +53,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const onToggleCollapse = useCallback(() => setCollapsed(prev => !prev), []);
   
   const handleModuleChange = useCallback((module: { id: string; href: string; }) => {
-    // Si ya estamos en la página de destino, no hacemos nada.
     if (pathname === module.href) return;
     
-    // Activamos el estado de navegación ANTES de cambiar la ruta.
     setIsNavigating(true);
     setCurrentModuleId(module.id);
     router.push(module.href);
@@ -68,24 +64,21 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     logout();
   }, [logout]);
 
-  // Pantalla de carga inicial (verificación de sesión)
   if (authLoading) {
     return <LoadingSpinner fullScreen message="Verificando sesión..." />;
   }
 
   if (!user) {
-    return null; // Evita parpadeos
+    return null; 
   }
   
   return (
     <div className={`flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300 ${theme}`}>
       <Sidebar
         user={user}
-        onLogout={handleLogout}
+        onLogout={logout}
         collapsed={collapsed}
         onToggleCollapse={onToggleCollapse}
-        theme={theme}
-        onToggleTheme={toggleTheme}
         currentModuleId={currentModuleId}
         onModuleChange={handleModuleChange}
       />

@@ -3,22 +3,48 @@
  * @route frontend/src/components/predictions
  * @description Tarjeta de predicción final, pulida y con toda la información.
  * @author Kevin Mariano
- * @version 1.0.0
+ * @version 1.1.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
 import { Card, CardHeader, CardBody } from '@nextui-org/react';
 import { ChevronsRight, AlertTriangle, Thermometer, Droplet, Wind } from 'lucide-react';
 import { PredictionChart } from './PredictionChart';
+import { ThresholdGauge } from './ThresholdGauge';
 import { cn } from '@/utils/cn';
+import { SensorType } from '@/types'; 
+
+interface PredictedDataPoint {
+  timestamp: string;
+  value: number;
+}
+
+interface PredictionThresholds {
+  minCritical: number;
+  maxCritical: number;
+  minWarning: number;
+  maxWarning: number;
+}
+
+interface PredictionResult {
+  predicted: PredictedDataPoint[];
+  thresholds: PredictionThresholds;
+  sensorType: SensorType;
+  sensorName: string;
+  message?: string;
+}
+
+interface PredictionCardProps {
+  result: PredictionResult;
+}
 
 const sensorInfo = {
-  TEMPERATURE: { icon: Thermometer, unit: '°C', color: 'text-danger-500' },
-  PH: { icon: Droplet, unit: '', color: 'text-primary-500' },
-  OXYGEN: { icon: Wind, unit: 'mg/L', color: 'text-secondary-500' },
+  [SensorType.TEMPERATURE]: { icon: Thermometer, unit: '°C', color: 'text-danger-500' },
+  [SensorType.PH]: { icon: Droplet, unit: '', color: 'text-primary-500' },
+  [SensorType.OXYGEN]: { icon: Wind, unit: 'mg/L', color: 'text-secondary-500' },
 };
 
-export const PredictionCard = ({ result }) => {
+export const PredictionCard: React.FC<PredictionCardProps> = ({ result }) => {
   const info = sensorInfo[result.sensorType] || {};
   const Icon = info.icon || ChevronsRight;
   const { predicted, thresholds } = result;
@@ -63,6 +89,14 @@ export const PredictionCard = ({ result }) => {
                 <span className='text-2xl font-medium text-default-400'>{info.unit}</span>
               </p>
             </div>
+
+            {initialValue !== undefined && thresholds && (
+                <div className="px-4 mb-4">
+                    <p className='text-sm text-center text-default-500 mb-2'>Valor Actual</p>
+                    <ThresholdGauge value={initialValue} thresholds={thresholds} unit={info.unit} />
+                </div>
+            )}
+            
             <div className="flex-grow h-52 w-full">
               <PredictionChart data={chartData} thresholds={thresholds} />
             </div>

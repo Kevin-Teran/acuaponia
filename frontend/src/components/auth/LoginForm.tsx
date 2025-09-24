@@ -25,7 +25,7 @@ export const LoginForm: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     
     const { login, loading, isAuthenticated } = useAuth();
-    const { effectiveTheme, toggleTheme } = useTheme();
+    const { theme, toggleTheme } = useTheme();
     const router = useRouter();
 
     useEffect(() => {
@@ -82,7 +82,7 @@ export const LoginForm: React.FC = () => {
                     className="rounded-full bg-gray-200/50 p-2 transition-all hover:bg-gray-300 dark:bg-gray-700/50 dark:hover:bg-gray-600"
                     aria-label="Cambiar tema"
                 >
-                    {effectiveTheme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+                    {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
                 </button>
             </div>
 

@@ -26,7 +26,7 @@ export const ResetPasswordForm: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
-    const { effectiveTheme, toggleTheme } = useTheme();
+    const { theme, toggleTheme } = useTheme();
     const params = useParams();
     const router = useRouter();
     const token = params.token as string;
@@ -69,13 +69,12 @@ export const ResetPasswordForm: React.FC = () => {
                     className="rounded-full bg-gray-200/50 p-2 transition-all hover:bg-gray-300 dark:bg-gray-700/50 dark:hover:bg-gray-600"
                     aria-label="Cambiar tema"
                 >
-                    {effectiveTheme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+                    {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
                 </button>
             </div>
 
             <main className="w-full max-w-sm animate-in fade-in slide-in-from-bottom-5 duration-500 sm:max-w-md sm:px-0">
                 <header className="mb-6 text-center">
-                    {/* 👇 INICIA LA CORRECCIÓN AQUÍ 👇 */}
                     <div className="relative mx-auto mb-3 h-16 w-16">
                         <Image
                             src="/logo-sena.png"
@@ -85,7 +84,6 @@ export const ResetPasswordForm: React.FC = () => {
                             priority
                         />
                     </div>
-                    {/* 👆 TERMINA LA CORRECCIÓN AQUÍ 👆 */}
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Establecer Nueva Contraseña</h1>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Crea una contraseña segura y fácil de recordar</p>
                 </header>
@@ -130,7 +128,6 @@ export const ResetPasswordForm: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* ... (el resto del formulario no cambia) ... */}
                         {error && (
                             <div className="relative flex items-center justify-between rounded-lg border border-red-400/50 bg-red-100/80 px-4 py-3 text-red-700 dark:bg-red-900/50 dark:text-red-300" role="alert">
                                 <div className="flex items-center">

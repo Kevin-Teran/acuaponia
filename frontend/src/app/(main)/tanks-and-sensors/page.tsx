@@ -459,10 +459,11 @@ export default function DevicesPage() {
             )}
             
             {modal.view === 'view-sensor' && modal.data && (
-                <SensorDetailModal 
-                    isOpen={true} 
-                    sensor={modal.data} 
-                    onClose={handleCloseModal} 
+                <SensorDetailModal
+                    isOpen={true}
+                    sensor={modal.data}
+                    lastReading={modal.data.lastReading || null} 
+                    onClose={handleCloseModal}
                 />
             )}
         </div>

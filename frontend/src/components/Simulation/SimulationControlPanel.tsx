@@ -1,15 +1,19 @@
 /**
  * @file SimulationControlPanel.tsx
+ * @route frontend/src/components/Simulation
  * @description Panel para gestionar simulaciones MQTT, incluyendo acciones en lote.
- * @author Kevin Mariano 
- * @version 5.0.0
+ * @author Kevin Mariano
+ * @version 1.1.0
+ * @since 1.0.0
+ * @copyright SENA 2025
  */
+
 'use client';
 
 import React, { useState } from 'react';
 import { useDataEntry } from '@/hooks/useDataEntry';
-import { Button } from '@/components/ui/button';
-import { SimulationSensorRow } from './SimulationSensorRow'; // Importa el componente de la misma carpeta
+import { Button } from '@nextui-org/react';
+import { SimulationSensorRow } from './SimulationSensorRow'; 
 import { Play, Square } from 'lucide-react';
 
 export const SimulationControlPanel: React.FC = () => {
@@ -48,11 +52,11 @@ export const SimulationControlPanel: React.FC = () => {
             <Play className="h-4 w-4 mr-1" />
             Iniciar Seleccionados ({selectedSensors.size})
           </Button>
-          <Button size="sm" variant="destructive" onClick={handleStopSelected} disabled={selectedSensors.size === 0}>
+          <Button size="sm" color="danger" onClick={handleStopSelected} disabled={selectedSensors.size === 0}>
             <Square className="h-4 w-4 mr-1" />
-            Detener Seleccionados ({selectedSensors.size})
+              Detener Seleccionados ({selectedSensors.size})
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setSelectedSensors(new Set())} disabled={selectedSensors.size === 0}>
+          <Button size="sm" variant="bordered" onClick={() => setSelectedSensors(new Set())} disabled={selectedSensors.size === 0}>
             Limpiar Selección
           </Button>
         </div>

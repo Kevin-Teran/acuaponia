@@ -28,13 +28,13 @@ export const Sidebar: React.FC<Omit<SidebarProps, 'theme' | 'onToggleTheme'>> = 
   currentModuleId,
   onModuleChange,
 }) => {
-  const { effectiveTheme, toggleTheme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
 
   const handleSettingsClick = useCallback(() => {
     onModuleChange({ id: 'settings', href: '/settings' });
   }, [onModuleChange]);
   
-  const themeText = effectiveTheme === 'light' ? 'Tema Oscuro' : 'Tema Claro';
+  const themeText = theme === 'light' ? 'Tema Oscuro' : 'Tema Claro';
 
   return (
     <aside
@@ -70,9 +70,9 @@ export const Sidebar: React.FC<Omit<SidebarProps, 'theme' | 'onToggleTheme'>> = 
                 aria-label={`Cambiar a ${themeText}`}
                 isCollapsed={collapsed}
             >
-                {effectiveTheme === 'light' 
-                    ? <Moon className={clsx('h-5 w-5', !collapsed && 'mr-3')} /> 
-                    : <Sun className={clsx('h-5 w-5', !collapsed && 'mr-3')} />
+                {theme === 'light'
+                  ? <Moon className={clsx('h-5 w-5', !collapsed && 'mr-3')} />
+                  : <Sun className={clsx('h-5 w-5', !collapsed && 'mr-3')} />
                 }
                 {!collapsed && <span className="text-sm">{themeText}</span>}
             </ActionButton>

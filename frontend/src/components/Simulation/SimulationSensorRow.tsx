@@ -1,9 +1,13 @@
 /**
  * @file SimulationSensorRow.tsx
+ * @route frontend/src/components/Simulation
  * @description Componente para mostrar y controlar cada sensor individual en la simulación.
  * @author Kevin Mariano
- * @version 5.0.0
+ * @version 1.1.0
+ * @since 1.0.0
+ * @copyright SENA 2025
  */
+
 'use client';
 
 import React from 'react';

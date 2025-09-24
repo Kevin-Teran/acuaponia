@@ -142,7 +142,12 @@ export default function PredictionsPage() {
                 label="Horizonte"
                 labelPlacement="outside-left"
                 selectedKeys={selectedHorizonKeys} 
-                onSelectionChange={(keys) => setHorizon((keys as Set<string>).values().next().value)} 
+                onSelectionChange={(keys) => {
+                  const value = (keys as Set<string>).values().next().value;
+                  if (value) {
+                    setHorizon(value);
+                  }
+                }}
                 disabled={!selectedTankId}
                 className="min-w-64"
                 classNames={{

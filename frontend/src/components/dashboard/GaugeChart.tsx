@@ -9,16 +9,17 @@
  */
 
 import React, { useMemo } from 'react';
-import { RealtimeData, SensorType, Settings } from '@/types';
+import { UserSettings, SensorType } from '@/types';
+import { RealtimeData } from '@/types/dashboard';
 import { Skeleton } from '@/components/common/Skeleton';
 import { Thermometer, Droplets, Wind, Activity, Clock } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, circOut } from 'framer-motion';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 interface GaugeChartProps {
     data: RealtimeData | null;
-    settings: Settings | null;
+    settings: UserSettings | null;
     loading: boolean;
 }
 
@@ -41,14 +42,13 @@ const sensorInfo: Record<string, { icon: React.ElementType; name: string }> = {
  * @param {Settings | null} settings - La configuración del sistema.
  * @returns {object} - La configuración del medidor.
  */
-const getSensorConfig = (type: SensorType, settings: Settings | null) => {
+const getSensorConfig = (type: SensorType, settings: UserSettings | null) => {
     const defaultThresholds = {
         temperature: { min: 22, max: 28 },
         ph: { min: 6.8, max: 7.6 },
-        oxygen: { min: 6, max: 10 },
+        oxygen: { min: 5, max: 8 },
     };
-    const currentThresholds = settings?.thresholds || defaultThresholds;
-
+    const currentThresholds = settings?.thresholds;
     let config;
     let unit = '';
     const colors = {
@@ -59,19 +59,27 @@ const getSensorConfig = (type: SensorType, settings: Settings | null) => {
 
     switch (type) {
         case SensorType.TEMPERATURE:
-            config = currentThresholds.temperature;
+            config = currentThresholds
+                ? { min: currentThresholds.temperatureMin, max: currentThresholds.temperatureMax }
+                : defaultThresholds.temperature;
             unit = '°C';
             break;
         case SensorType.PH:
-            config = currentThresholds.ph;
-            unit = '';
+            config = currentThresholds
+                ? { min: currentThresholds.phMin, max: currentThresholds.phMax }
+                : defaultThresholds.ph;
+            unit = 'pH';
             break;
         case SensorType.OXYGEN:
-            config = currentThresholds.oxygen;
+            config = currentThresholds
+                ? { min: currentThresholds.oxygenMin, max: currentThresholds.oxygenMax }
+                : defaultThresholds.oxygen;
             unit = 'mg/L';
             break;
         default:
-            config = { min: 30, max: 70 };
+            config = { min: 0, max: 100 };
+            unit = '';
+            break;
     }
 
     const { min, max } = config;
@@ -116,7 +124,7 @@ const SemiCircularGauge = ({
     const endY = centerY;
     const circumference = Math.PI * radius;
 
-    const transition = { duration: 1.5, ease: 'circOut' };
+    const transition = { duration: 1.5, ease: circOut };
 
     const needleAngleRad = (percentage / 100) * Math.PI;
 
@@ -198,7 +206,7 @@ const GaugeItem = ({
 }: {
     data: any;
     type: SensorType;
-    settings: Settings | null;
+    settings: UserSettings | null;
 }) => {
     const config = getSensorConfig(type, settings);
     const { icon: Icon, name } = sensorInfo[type];

@@ -34,7 +34,7 @@ import {
     Wind,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { Settings, SensorType } from '@/types';
+import { UserSettings, SensorType } from '@/types';
 import { 
     format, 
     differenceInDays, 
@@ -58,7 +58,7 @@ interface LineChartProps {
     title: string;
     yAxisLabel: string;
     sensorType: SensorType;
-    settings: Settings | null;
+    settings: UserSettings | null;
     loading: boolean;
     isLive: boolean;
     dateRange?: { from: Date; to: Date };
@@ -110,18 +110,6 @@ const SENSOR_THEMES = {
         color: '#06b6d4',
         gradientId: 'oxygenGradient',
         name: 'Oxígeno',
-    },
-    [SensorType.LEVEL]: {
-        icon: BarChart3,
-        color: '#a855f7',
-        gradientId: 'levelGradient',
-        name: 'Nivel',
-    },
-    [SensorType.FLOW]: {
-        icon: Waves,
-        color: '#f97316',
-        gradientId: 'flowGradient',
-        name: 'Flujo',
     },
 };
 
@@ -227,7 +215,7 @@ const intelligentSampling = (data: ChartDataPoint[], maxPoints: number): ChartDa
     return uniqueSampled.map(({ originalIndex, ...rest }) => rest);
 };
 
-const getTickInterval = (dataLength: number, rangeType: TimeRangeType): number | string => {
+const getTickInterval = (dataLength: number, rangeType: TimeRangeType): number => {
     const maxTicks = 8;
     
     if (dataLength <= maxTicks) {
@@ -407,11 +395,16 @@ export const LineChart: React.FC<LineChartProps> = ({
 
     const thresholds = useMemo(() => {
         if (!settings || !settings.thresholds) return null;
-        return (
-            settings.thresholds[
-                sensorType.toLowerCase() as keyof typeof settings.thresholds
-            ] || null
-        );
+        switch (sensorType) {
+            case SensorType.PH:
+                return { min: settings.thresholds.phMin, max: settings.thresholds.phMax };
+            case SensorType.TEMPERATURE:
+                return { min: settings.thresholds.temperatureMin, max: settings.thresholds.temperatureMax };
+            case SensorType.OXYGEN:
+                return { min: settings.thresholds.oxygenMin, max: settings.thresholds.oxygenMax };
+            default:
+                return null;
+        }
     }, [settings, sensorType]);
 
     const { processedData, stats, xAxisConfig, rangeType, dataInfo, dominantColor } = useMemo(() => {
@@ -421,7 +414,7 @@ export const LineChart: React.FC<LineChartProps> = ({
                 stats: { min: 0, max: 0, avg: 0, yDomain: [0, 10] },
                 xAxisConfig: { 
                     tickFormatter: () => '', 
-                    interval: 'preserveStartEnd',
+                    interval: 0, 
                     domain: ['auto', 'auto'] 
                 },
                 rangeType: TimeRangeType.HOURS,
@@ -460,7 +453,7 @@ export const LineChart: React.FC<LineChartProps> = ({
             return acc;
         }, {} as Record<string, number>);
 
-        const dominantStatus = Object.keys(statusCounts).length > 0 
+       const dominantStatus = Object.keys(statusCounts).length > 0 
             ? Object.entries(statusCounts)
                 .reduce((a, b) => a[1] > b[1] ? a : b)[0] as keyof typeof STATUS_COLORS
             : 'optimal';
@@ -496,7 +489,7 @@ export const LineChart: React.FC<LineChartProps> = ({
             stats: { min, max, avg, yDomain },
             xAxisConfig: { 
                 tickFormatter, 
-                interval: tickInterval,
+                interval: tickInterval, 
                 domain: ['dataMin', 'dataMax'] as [string, string]
             },
             rangeType: detectedRangeType,

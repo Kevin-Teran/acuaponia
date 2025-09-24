@@ -8,6 +8,7 @@
  * @copyright SENA 2025
  */
 import { SensorType } from './index';
+import { EmitterStatus } from '@/services/dataService';
 
 export interface DashboardFilters {
   userId?: string;
@@ -64,4 +65,29 @@ export interface DashboardUserOption {
   name: string;
   email: string;
   _count: { tanks: number };
+}
+
+/**
+ * @typedef {object} RealtimeData
+ * @description Contiene los datos en tiempo real de los sensores, agrupados por tipo.
+ * @property {RealtimeSensorData[]} [TEMPERATURE] - Datos del sensor de temperatura (opcional).
+ * @property {RealtimeSensorData[]} [PH] - Datos del sensor de pH (opcional).
+ * @property {RealtimeSensorData[]} [OXYGEN] - Datos del sensor de oxígeno (opcional).
+ * @property {RealtimeSensorData[]} [TDS] - Datos del sensor de TDS (opcional).
+ */
+ export interface RealtimeData {
+  [key: string]: RealtimeSensorData[];
+}
+
+export interface SimulationSummaryByTank {
+  tankName: string;
+  count: number;
+  simulations: EmitterStatus[];
+}
+
+export interface SimulationSummary {
+  totalActive: number;
+  totalMessages: number;
+  byTank: Record<string, SimulationSummaryByTank>;
+  byType: Record<string, number>;
 }

@@ -80,7 +80,11 @@ const getSensorInfo = (type: SensorType) => ({
   description: 'Tipo de sensor no reconocido'
 });
 
-const SENSOR_TYPES: SensorType[] = ['TEMPERATURE', 'PH', 'OXYGEN'];
+const SENSOR_TYPES: SensorType[] = [
+  SensorType.TEMPERATURE,
+  SensorType.PH,
+  SensorType.OXYGEN,
+];
 
 export const SensorModal: React.FC<SensorModalProps> = ({
   isOpen,
@@ -245,8 +249,9 @@ export const SensorModal: React.FC<SensorModalProps> = ({
           type: formData.type as SensorType,
           tankId: formData.tankId,
           calibrationDate: new Date(formData.calibrationDate).toISOString(),
+          location: selectedTank?.location || '',
         };
-
+        
         await createSensor(createPayload);
         await Swal.fire({
           title: '¡Sensor creado!',

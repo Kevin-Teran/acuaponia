@@ -50,6 +50,7 @@ interface SensorDetailModalProps {
       SensorData: number;
     };
   };
+  lastReading: number | null; 
   onClose: () => void;
 }
 
@@ -140,6 +141,7 @@ const getStatusInfo = (status: Sensor['status']) => {
 export const SensorDetailModal: React.FC<SensorDetailModalProps> = ({
   isOpen,
   sensor,
+  lastReading, 
   onClose,
 }) => {
   if (!isOpen) return null;
@@ -162,7 +164,7 @@ export const SensorDetailModal: React.FC<SensorDetailModalProps> = ({
     }
   };
 
-  const lastUpdateInfo = formatLastUpdate(sensor.lastUpdate);
+  const lastUpdateInfo = formatLastUpdate(sensor.updatedAt);
   const calibrationInfo = formatLastUpdate(sensor.calibrationDate);
 
   return (
@@ -237,8 +239,8 @@ export const SensorDetailModal: React.FC<SensorDetailModalProps> = ({
             <div className="bg-white dark:bg-gray-700 rounded-xl p-6 border border-gray-200 dark:border-gray-600 text-center">
               <div className="flex items-baseline justify-center mb-4">
                 <span className="text-6xl font-bold text-gray-900 dark:text-white">
-                  {sensor.lastReading !== null && sensor.lastReading !== undefined 
-                    ? sensor.lastReading.toFixed(sensor.type === 'PH' ? 2 : 1) 
+                  {lastReading !== null && lastReading !== undefined 
+                    ? lastReading.toFixed(sensor.type === 'PH' ? 2 : 1) 
                     : '--'
                   }
                 </span>
@@ -249,11 +251,11 @@ export const SensorDetailModal: React.FC<SensorDetailModalProps> = ({
               <div className="flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
                 <Clock className="w-4 h-4 mr-1" />
                 <span>
-                  Última actualización: {lastUpdateInfo.formatted}
+                  Última actualización: {typeof lastUpdateInfo === 'string' ? lastUpdateInfo : lastUpdateInfo.formatted}
                 </span>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                {lastUpdateInfo.relative}
+                {typeof lastUpdateInfo === 'string' ? '' : lastUpdateInfo.relative}
               </p>
             </div>
           </div>
@@ -345,10 +347,10 @@ export const SensorDetailModal: React.FC<SensorDetailModalProps> = ({
                     Última Calibración
                   </label>
                   <p className="text-lg text-gray-900 dark:text-white mt-1">
-                    {calibrationInfo.formatted}
+                    {typeof calibrationInfo === 'string' ? calibrationInfo : calibrationInfo.formatted}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {calibrationInfo.relative}
+                    {typeof calibrationInfo === 'string' ? '' : calibrationInfo.relative}
                   </p>
                 </div>
               </div>
@@ -365,33 +367,33 @@ export const SensorDetailModal: React.FC<SensorDetailModalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="text-center p-4 bg-gray-50 dark:bg-gray-600 rounded-lg">
                   <p className="text-3xl font-bold text-[#39A900]">
-                    {sensor._count.SensorData || 0}
+                      {sensor._count.SensorData || 0}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Lecturas Registradas
+                      Lecturas Registradas
                   </p>
                 </div>
                 <div className="text-center p-4 bg-gray-50 dark:bg-gray-600 rounded-lg">
                   <p className="text-3xl font-bold text-blue-500">
-                    {sensor.lastReading !== null ? '24/7' : '0/7'}
+                      {lastReading !== null ? '24/7' : '0/7'}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Días Activos
+                      Días Activos
                   </p>
                 </div>
                 <div className="text-center p-4 bg-gray-50 dark:bg-gray-600 rounded-lg">
                   <p className={clsx(
-                    "text-3xl font-bold",
-                    sensor.status === 'ACTIVE' ? 'text-green-500' : 'text-red-500'
+                      "text-3xl font-bold",
+                      sensor.status === 'ACTIVE' ? 'text-green-500' : 'text-red-500'
                   )}>
-                    {sensor.status === 'ACTIVE' ? '99%' : '0%'}
+                      {sensor.status === 'ACTIVE' ? '99%' : '0%'}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Tiempo Operativo
+                      Tiempo Operativo
                   </p>
                 </div>
               </div>
-            </div>
+            </div>  
           )}
 
           {/* Close Button */}

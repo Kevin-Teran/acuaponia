@@ -24,7 +24,7 @@ import {
 } from '@/components/dashboard';
 import { Card } from '@/components/common/Card';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import { Role, SensorType, Settings } from '@/types';
+import { Role, SensorType, UserSettings } from '@/types';
 import { getSettings } from '@/services/settingsService';
 import { Container } from 'lucide-react';
 import { parseISO, format as formatDate } from 'date-fns';
@@ -77,7 +77,7 @@ const DashboardPage: React.FC = () => {
 		fetchUsersList,
 	} = useDashboard();
 
-	const [settings, setSettings] = useState<Settings | null>(null);
+	const [settings, setSettings] = useState<UserSettings | null>(null);
 
 	const [filters, setFilters] = useState(() => {
 		const { startDate, endDate } = getInitialDates();
@@ -182,7 +182,7 @@ const DashboardPage: React.FC = () => {
 				tanksList={tanks}
 				usersList={usersList}
 				currentUserRole={user.role}
-				loading={loading.users || loading.tanks}
+				loading={loading.users}
 			/>
 
 			{(loading.summary || loading.historical) && !summaryData && (
@@ -191,7 +191,7 @@ const DashboardPage: React.FC = () => {
 				</div>
 			)}
 
-			{!filters.tankId && !loading.tanks ? (
+			{!filters.tankId ? (
 				<div className='rounded-xl border border-amber-200 bg-amber-50 p-8 text-center dark:border-amber-800 dark:bg-amber-900/20'>
 					<Container className='mx-auto mb-4 h-16 w-16 text-amber-500' />
 					<h3 className='mb-2 text-xl font-semibold text-amber-800 dark:text-amber-200'>
@@ -205,7 +205,11 @@ const DashboardPage: React.FC = () => {
 				<>
 					{isAdmin && (
 						<AdminStatCards
-							stats={summaryData?.adminStats}
+							stats={{
+								totalUsers: usersList.length,
+								totalTanks: summaryData?.tanksCount,
+								totalSensors: summaryData?.sensorsCount,
+							}}
 							loading={loading.summary}
 						/>
 					)}
