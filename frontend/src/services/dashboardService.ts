@@ -3,7 +3,7 @@
  * @description Funciones para interactuar con los endpoints del dashboard en el backend.
  * SOLUCIÓN: Define y exporta las funciones que el hook `useDashboard` necesita,
  * corrigiendo los errores 'is not a function'.
- * @author Kevin Mariano & Gemini AI
+ * @author Kevin Mariano
  * @version 2.0.0 
  * @since 1.0.0
  * @copyright SENA 2025
@@ -11,11 +11,12 @@
 
 import api from '@/config/api';
 import {
+	SummaryData,
 	RealtimeData,
 	HistoricalData,
 	UserForList,
 } from '@/types';
-import { DashboardFiltersDto, DashboardSummary } from '@/types/dashboard';
+import { DashboardFiltersDto } from '@/types/dashboard';
 
 /**
  * @function getSummary
@@ -25,7 +26,7 @@ import { DashboardFiltersDto, DashboardSummary } from '@/types/dashboard';
  */
 export const getSummary = async (
 	filters: DashboardFiltersDto,
-): Promise<DashboardSummary> => {
+): Promise<SummaryData> => {
 	const { data } = await api.get('/dashboard/summary', { params: filters });
 	return data;
 };

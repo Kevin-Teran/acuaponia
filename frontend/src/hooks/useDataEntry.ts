@@ -81,25 +81,24 @@ export const useDataEntry = () => {
       else setMqttStatus('disconnected');
     });
 
-    // Escuchar actualizaciones de datos por WebSocket
     const handleSensorUpdate = (data: SensorData) => {
       setActiveSimulations(prevSims =>
-        prevSims.map(sim =>
-          sim.sensorId === data.sensorId
-            ? { ...sim, currentValue: data.value }
-            : sim
-        )
+        prevSims.map(sim => {
+          if (sim.sensorId === data.sensorId) {
+            const updatedValue = data.value !== undefined ? data.value : sim.currentValue;
+            return { ...sim, currentValue: updatedValue };
+          }
+          return sim;
+        })
       );
     };
-    socketManager.onSensorData(handleSensorUpdate);
+    socketManager.socket.on('new_sensor_data', handleSensorUpdate);
 
-    // Sincronización inicial y periódica del estado de los emisores
     syncSimulationStatus();
     syncIntervalRef.current = setInterval(syncSimulationStatus, 15000);
 
-    // Limpieza al desmontar el componente
     return () => {
-      socketManager.offSensorData(handleSensorUpdate);
+      socketManager.socket.off('new_sensor_data', handleSensorUpdate);
       socketManager.disconnect();
       mqttService.disconnect();
       unsubscribeMqtt();
@@ -107,7 +106,6 @@ export const useDataEntry = () => {
     };
   }, [syncSimulationStatus]);
 
-  // Carga sectorizada de datos
   useEffect(() => {
     const loadUsers = async () => {
       if (!isAdmin) {

@@ -342,11 +342,13 @@ export interface UpdateSensorDto {
  * oxygen: 8.3
  * };
  */
-export interface SensorData {
+ export interface SensorData {
+  sensorId?: string;
+  value?: number;
   timestamp: string;
-  temperature: number;
-  ph: number;
-  oxygen: number;
+  temperature?: number;
+  ph?: number;
+  oxygen?: number;
 }
 
 /**
