@@ -11,6 +11,7 @@
 
 import api from '@/config/api';
 import { User, LoginCredentials, ResetPasswordCredentials } from '../types';
+import { AxiosError } from 'axios';
 
 interface LoginResponse {
   user: User;
@@ -48,7 +49,9 @@ export const authService = {
         const response = await api.post<MessageResponse>('/auth/forgot-password', { email });
         return response.data.message;
     } catch (error: any) {
-        const errorMessage = error.response?.data?.message || 'Ocurrió un error al intentar recuperar la contraseña.';
+        const axiosError = error as AxiosError;
+        const errorMessage = (axiosError.response?.data as { message?: string })?.message ||
+                           'Ocurrió un error al intentar recuperar la contraseña.';
         throw new Error(errorMessage);
     }
   },
@@ -59,7 +62,9 @@ export const authService = {
         const response = await api.post<MessageResponse>('/auth/reset-password', { token, newPassword });
         return response.data.message;
     } catch (error: any) {
-        const errorMessage = error.response?.data?.message || 'El enlace de recuperación es inválido o ha expirado.';
+        const axiosError = error as AxiosError;
+        const errorMessage = (axiosError.response?.data as { message?: string })?.message ||
+                           'El enlace de recuperación es inválido o ha expirado.';
         throw new Error(errorMessage);
     }
   },

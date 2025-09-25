@@ -17,7 +17,7 @@ model User {
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
   lastLogin DateTime?
-  settings  Json?
+  settings  String?      @db.LongText
   alerts    Alert[]
   reports   Report[]
   tanks     Tank[]
@@ -45,7 +45,7 @@ model Sensor {
   id              String       @id @default(cuid())
   hardwareId      String       @unique(map: "hardwareId")
   name            String
-  type            SensorType
+  type            sensors_type
   location        String
   status          SensorStatus @default(ACTIVE)
   calibrationDate DateTime
@@ -192,4 +192,10 @@ enum users_status {
   ACTIVE
   INACTIVE
   SUSPENDED
+}
+
+enum sensors_type {
+  TEMPERATURE
+  PH
+  OXYGEN
 }

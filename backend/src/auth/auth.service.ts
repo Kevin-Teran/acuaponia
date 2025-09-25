@@ -98,16 +98,18 @@ export class AuthService {
   async forgotPassword(email: string) {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
+      this.logger.warn(`Intento de restablecimiento de contraseña para correo no registrado: ${email}`);
       return { message: 'Si tu correo electrónico está en nuestros registros, recibirás un enlace para restablecer tu contraseña.' };
     }
   
     const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hora de validez
   
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
         resetPasswordToken: resetToken,
-        resetPasswordExpiry: new Date(Date.now() + 3600000), 
+        resetPasswordExpiry: resetTokenExpiry, 
       },
     });
   
@@ -119,31 +121,29 @@ export class AuthService {
     return { message: 'Si tu correo electrónico está en nuestros registros, recibirás un enlace para restablecer tu contraseña.' };
   }
 
-    const resetUrl = `${this.configService.get<string>('FRONTEND_URL')}/recover-password/${resetToken}`;
-    await this.emailService.sendResetPasswordEmail(user.email, resetUrl);
-
-    this.logger.log(`URL de reseteo: ${resetUrl}`);
-
-    return { message: 'Si tu correo electrónico está en nuestros registros, recibirás un enlace para restablecer tu contraseña.' };
-  }
-
   async resetPassword(token: string, newPassword: string) {
-    try {
-      const payload = await this.jwtService.verifyAsync(token, {
-        secret: this.configService.get<string>('JWT_SECRET'),
-      });
-      if (payload.purpose !== 'password-reset') {
-        throw new Error('Token inválido.');
-      }
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      // @ts-ignore
-      await this.prisma.user.update({
-        where: { id: payload.sub },
-        data: { password: hashedPassword },
-      });
-      return { message: 'Contraseña actualizada correctamente.' };
-    } catch (error) {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        resetPasswordToken: token,
+        resetPasswordExpiry: { gt: new Date() },
+      },
+    });
+
+    if (!user) {
       throw new BadRequestException('El token es inválido o ha expirado.');
     }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetPasswordToken: null,
+        resetPasswordExpiry: null,
+      },
+    });
+    
+    return { message: 'Contraseña actualizada correctamente.' };
   }
 }

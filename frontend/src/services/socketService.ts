@@ -21,15 +21,21 @@ class SocketManager {
 
     private constructor() {
         this.logger.log('Inicializando SocketManager...');
-        const url = process.env.NEXT_PUBLIC_API_URL?.replace(/^http/, 'ws');
         
-        const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-
-        if (!url) {
-            this.logger.error('NEXT_PUBLIC_API_URL no está definida.');
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+        if (!apiBaseUrl) {
+            this.logger.error('❌ NEXT_PUBLIC_API_BASE_URL no está definida.');
             throw new Error('URL de la API no definida');
         }
 
+        const url = apiBaseUrl.startsWith('https://') ? 
+            apiBaseUrl.replace(/^https/, 'wss') : 
+            apiBaseUrl.replace(/^http/, 'ws');
+        
+        const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+
+        this.logger.log(`🔗 Intentando conectar a: ${url}`); 
+        
         const options: Partial<ManagerOptions & SocketOptions> = {
             extraHeaders: token ? { Authorization: `Bearer ${token}` } : {},
             reconnectionAttempts: this.MAX_ATTEMPTS,
@@ -76,14 +82,21 @@ class SocketManager {
     }
 
     private registerEventListeners(): void {
-        this.socket.on('connect', () => {
-            this.logger.log('✅ Conexión de socket exitosa.');
-            this.connectionAttempts = 0;
-            if (this.reconnectTimeout) {
-                clearTimeout(this.reconnectTimeout);
-                this.reconnectTimeout = null;
+        this.socket.on('connect_error', (error) => {
+            this.logger.error('❌ Error de conexión de Socket:', error);
+            if (error.message === 'xhr poll error') {
+                this.logger.error('Posible problema de CORS o servidor no disponible.');
+            } else if (error.message === 'websocket error') {
+                this.logger.error('Fallo en la conexión del protocolo WebSocket.');
             }
         });
+
+        this.socket.on('connect_error', (err) => {
+            if (err.message === 'Invalid token') {
+              this.logger.error('Token de autenticación inválido o expirado. Redireccionando a login...');
+              this.socket.disconnect(); 
+            }
+          });
 
         this.socket.on('disconnect', (reason) => {
             this.logger.warn(`🔴 Desconexión de socket: ${reason}`);
