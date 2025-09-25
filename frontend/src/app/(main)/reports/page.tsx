@@ -24,7 +24,7 @@
  import { Report, ReportStatus, Tank, Sensor } from '@/types';
  import { cn } from '@/utils/cn';
  import { socketManager } from '@/services/socketService';
- 
+
  /**
  * @typedef {object} ReportFilters
  * @property {string | null} tankId
@@ -123,17 +123,24 @@ export default function Reports() {
   }, [fetchInitialData]);
 
   useEffect(() => {
+    if (!socketManager || !socketManager.socket) {
+        console.warn('Socket no está disponible. No se pueden recibir actualizaciones en tiempo real.');
+        return;
+    }
+
     const handleReportUpdate = (updatedReport: Report) => {
         setReports(prevReports =>
             prevReports.map(r => r.id === updatedReport.id ? updatedReport : r)
         );
     };
 
-    socketManager.connect();
     socketManager.socket.on('report_status_update', handleReportUpdate);
-
+    socketManager.init();
+    
     return () => {
-      socketManager.socket.off('report_status_update', handleReportUpdate);
+      if (socketManager && socketManager.socket) {
+        socketManager.socket.off('report_status_update', handleReportUpdate);
+      }
     };
   }, []);
 

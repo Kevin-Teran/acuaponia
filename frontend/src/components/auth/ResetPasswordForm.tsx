@@ -1,10 +1,9 @@
 /**
  * @file ResetPasswordForm.tsx
  * @route frontend/src/components/auth
- * @description
- * Componente de UI para el formulario de restablecimiento de contraseña.
+ * @description Componente de UI para el formulario de restablecimiento de contraseña.
  * @author Kevin Mariano
- * @version 1.1.1
+ * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
 */
@@ -18,6 +17,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Lock, Eye, EyeOff, KeyRound, Sun, Moon, AlertTriangle, X, CheckCircle } from 'lucide-react';
 import { authService } from '@/services/authService';
 import { useTheme } from '@/context/ThemeContext';
+import { ResetPasswordCredentials } from '@/types';
 
 export const ResetPasswordForm: React.FC = () => {
     const [password, setPassword] = useState('');
@@ -41,14 +41,17 @@ export const ResetPasswordForm: React.FC = () => {
             setError('La contraseña debe tener al menos 6 caracteres.');
             return;
         }
-
+    
         setLoading(true);
         setError(null);
         setSuccessMessage(null);
-
+    
         try {
-            // @ts-ignore
-            const response = await authService.resetPassword(token, password);
+            const credentials: ResetPasswordCredentials = { 
+                token: token,
+                newPassword: password
+            };
+            const response = await authService.resetPassword(credentials); 
             // @ts-ignore
             setSuccessMessage(response.message + ' Serás redirigido en 3 segundos...');
             setTimeout(() => {

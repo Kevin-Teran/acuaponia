@@ -65,8 +65,14 @@ export const useDataEntry = () => {
   }, [currentUser]);
 
   useEffect(() => {
-    socketManager.connect();
+    if (socketManager) {
+      socketManager.socket.connect();
+    } else {
+      console.error('❌ SocketManager no está disponible');
+    }
+
     mqttService.connect();
+    
     const unsubscribeMqtt = mqttService.onStatusChange(status => {
       if (status.connected) setMqttStatus('connected');
       else if (status.connecting) setMqttStatus('connecting');
@@ -84,17 +90,26 @@ export const useDataEntry = () => {
         })
       );
     };
-    socketManager.socket.on('new_sensor_data', handleSensorUpdate);
+
+    if (socketManager && socketManager.socket) {
+      socketManager.socket.on('new_sensor_data', handleSensorUpdate);
+    }
 
     syncSimulationStatus();
     syncIntervalRef.current = setInterval(syncSimulationStatus, 15000);
 
     return () => {
-      socketManager.socket.off('new_sensor_data', handleSensorUpdate);
-      socketManager.disconnect();
+      if (socketManager && socketManager.socket) {
+        socketManager.socket.off('new_sensor_data', handleSensorUpdate);
+        socketManager.socket.disconnect();
+      }
+      
       mqttService.disconnect();
       unsubscribeMqtt();
-      if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
+      
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current);
+      }
     };
   }, [syncSimulationStatus]);
 

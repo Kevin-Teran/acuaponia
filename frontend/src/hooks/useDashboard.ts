@@ -2,8 +2,8 @@
  * @file useDashboard.ts
  * @route frontend/src/hooks/
  * @description Hook corregido para el dashboard con actualizaciones en tiempo real funcionando
- * @author Kevin Mariano & Claude AI
- * @version 6.1.0 (Live Fix)
+ * @author Kevin Mariano 
+ * @version 1.0.0 
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -17,7 +17,7 @@ import {
 } from '@/services/dashboardService';
 import { DashboardFilters, DashboardSummary, RealtimeData, HistoricalData, RealtimeSensorData } from '@/types/dashboard';
 import { UserFromApi, SensorType } from '@/types';
-import { socket } from '@/services/socketService';
+import { socketManager } from '@/services/socketService';
 
 interface LoadingState {
 	summary: boolean;
@@ -145,28 +145,53 @@ export const useDashboard = () => {
 			});
 		};
 
-		if (socket.connected) {
-			console.log('🔌 Socket ya conectado, suscribiendo a eventos...');
-			subscribeToEvents();
-		} else {
-			console.log('🔌 Socket no conectado, esperando conexión...');
-			socket.on('connect', () => {
-				console.log('🔌 Socket conectado, suscribiendo a eventos...');
-				subscribeToEvents();
-			});
-		}
-
+		/**
+		 * @function subscribeToEvents
+		 * @description Suscribe a los eventos del socket
+		 */
 		function subscribeToEvents() {
+			if (!socketManager || !socketManager.socket) {
+				console.error('❌ Socket no está disponible para suscribirse a eventos');
+				return;
+			}
+
+			const socket = socketManager.socket;
 			socket.on('new_sensor_data', handleNewSensorData);
 			socket.on('report_status_update', handleReportUpdate);
 			socket.on('new-alert', handleNewAlert);
 		}
 
+		/**
+		 * @function handleConnect
+		 * @description Maneja la conexión del socket
+		 */
+		const handleConnect = () => {
+			console.log('🔌 Socket conectado, suscribiendo a eventos...');
+			subscribeToEvents();
+		};
+
+		// Verificar si el socket está disponible y conectado
+		if (socketManager && socketManager.socket) {
+			if (socketManager.socket.connected) {
+				console.log('🔌 Socket ya está conectado, suscribiendo a eventos...');
+				subscribeToEvents();
+			} else {
+				console.log('🔌 Socket no conectado, esperando conexión...');
+				socketManager.socket.on('connect', handleConnect);
+			}
+		} else {
+			console.error('❌ SocketManager no está disponible');
+		}
+
+		// Cleanup function
 		return () => {
-			socket.off('new_sensor_data', handleNewSensorData);
-			socket.off('report_status_update', handleReportUpdate);
-			socket.off('new-alert', handleNewAlert);
-			socket.off('connect');
+			if (socketManager && socketManager.socket) {
+				const socket = socketManager.socket;
+				socket.off('new_sensor_data', handleNewSensorData);
+				socket.off('report_status_update', handleReportUpdate);
+				socket.off('new-alert', handleNewAlert);
+				socket.off('connect', handleConnect);
+			}
 		};
 	}, []); 
 
