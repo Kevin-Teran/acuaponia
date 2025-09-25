@@ -3,7 +3,7 @@
  * @route /backend/src/events
  * @description Gateway de WebSockets completo y corregido con tipos apropiados.
  * @author Kevin Mariano
- * @version 1.1.1 (Types Fix)
+ * @version 1.1.1 
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -22,7 +22,6 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 
-// Interfaces más flexibles para los Payloads
 interface SensorDataPayload {
   id: string;
   value: number;
@@ -85,10 +84,8 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         throw new Error('El usuario del token no fue encontrado.');
       }
 
-      // Adjuntamos el usuario al socket para uso futuro
       client.data.user = user;
 
-      // Guardar información del cliente conectado
       this.connectedClients.set(client.id, {
         userId: user.id,
         userName: user.name,
@@ -96,17 +93,14 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       this.logger.log(`🔗 Cliente conectado y autenticado: ${user.name} (${client.id})`);
       
-      // Unir el cliente a su sala personal (basada en userId)
       client.join(user.id);
       this.logger.log(`🚪 Cliente ${client.id} se unió a la sala: ${user.id}`);
 
-      // Si es admin, también unirlo a la sala de admins
       if (user.role === 'ADMIN') {
         client.join('admin_room');
         this.logger.log(`👑 Admin ${user.name} unido a la sala de administradores`);
       }
 
-      // Enviar confirmación de conexión exitosa
       client.emit('connection_established', {
         message: 'Conectado exitosamente',
         userId: user.id,
@@ -114,7 +108,6 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         timestamp: new Date().toISOString(),
       });
 
-      // Log del estado actual de conexiones
       this.logger.log(`📊 Total de clientes conectados: ${this.connectedClients.size}`);
 
     } catch (error) {
@@ -178,7 +171,6 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
-    // Formatear los datos para el frontend
     const formattedData = {
       id: sensorData.id,
       value: sensorData.value,
@@ -199,13 +191,11 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     this.logger.log(`📊 Enviando datos de sensor a usuario ${userId}: ${sensorData.sensor.type} = ${sensorData.value}`);
     
-    // Emitir a la sala del usuario específico
     this.server.to(userId).emit('new_sensor_data', formattedData);
 
-    // También emitir a administradores
     this.server.to('admin_room').emit('new_sensor_data', {
       ...formattedData,
-      userId: userId, // Incluir userId para que admins sepan de qué usuario son los datos
+      userId: userId, 
     });
   }
 
@@ -222,7 +212,6 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.log(`📋 Enviando actualización de reporte a usuario ${report.userId}`);
     this.server.to(report.userId).emit('report_status_update', report);
     
-    // También a admins
     this.server.to('admin_room').emit('report_status_update', report);
   }
 
@@ -238,12 +227,10 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     this.logger.log(`🚨 Transmitiendo nueva alerta a administradores: ${adminIds.join(', ')}`);
     
-    // Emitir a las salas de administradores específicos
     adminIds.forEach(adminId => {
       this.server.to(adminId).emit('new-alert', alertPayload);
     });
     
-    // También emitir a la sala general de admins
     this.server.to('admin_room').emit('new-alert', alertPayload);
   }
 
@@ -256,8 +243,6 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.emit(event, data);
   }
 
-  // ==================== MÉTODOS DE PRUEBA Y MANTENIMIENTO ====================
-
   /**
    * @SubscribeMessage test_broadcast
    * @description Método de prueba para verificar que los WebSockets funcionan correctamente.
@@ -269,10 +254,9 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { error: 'Usuario no autenticado' };
     }
 
-    // SOLUCIÓN: Usar un objeto simple que coincida con SensorDataPayload
     const testSensorData = {
       id: 'test-' + Date.now(),
-      value: Math.round((Math.random() * 30 + 20) * 100) / 100, // Temperatura entre 20-50°C
+      value: Math.round((Math.random() * 30 + 20) * 100) / 100, 
       timestamp: new Date().toISOString(),
       userId: user.id,
       sensor: {

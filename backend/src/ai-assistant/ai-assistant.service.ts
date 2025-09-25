@@ -15,7 +15,6 @@ export class AiAssistantService {
   }
 
   private async getSystemContext() {
-    // Esta función para obtener los datos de la base de datos se mantiene igual.
     const activeTanksCount = await this.prisma.tank.count({});
     const unresolvedAlertsCount = await this.prisma.alert.count({ where: { resolvedAt: null } });
     const getSensorHistory = async (type: sensors_type) => {

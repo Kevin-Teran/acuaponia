@@ -7,13 +7,15 @@
  * @since 1.0.0
  * @copyright SENA 2025
  */
+
 import { Module } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { DashboardController } from './dashboard.controller';
 import { PrismaModule } from '../prisma/prisma.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, UsersModule],
   controllers: [DashboardController],
   providers: [DashboardService],
   exports: [DashboardService],

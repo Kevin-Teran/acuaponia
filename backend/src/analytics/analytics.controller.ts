@@ -13,7 +13,7 @@ import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { User, Role, SensorType } from '@prisma/client';
+import { User, Role, sensors_type as SensorType } from '@prisma/client';
 import { AnalyticsFiltersDto, CorrelationFiltersDto } from './dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
