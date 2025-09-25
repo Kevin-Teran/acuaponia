@@ -25,7 +25,7 @@ import { CreateSensorDto } from './dto/create-sensor.dto';
 import { UpdateSensorDto } from './dto/update-sensor.dto';
 import { FindSensorsDto } from './dto/find-sensors.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { Role, SensorType, User } from '@prisma/client';
+import { Role, sensors_type, User } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -91,7 +91,7 @@ export class SensorsController {
   @Roles(Role.ADMIN, Role.USER)
   getAvailableTanks(
     @Req() req: { user: User },
-    @Param('sensorType') sensorType: SensorType,
+    @Param('sensorType') sensorType: sensors_type,
     @Query('userId') userId: string,
     @Query('excludeSensorId') excludeSensorId?: string,
   ) {

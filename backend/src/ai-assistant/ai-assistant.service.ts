@@ -1,6 +1,6 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { SensorType } from '@prisma/client';
+import { sensors_type } from '@prisma/client';
 import axios from 'axios';
 
 @Injectable()
@@ -18,7 +18,7 @@ export class AiAssistantService {
     // Esta función para obtener los datos de la base de datos se mantiene igual.
     const activeTanksCount = await this.prisma.tank.count({});
     const unresolvedAlertsCount = await this.prisma.alert.count({ where: { resolvedAt: null } });
-    const getSensorHistory = async (type: SensorType) => {
+    const getSensorHistory = async (type: sensors_type) => {
       const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
       const readings = await this.prisma.sensorData.findMany({
         where: { type, timestamp: { gte: twelveHoursAgo } },
@@ -32,9 +32,9 @@ export class AiAssistantService {
       const max = Math.max(...values);
       return { latest, avg, min, max };
     };
-    const temperature = await getSensorHistory(SensorType.TEMPERATURE);
-    const ph = await getSensorHistory(SensorType.PH);
-    const oxygen = await getSensorHistory(SensorType.OXYGEN);
+    const temperature = await getSensorHistory(sensors_type.TEMPERATURE);
+    const ph = await getSensorHistory(sensors_type.PH);
+    const oxygen = await getSensorHistory(sensors_type.OXYGEN);
     return { activeTanksCount, unresolvedAlertsCount, temperature, ph, oxygen };
   }
 

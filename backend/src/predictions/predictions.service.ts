@@ -51,11 +51,11 @@ export class PredictionsService {
     if (!tank) throw new NotFoundException(`Tanque con ID "${tankId}" no encontrado.`);
     if (!tank.userId) throw new BadRequestException('El tanque no está asociado a un usuario.');
 
-    const hasSensor = await this.prisma.sensor.findFirst({ where: { tankId, type }});
+    const hasSensor = await this.prisma.sensor.findFirst({ where: { tankId, type: type as SensorType }});
     if (!hasSensor) throw new BadRequestException(`El tanque no tiene un sensor del tipo ${type}.`);
 
     const historicalData = await this.prisma.sensorData.findMany({
-      where: { tankId, type },
+      where: { tankId, type: type as SensorType },
       orderBy: { timestamp: 'asc' },
     });
 
@@ -72,10 +72,14 @@ export class PredictionsService {
     // El modelo `Threshold` no existe en `schema.prisma`. Se asume que los umbrales
     // se almacenan en el campo JSON `settings` del usuario.
     let thresholds = null;
-    if (tank.user.settings && typeof tank.user.settings === 'object') {
-      const settings = tank.user.settings as any;
-      if (settings.thresholds && settings.thresholds[type]) {
-        thresholds = settings.thresholds[type];
+    if (tank.user.settings && typeof tank.user.settings === 'string') {
+      try {
+        const settings = JSON.parse(tank.user.settings);
+        if (settings.thresholds && settings.thresholds[type]) {
+          thresholds = settings.thresholds[type];
+        }
+      } catch (error) {
+        this.logger.error('Error parsing user settings:', error);
       }
     }
 

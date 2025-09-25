@@ -8,32 +8,31 @@
  * @copyright SENA 2025
  */
 
-import { IsOptional, IsString, IsEnum } from 'class-validator';
-import { SensorType } from '@prisma/client';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsOptional, IsString } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class DashboardFiltersDto {
-  @ApiProperty({ description: 'ID del usuario (solo para admins)', required: false })
-  @IsOptional()
-  @IsString()
-  userId?: string;
-
-  @ApiProperty({ description: 'ID del tanque específico', required: false })
+  @ApiPropertyOptional({ description: 'ID del tanque para filtrar los datos.' })
   @IsOptional()
   @IsString()
   tankId?: string;
 
-  @ApiProperty({ description: 'Tipo de sensor específico', enum: SensorType, required: false })
+  @ApiPropertyOptional({ description: 'Tipo de sensor para filtrar los datos.', enum: ['TEMPERATURE', 'PH', 'OXYGEN'] })
   @IsOptional()
-  @IsEnum(SensorType)
-  sensorType?: SensorType;
+  @IsString()
+  sensorType?: 'TEMPERATURE' | 'PH' | 'OXYGEN';
 
-  @ApiProperty({ description: 'Fecha de inicio para datos históricos', required: false })
+  @ApiPropertyOptional({ description: 'Rango de tiempo para los datos (ej. day, week, month).', enum: ['day', 'week', 'month', 'year'] })
+  @IsOptional()
+  @IsString()
+  range?: string;
+
+  @ApiPropertyOptional({ description: 'Fecha de inicio del rango personalizado.', format: 'date-time' })
   @IsOptional()
   @IsString()
   startDate?: string;
 
-  @ApiProperty({ description: 'Fecha de fin para datos históricos', required: false })
+  @ApiPropertyOptional({ description: 'Fecha de fin del rango personalizado.', format: 'date-time' })
   @IsOptional()
   @IsString()
   endDate?: string;

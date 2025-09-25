@@ -14,7 +14,7 @@ CREATE TABLE `users` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- Tabla de Tanques (Corregida: sin capacity ni currentLevel)
+-- Tabla de Tanques 
 CREATE TABLE `tanks` (
     `id` VARCHAR(191) NOT NULL,
     `name` VARCHAR(191) NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE `tanks` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- Tabla de Sensores (Corregida: con hardwareId y sin batteryLevel)
+-- Tabla de Sensores
 CREATE TABLE `sensors` (
     `id` VARCHAR(191) NOT NULL,
     `hardwareId` VARCHAR(191) NOT NULL,
@@ -44,11 +44,11 @@ CREATE TABLE `sensors` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- Tabla de Datos de Sensores (Corregida: estructura normalizada)
+-- Tabla de Datos de Sensores (
 CREATE TABLE `sensor_data` (
     `id` VARCHAR(191) NOT NULL,
     `value` DOUBLE NOT NULL,
-    `type` ENUM('TEMPERATURE', 'PH', 'OXYGEN', 'LEVEL', 'FLOW') NOT NULL,
+    `type` ENUM('TEMPERATURE', 'PH', 'OXYGEN') NOT NULL,
     `timestamp` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `sensorId` VARCHAR(191) NOT NULL,

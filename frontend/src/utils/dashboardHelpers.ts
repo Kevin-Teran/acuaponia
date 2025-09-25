@@ -38,24 +38,6 @@ export const getSensorTypeConfig = (type: SensorType) => {
       optimal: { min: 6, max: 10 },
       icon: '🫧'
     },
-    LEVEL: {
-      label: 'Nivel',
-      unit: '%',
-      color: '#8b5cf6',
-      min: 0,
-      max: 100,
-      optimal: { min: 50, max: 95 },
-      icon: '📊'
-    },
-    FLOW: {
-      label: 'Caudal',
-      unit: 'L/min',
-      color: '#f59e0b',
-      min: 0,
-      max: 20,
-      optimal: { min: 5, max: 15 },
-      icon: '🌊'
-    }
   };
   return configs[type];
 };

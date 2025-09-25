@@ -9,7 +9,7 @@
  */
 
 import { IsOptional, IsString, IsDateString, IsEnum } from 'class-validator';
-import { SensorType } from '@prisma/client';
+import { sensors_type } from '@prisma/client';
 
 export class AnalyticsFiltersDto {
   /**
@@ -38,12 +38,12 @@ export class AnalyticsFiltersDto {
 
   /**
    * @description Tipo de sensor (opcional).
-   * @enum {SensorType}
-   * @example SensorType.TEMPERATURE
+   * @enum {sensors_type}
+   * @example sensors_type.TEMPERATURE
    */
   @IsOptional()
-  @IsEnum(SensorType)
-  sensorType?: SensorType;
+  @IsEnum(sensors_type)
+  sensorType?: sensors_type;
 
   /**
    * @description Rango de tiempo para la consulta (día, semana, mes, año).

@@ -12,7 +12,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { EventsGateway } from '../events/events.gateway';
-import { Sensor, AlertType, AlertSeverity, SensorType, SystemConfig } from '@prisma/client';
+import { Sensor, AlertType, AlertSeverity, sensors_type, SystemConfig } from '@prisma/client';
 
 @Injectable()
 export class AlertsService {
@@ -24,8 +24,8 @@ export class AlertsService {
     private readonly eventsGateway: EventsGateway,
   ) {}
 
-  private getAlertTypeAndSeverity(sensorType: SensorType, isHigh: boolean): { type: AlertType; severity: AlertSeverity } {
-    const typeMapping: Partial<Record<SensorType, { high: AlertType; low: AlertType }>> = {
+  private getAlertTypeAndSeverity(sensorType: sensors_type, isHigh: boolean): { type: AlertType; severity: AlertSeverity } {
+    const typeMapping: Partial<Record<sensors_type, { high: AlertType; low: AlertType }>> = {
       TEMPERATURE: { high: 'TEMPERATURE_HIGH', low: 'TEMPERATURE_LOW' },
       PH: { high: 'PH_HIGH', low: 'PH_LOW' },
       OXYGEN: { high: 'OXYGEN_HIGH', low: 'OXYGEN_LOW' },
@@ -46,7 +46,7 @@ export class AlertsService {
    * @param configs - Un array con todas las configuraciones del sistema.
    * @returns Un objeto con los umbrales alto y bajo.
    */
-  private getThresholdsForSensor(sensorType: SensorType, configs: SystemConfig[]): { high: number | null; low: number | null } {
+  private getThresholdsForSensor(sensorType: sensors_type, configs: SystemConfig[]): { high: number | null; low: number | null } {
     const findValue = (key: string) => {
       const config = configs.find(c => c.key === key);
       return config ? parseFloat(config.value) : null;

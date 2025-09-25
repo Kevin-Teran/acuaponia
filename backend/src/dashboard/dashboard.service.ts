@@ -158,7 +158,7 @@ export class DashboardService {
       where: { status: SensorStatus.ACTIVE },
     });
 
-    const userStats = await this.usersService.getUserStats();
+    const userStats = await this.usersService.findAll();
 
     return {
       totalUsers,

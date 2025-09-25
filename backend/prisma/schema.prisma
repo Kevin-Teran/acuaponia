@@ -63,15 +63,15 @@ model Sensor {
 }
 
 model SensorData {
-  id        String     @id @default(cuid())
+  id        String           @id @default(cuid())
   value     Float
-  type      SensorType
-  timestamp DateTime   @default(now())
-  createdAt DateTime   @default(now())
+  type      sensor_data_type
+  timestamp DateTime         @default(now())
+  createdAt DateTime         @default(now())
   sensorId  String
   tankId    String
-  sensor    Sensor     @relation(fields: [sensorId], references: [id], onDelete: Cascade)
-  tank      Tank       @relation(fields: [tankId], references: [id], onDelete: Cascade)
+  sensor    Sensor           @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  tank      Tank             @relation(fields: [tankId], references: [id], onDelete: Cascade)
 
   @@index([timestamp])
   @@index([sensorId, timestamp])
@@ -141,14 +141,6 @@ enum TankStatus {
   INACTIVE
 }
 
-enum SensorType {
-  TEMPERATURE
-  PH
-  OXYGEN
-  LEVEL
-  FLOW
-}
-
 enum SensorStatus {
   ACTIVE
   INACTIVE
@@ -198,4 +190,12 @@ enum sensors_type {
   TEMPERATURE
   PH
   OXYGEN
+}
+
+enum sensor_data_type {
+  TEMPERATURE
+  PH
+  OXYGEN
+  LEVEL
+  FLOW
 }

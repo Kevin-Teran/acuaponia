@@ -10,7 +10,7 @@
 
 import { IsEnum, IsOptional, IsString, IsDateString } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { SensorType } from '@prisma/client';
+import { sensors_type } from '@prisma/client';
 
 export class CorrelationFiltersDto {
   /**
@@ -63,35 +63,35 @@ export class CorrelationFiltersDto {
 
   /**
    * @description Tipo de sensor para el eje X.
-   * @enum {SensorType}
-   * @example SensorType.TEMPERATURE
+   * @enum {sensors_type}
+   * @example sensors_type.TEMPERATURE
    */
   @IsOptional()
   @Transform(({ value }) => {
     if (!value || value === 'undefined' || value === 'null' || value === '') {
-      return SensorType.TEMPERATURE;
+      return sensors_type.TEMPERATURE;
     }
     return value;
   })
-  @IsEnum(SensorType, { 
+  @IsEnum(sensors_type, { 
     message: 'El tipo de sensor X debe ser uno de: TEMPERATURE, PH, OXYGEN' 
   })
-  sensorTypeX?: SensorType;
+  sensorTypeX?: sensors_type;
 
   /**
    * @description Tipo de sensor para el eje Y.
-   * @enum {SensorType}
-   * @example SensorType.PH
+   * @enum {sensors_type}
+   * @example sensors_type.PH
    */
   @IsOptional()
   @Transform(({ value }) => {
     if (!value || value === 'undefined' || value === 'null' || value === '') {
-      return SensorType.PH;
+      return sensors_type.PH;
     }
     return value;
   })
-  @IsEnum(SensorType, { 
+  @IsEnum(sensors_type, { 
     message: 'El tipo de sensor Y debe ser uno de: TEMPERATURE, PH, OXYGEN' 
   })
-  sensorTypeY?: SensorType;
+  sensorTypeY?: sensors_type;
 }

@@ -9,7 +9,7 @@
  */
 
 import { IsOptional, IsString, IsEnum } from 'class-validator';
-import { SensorType } from '@prisma/client';
+import { sensors_type } from '@prisma/client';
 
 export class GetLatestDataDto {
   @IsOptional()
@@ -17,6 +17,6 @@ export class GetLatestDataDto {
   tankId?: string;
 
   @IsOptional()
-  @IsEnum(SensorType)
-  type?: SensorType;
+  @IsEnum(sensors_type)
+  type?: sensors_type;
 }

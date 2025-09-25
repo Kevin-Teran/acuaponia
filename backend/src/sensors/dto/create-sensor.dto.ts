@@ -9,7 +9,7 @@
  */
 
 import { IsString, IsNotEmpty, IsEnum, IsDateString } from 'class-validator';
-import { SensorType } from '@prisma/client';
+import { sensors_type } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
@@ -37,13 +37,13 @@ export class CreateSensorDto {
   hardwareId: string;
 
   /**
-   * @property {SensorType} type - El tipo de medición que realiza el sensor.
-   * @enum SensorType
+   * @property {sensors_type} type - El tipo de medición que realiza el sensor.
+   * @enum sensors_type
    * @example "PH"
    */
-  @ApiProperty({ enum: SensorType, description: 'Tipo de sensor.', example: 'PH' })
-  @IsEnum(SensorType, { message: 'El tipo de sensor no es válido.' })
-  type: SensorType;
+  @ApiProperty({ enum: sensors_type, description: 'Tipo de sensor.', example: 'PH' })
+  @IsEnum(sensors_type, { message: 'El tipo de sensor no es válido.' })
+  type: sensors_type;
 
   /**
    * @property {string} tankId - ID del tanque al que está asociado el sensor.

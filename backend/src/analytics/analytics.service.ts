@@ -11,7 +11,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AnalyticsFiltersDto } from './dto/analytics-filters.dto';
-import { User, Role, Prisma, sensors_type as SensorTypePrisma, SensorType } from '@prisma/client';
+import { User, Role, Prisma, sensors_type as SensorTypePrisma } from '@prisma/client';
 import { CorrelationFiltersDto } from './dto/correlation-filters.dto';
 import { subDays, startOfDay, endOfDay, subMonths, subYears, parseISO, isValid } from 'date-fns';
 
@@ -175,10 +175,9 @@ export class AnalyticsService {
     try {
       this.logger.log('Procesando correlaciones con filtros:', JSON.stringify(filters));
 
-      const sensorTypeX = filters.sensorTypeX || SensorType.TEMPERATURE;
-      const sensorTypeY = filters.sensorTypeY || SensorType.PH;
+      const sensorTypeX = filters.sensorTypeX || SensorTypePrisma.TEMPERATURE;
+      const sensorTypeY = filters.sensorTypeY || SensorTypePrisma.PH;
 
-      // The validation should be against the `sensors_type` which is used in the Sensor model.
       if (!Object.values(SensorTypePrisma).includes(sensorTypeX as any)) {
         throw new BadRequestException(`Tipo de sensor X inválido: ${sensorTypeX}`);
       }
@@ -209,18 +208,16 @@ export class AnalyticsService {
       const whereX: Prisma.SensorDataWhereInput = {
         ...baseWhere,
         sensor: {
-          ...baseWhere.sensor,
-          // Correctly use the `sensors_type` enum for the query on the Sensor model.
-          type: sensorTypeX as unknown as SensorTypePrisma,
+          ...(baseWhere.sensor as Prisma.SensorWhereInput),
+          type: sensorTypeX,
         },
       };
 
       const whereY: Prisma.SensorDataWhereInput = {
         ...baseWhere,
         sensor: {
-          ...baseWhere.sensor,
-          // Correctly use the `sensors_type` enum for the query on the Sensor model.
-          type: sensorTypeY as unknown as SensorTypePrisma,
+          ...(baseWhere.sensor as Prisma.SensorWhereInput),
+          type: sensorTypeY,
         },
       };
 
@@ -293,7 +290,7 @@ export class AnalyticsService {
           ...(filters.tankId && filters.tankId !== 'ALL' && { id: filters.tankId }),
         },
         ...(filters.sensorId && filters.sensorId !== 'ALL' && { id: filters.sensorId }),
-        ...(filters.sensorType && { type: filters.sensorType as unknown as SensorTypePrisma }),
+        ...(filters.sensorType && { type: filters.sensorType as SensorTypePrisma }),
       },
     };
     return whereClause;

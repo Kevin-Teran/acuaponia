@@ -15,7 +15,7 @@ import { EventsGateway } from '../events/events.gateway';
 import { MqttService } from '../mqtt/mqtt.service';
 import { ManualEntryDto } from './dto/manual-entry.dto';
 import { GetLatestDataDto } from './dto/get-latest-data.dto';
-import { SensorData, sensors_type as SensorType, User, Role, Prisma } from '@prisma/client';
+import { SensorData, sensors_type as SensorTypePrisma, User, Role, Prisma } from '@prisma/client';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -26,7 +26,7 @@ interface ActiveEmitter {
   sensorId: string;
   hardwareId: string;
   sensorName: string;
-  type: SensorType;
+  type: SensorTypePrisma;
   tankId: string;
   tankName: string;
   userName: string;
@@ -48,8 +48,6 @@ const DEFAULT_THRESHOLDS = {
   TEMPERATURE: { min: 22, max: 28 },
   PH: { min: 6.8, max: 7.6 },
   OXYGEN: { min: 6, max: 10 },
-  LEVEL: { min: 50, max: 95 },
-  FLOW: { min: 5, max: 15 },
 };
 
 @Injectable()
@@ -108,7 +106,6 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
   }
 
   async createFromMqtt(hardwareId: string, data: { value: number; timestamp?: string }): Promise<SensorData> {
-    // CORRECCIÓN: Incluir más información del sensor y tanque para el WebSocket
     const sensor = await this.prisma.sensor.findUnique({
       where: { hardwareId },
       include: { 
@@ -125,7 +122,6 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
     if (!sensor) {
       this.logger.error(`❌ [DataService] Sensor no encontrado para hardwareId: "${hardwareId}"`);
       
-      // Debug: Mostrar sensores disponibles solo si es necesario
       const availableSensors = await this.prisma.sensor.findMany({
         select: { hardwareId: true, name: true, type: true }
       });
@@ -136,14 +132,12 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
   
     this.logger.log(`✅ [DataService] Sensor encontrado: ${sensor.name} (${sensor.type}) del tanque ${sensor.tank.name}`);
   
-    // Actualizar estado del emitter si está activo
     const activeEmitter = this.activeEmitters.get(sensor.id);
     if (activeEmitter) {
       activeEmitter.currentValue = data.value;
       activeEmitter.messagesCount++;
     }
   
-    // CORRECCIÓN: Llamar al método corregido con información completa del sensor
     return this.createAndBroadcastEntry({
       sensorId: sensor.id,
       tankId: sensor.tankId,
@@ -151,7 +145,6 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
       value: data.value,
       timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
       userId: sensor.tank.userId,
-      // NUEVO: Pasar información completa del sensor para el WebSocket
       sensorInfo: {
         id: sensor.id,
         name: sensor.name,
@@ -190,7 +183,6 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
           value: entry.value,
           timestamp: entry.timestamp || new Date(),
           userId: sensor.tank.userId,
-          // CORRECCIÓN: Incluir información del sensor para WebSocket
           sensorInfo: {
             id: sensor.id,
             name: sensor.name,
@@ -296,10 +288,9 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
       const tank = await this.prisma.tank.findFirst({ where: { id: tankId, userId: user.id } });
       if (!tank) throw new ForbiddenException('No tienes permiso para acceder a este tanque.');
     }
-    const sensors = await this.prisma.sensor.findMany({ where: { tankId, ...(type && { type }) }, select: { id: true } });
+    const sensors = await this.prisma.sensor.findMany({ where: { tankId, ...(type && { type: type as SensorTypePrisma }) }, select: { id: true } });
     if (sensors.length === 0) return [];
     
-    // CORRECCIÓN: Volver al método estándar de Prisma para evitar errores de importación.
     return this.prisma.sensorData.findMany({
       where: { sensorId: { in: sensors.map(s => s.id) } },
       orderBy: { timestamp: 'desc' },
@@ -340,7 +331,7 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
       totalActiveSimulations: userSimulations.length,
       totalMessagesSent: userSimulations.reduce((sum, sim) => sum + sim.messagesCount, 0),
       averageUptime: userSimulations.length > 0 ? Math.floor(userSimulations.reduce((sum, sim) => sum + (Date.now() - sim.startTime.getTime()), 0) / userSimulations.length / 1000) : 0,
-      simulationsByType: userSimulations.reduce((acc, sim) => { acc[sim.type] = (acc[sim.type] || 0) + 1; return acc; }, {} as Record<SensorType, number>),
+      simulationsByType: userSimulations.reduce((acc, sim) => { acc[sim.type] = (acc[sim.type] || 0) + 1; return acc; }, {} as Record<SensorTypePrisma, number>),
       systemUptime: Math.floor((Date.now() - this.serviceStartTime.getTime()) / 1000)
     };
   }
@@ -348,15 +339,14 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
   private async createAndBroadcastEntry(data: { 
     sensorId: string; 
     tankId: string; 
-    type: SensorType; 
+    type: SensorTypePrisma; 
     value: number; 
     timestamp: Date; 
     userId: string;
-    sensorInfo?: any; // Información adicional del sensor para WebSocket
+    sensorInfo?: any;
   }): Promise<SensorData> {
     const { userId, sensorInfo, ...createData } = data;
     
-    // Crear el registro en la base de datos
     const createdData = await this.prisma.sensorData.create({
       data: createData,
       include: { 
@@ -378,13 +368,11 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
       },
     });
   
-    // Actualizar última lectura del sensor
     await this.prisma.sensor.update({ 
       where: { id: data.sensorId }, 
       data: { lastReading: data.value, lastUpdate: data.timestamp } 
     });
   
-    // CORRECCIÓN: Preparar datos para WebSocket con estructura completa
     const dataForWebSocket = {
       id: createdData.id,
       value: createdData.value,
@@ -406,7 +394,6 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
   
     this.logger.log(`💾 [DataService] Datos guardados | ID: ${createdData.id}, Valor: ${data.value}, Tipo: ${data.type}`);
     
-    // Emitir via WebSocket
     this.eventsGateway.broadcastNewData(dataForWebSocket);
     this.logger.log(`📡 [DataService] Datos enviados via WebSocket a usuario ${userId}`);
   

@@ -41,7 +41,7 @@ export class SettingsService {
       throw new NotFoundException('Usuario no encontrado.');
     }
     
-    return user.settings || {};
+    return user.settings ? JSON.parse(user.settings) : {};
   }
 
   /**
@@ -61,13 +61,13 @@ export class SettingsService {
       throw new NotFoundException('Usuario no encontrado.');
     }
 
-    const currentSettings = (user.settings as Prisma.JsonValue) || {};
+    const currentSettings = user.settings ? JSON.parse(user.settings) : {};
     const newSettings = { ...currentSettings, ...settings };
 
     return this.prisma.user.update({
       where: { id: userId },
       data: { 
-        settings: newSettings 
+        settings: JSON.stringify(newSettings) 
       },
       select: { settings: true } 
     });

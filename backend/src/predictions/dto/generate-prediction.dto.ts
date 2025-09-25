@@ -10,7 +10,7 @@
 
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsNotEmpty, IsInt, IsEnum, Min, Max } from 'class-validator';
-import { SensorType } from '@prisma/client';
+import { sensors_type } from '@prisma/client';
 
 export class GeneratePredictionDto {
   @ApiProperty({
@@ -23,12 +23,12 @@ export class GeneratePredictionDto {
 
   @ApiProperty({
     description: 'Tipo de sensor a predecir (actualmente solo TEMPERATURA está soportado con clima)',
-    enum: SensorType,
-    example: SensorType.TEMPERATURE,
+    enum: sensors_type,
+    example: sensors_type.TEMPERATURE,
   })
-  @IsEnum(SensorType)
+  @IsEnum(sensors_type)
   @IsNotEmpty()
-  type: SensorType;
+  type: sensors_type;
 
   @ApiProperty({
     description: 'Horizonte de tiempo de la predicción en días (7-15)',

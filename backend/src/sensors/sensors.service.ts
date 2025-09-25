@@ -13,7 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateSensorDto } from './dto/create-sensor.dto';
 import { UpdateSensorDto } from './dto/update-sensor.dto';
 import { FindSensorsDto } from './dto/find-sensors.dto';
-import { Sensor, sensors_type as SensorType, Prisma } from '@prisma/client';
+import { Sensor, sensors_type as sensors_type, Prisma } from '@prisma/client';
 
 const MAX_SENSORS_PER_TYPE_PER_TANK = 1;
 
@@ -37,9 +37,8 @@ export class SensorsService {
       throw new NotFoundException(`El tanque con ID "${tankId}" no fue encontrado.`);
     }
   
-    // Correcting the type of `tank` to ensure `sensors` property is recognized.
     const tankWithSensors = tank as Prisma.TankGetPayload<{
-      include: { sensors: { where: { type: SensorType } } };
+      include: { sensors: { where: { type: sensors_type } } };
     }>;
   
     if (tankWithSensors.sensors.length >= MAX_SENSORS_PER_TYPE_PER_TANK) {
@@ -171,7 +170,7 @@ export class SensorsService {
       }
       
       const newTankWithSensors = newTank as Prisma.TankGetPayload<{
-        include: { sensors: { where: { type: SensorType } } };
+        include: { sensors: { where: { type: sensors_type } } };
       }>;
 
       if (newTankWithSensors.sensors.length >= MAX_SENSORS_PER_TYPE_PER_TANK) {
@@ -200,7 +199,7 @@ export class SensorsService {
   }
 
   async getAvailableTanksForSensorType(
-    sensorType: SensorType,
+    sensorType: sensors_type,
     userId: string,
     excludeSensorId?: string,
   ) {
@@ -209,7 +208,7 @@ export class SensorsService {
       include: {
         sensors: {
           where: {
-            type: sensorType as unknown as SensorType, // Type assertion
+            type: sensorType as unknown as sensors_type,
             id: excludeSensorId ? { not: excludeSensorId } : undefined,
           },
         },
@@ -220,7 +219,7 @@ export class SensorsService {
   }
   
 
-  async getSensorCountByTypeForTank(tankId: string): Promise<Record<SensorType, number>> {
+  async getSensorCountByTypeForTank(tankId: string): Promise<Record<sensors_type, number>> {
     const sensors = await this.prisma.sensor.findMany({
       where: { tankId },
       select: { type: true },
@@ -230,7 +229,7 @@ export class SensorsService {
       TEMPERATURE: 0,
       PH: 0,
       OXYGEN: 0,
-    } as Record<SensorType, number>;
+    } as Record<sensors_type, number>;
 
     sensors.forEach(sensor => {
       if (counts.hasOwnProperty(sensor.type)) {
