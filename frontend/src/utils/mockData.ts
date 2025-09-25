@@ -39,7 +39,7 @@ export const generarDatosSensoresSimulados = (count: number = 20): SensorData[] 
  * @param {SensorData[]} data - Un array de objetos con datos de sensores.
  * @returns {DataSummary} Un objeto que resume los datos para cada parámetro.
  */
-export const calcularResumenDatos = (data: SensorData[]): DataSummary => {
+ export const calcularResumenDatos = (data: SensorData[]): DataSummary => {
   if (data.length === 0) {
     return {
       temperature: { min: 0, max: 0, avg: 0, current: 0 },
@@ -48,28 +48,28 @@ export const calcularResumenDatos = (data: SensorData[]): DataSummary => {
     };
   }
 
-  const temps = data.map(d => d.temperature);
-  const phs = data.map(d => d.ph);
-  const oxygens = data.map(d => d.oxygen);
+  const temps = data.map(d => d.temperature).filter(Boolean) as number[];
+  const phs = data.map(d => d.ph).filter(Boolean) as number[];
+  const oxygens = data.map(d => d.oxygen).filter(Boolean) as number[];
 
   return {
     temperature: {
       min: Math.min(...temps),
       max: Math.max(...temps),
-      avg: temps.reduce((a, b) => a + b, 0) / temps.length,
-      current: temps[temps.length - 1],
+      avg: temps.length > 0 ? temps.reduce((a, b) => a + b, 0) / temps.length : 0,
+      current: data[data.length - 1].temperature ?? 0,
     },
     ph: {
       min: Math.min(...phs),
       max: Math.max(...phs),
-      avg: phs.reduce((a, b) => a + b, 0) / phs.length,
-      current: phs[phs.length - 1],
+      avg: phs.length > 0 ? phs.reduce((a, b) => a + b, 0) / phs.length : 0,
+      current: data[data.length - 1].ph ?? 0,
     },
     oxygen: {
       min: Math.min(...oxygens),
       max: Math.max(...oxygens),
-      avg: oxygens.reduce((a, b) => a + b, 0) / oxygens.length,
-      current: oxygens[oxygens.length - 1],
+      avg: oxygens.length > 0 ? oxygens.reduce((a, b) => a + b, 0) / oxygens.length : 0,
+      current: data[data.length - 1].oxygen ?? 0,
     },
   };
 };
