@@ -22,7 +22,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { authService } from '../services/authService';
 import { updateUser as updateUserService } from '../services/userService'; 
-import { socketManager } from '../services/socketService'; 
+import { socketManager } from '@/services/socketService';
 import { User, LoginCredentials } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 

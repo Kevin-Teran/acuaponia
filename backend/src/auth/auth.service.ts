@@ -17,6 +17,9 @@ import { ConfigService } from '@nestjs/config';
 import { LoginDto } from './dto/login.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Role, User } from '@prisma/client';
+import * as crypto from 'crypto';
+import { EmailService } from '../email/email.service';
+import { NotFoundException } from '@nestjs/common';
 
 @Injectable()
 export class AuthService {
@@ -27,6 +30,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private prisma: PrismaService,
+    private emailService: EmailService,
   ) {}
 
   /**
@@ -96,13 +100,30 @@ export class AuthService {
     if (!user) {
       return { message: 'Si tu correo electrónico está en nuestros registros, recibirás un enlace para restablecer tu contraseña.' };
     }
-    const payload = { sub: user.id, purpose: 'password-reset' };
-    const resetToken = await this.jwtService.signAsync(payload, {
-      secret: this.configService.get<string>('JWT_SECRET'), 
-      expiresIn: '15m', 
+  
+    const resetToken = crypto.randomBytes(32).toString('hex');
+  
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetPasswordToken: resetToken,
+        resetPasswordExpiry: new Date(Date.now() + 3600000), 
+      },
     });
-    const resetUrl = `${this.configService.get<string>('FRONTEND_URL')}/reset-password/${resetToken}`;
-    this.logger.log(`URL de reseteo (simulado): ${resetUrl}`);
+  
+    const resetUrl = `${this.configService.get<string>('FRONTEND_URL')}/recover-password/${resetToken}`;
+    await this.emailService.sendResetPasswordEmail(user.email, resetUrl);
+  
+    this.logger.log(`URL de reseteo (enviada al correo): ${resetUrl}`);
+  
+    return { message: 'Si tu correo electrónico está en nuestros registros, recibirás un enlace para restablecer tu contraseña.' };
+  }
+
+    const resetUrl = `${this.configService.get<string>('FRONTEND_URL')}/recover-password/${resetToken}`;
+    await this.emailService.sendResetPasswordEmail(user.email, resetUrl);
+
+    this.logger.log(`URL de reseteo: ${resetUrl}`);
+
     return { message: 'Si tu correo electrónico está en nuestros registros, recibirás un enlace para restablecer tu contraseña.' };
   }
 
