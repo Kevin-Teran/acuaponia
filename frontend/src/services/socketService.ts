@@ -1,20 +1,18 @@
 /**
  * @file socketService.ts
  * @route frontend/src/services
- * @description Servicio corregido para gestionar la conexión de Socket.IO con reconexión automática
+ * @description Servicio para gestionar la conexión de Socket.IO con reconexión automática y tipado correcto.
  * @author Kevin Mariano
- * @version 1.0.0 
+ * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
-import { io, Socket } from 'socket.io-client';
-import { DefaultEventsMap } from '@socket.io/client-events';
-import { ManagerOptions, SocketOptions } from 'socket.io-client/build/esm/types';
-import { Logger } from '@/utils/logger';
+ import { io, Socket, ManagerOptions, SocketOptions } from 'socket.io-client';
+  import { Logger } from '@/utils/logger';
 
 class SocketManager {
-    public socket: Socket<DefaultEventsMap, DefaultEventsMap>;
+    public socket: Socket<any, any>;
     private logger = new Logger('SocketManager');
     private static instance: SocketManager;
     private connectionAttempts = 0;
@@ -41,7 +39,7 @@ class SocketManager {
             forceNew: true,
             transports: ['websocket', 'polling'],
             auth: {
-                token: token,
+                token: token ? `Bearer ${token}` : '',
             },
         };
 
@@ -64,17 +62,17 @@ class SocketManager {
     }
 
     public init(): void {
-      this.logger.log('Iniciando conexión de socket...');
-      if (!this.socket.connected) {
-          this.socket.connect();
-      }
+        this.logger.log('Iniciando conexión de socket...');
+        if (!this.socket.connected) {
+            this.socket.connect();
+        }
     }
   
     public close(): void {
-      this.logger.log('Cerrando conexión de socket...');
-      if (this.socket.connected) {
-          this.socket.disconnect();
-      }
+        this.logger.log('Cerrando conexión de socket...');
+        if (this.socket.connected) {
+            this.socket.disconnect();
+        }
     }
 
     private registerEventListeners(): void {
@@ -119,9 +117,10 @@ class SocketManager {
             
             if (token) {
                 this.socket.auth = {
-                    token: token
+                    token: `Bearer ${token}`
                 };
                 this.socket.connect();
+                this.connectionAttempts++;
             } else {
                 this.logger.error('❌ No se puede reconectar: token no disponible');
                 this.socket.disconnect();
@@ -137,4 +136,4 @@ class SocketManager {
 }
 
 export const socketManager = SocketManager.getInstance();
-export const socket = socketManager ? socketManager.socket : null;
+export const socket = socketManager ? socketManager.getSocket() : null;
