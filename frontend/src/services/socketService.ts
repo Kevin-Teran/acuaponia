@@ -3,16 +3,16 @@
  * @route frontend/src/services
  * @description Servicio para gestionar la conexión de Socket.IO con reconexión automática y tipado correcto.
  * @author Kevin Mariano
- * @version 1.0.0
+ * @version 1.1.0 
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
- import { io, Socket, ManagerOptions, SocketOptions } from 'socket.io-client';
-  import { Logger } from '@/utils/logger';
+import { io, Socket, ManagerOptions, SocketOptions } from 'socket.io-client';
+import { Logger } from '@/utils/logger';
 
 class SocketManager {
-    public socket: Socket<any, any>;
+    public socket: Socket<any, any> | null = null;
     private logger = new Logger('SocketManager');
     private static instance: SocketManager;
     private connectionAttempts = 0;
@@ -21,23 +21,38 @@ class SocketManager {
 
     private constructor() {
         this.logger.log('Inicializando SocketManager...');
-        
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    }
+
+    public static getInstance(): SocketManager {
+        if (!SocketManager.instance) {
+            SocketManager.instance = new SocketManager();
+        }
+        return SocketManager.instance;
+    }
+
+    public getSocket(): Socket | null {
+        return this.socket;
+    }
+
+    public connect(token: string | null): void {
+        this.logger.log('Iniciando conexión de socket...');
+        if (!token) {
+            this.logger.error('❌ No se puede conectar: token no disponible');
+            return;
+        }
+
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
         if (!apiBaseUrl) {
-            this.logger.error('❌ NEXT_PUBLIC_API_BASE_URL no está definida.');
+            this.logger.error('❌ NEXT_PUBLIC_API_URL no está definida.');
             throw new Error('URL de la API no definida');
         }
 
-        const url = apiBaseUrl.startsWith('https://') ? 
-            apiBaseUrl.replace(/^https/, 'wss') : 
+        const url = apiBaseUrl.startsWith('https://') ?
+            apiBaseUrl.replace(/^https/, 'wss') :
             apiBaseUrl.replace(/^http/, 'ws');
         
-        const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-
-        this.logger.log(`🔗 Intentando conectar a: ${url}`); 
-        
         const options: Partial<ManagerOptions & SocketOptions> = {
-            extraHeaders: token ? { Authorization: `Bearer ${token}` } : {},
+            extraHeaders: { Authorization: `Bearer ${token}` },
             reconnectionAttempts: this.MAX_ATTEMPTS,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
@@ -45,69 +60,51 @@ class SocketManager {
             forceNew: true,
             transports: ['websocket', 'polling'],
             auth: {
-                token: token ? `Bearer ${token}` : '',
+                token: `Bearer ${token}`,
             },
         };
 
+        if (this.socket && this.socket.connected) {
+            this.logger.warn('El socket ya está conectado. Desconectando para reconectar con el nuevo token.');
+            this.socket.disconnect();
+        }
+
+        this.logger.log(`🔗 Intentando conectar a: ${url}`);
         this.socket = io(url, options);
         this.registerEventListeners();
-    }
-
-    public static getInstance(): SocketManager | null {
-        if (typeof window === 'undefined') {
-            return null;
-        }
-        if (!SocketManager.instance) {
-            SocketManager.instance = new SocketManager();
-        }
-        return SocketManager.instance;
-    }
-
-    public getSocket(): Socket {
-        return this.socket;
-    }
-
-    public init(): void {
-        this.logger.log('Iniciando conexión de socket...');
-        if (!this.socket.connected) {
-            this.socket.connect();
-        }
     }
   
     public close(): void {
         this.logger.log('Cerrando conexión de socket...');
-        if (this.socket.connected) {
+        if (this.socket && this.socket.connected) {
             this.socket.disconnect();
+            this.socket = null; 
         }
     }
 
     private registerEventListeners(): void {
+        if (!this.socket) return;
+        
+        this.socket.on('connect', () => {
+            this.logger.log('✅ Socket conectado.');
+            this.connectionAttempts = 0; 
+        });
+        
         this.socket.on('connect_error', (error) => {
             this.logger.error('❌ Error de conexión de Socket:', error);
-            if (error.message === 'xhr poll error') {
-                this.logger.error('Posible problema de CORS o servidor no disponible.');
-            } else if (error.message === 'websocket error') {
-                this.logger.error('Fallo en la conexión del protocolo WebSocket.');
+            if (error.message === 'Invalid token') {
+                this.logger.error('Token de autenticación inválido o expirado. Se cerrará la conexión.');
+                this.close(); 
+            } else {
+                this.logger.error('Fallo en la conexión. Posible problema de CORS o servidor no disponible.');
             }
         });
-
-        this.socket.on('connect_error', (err) => {
-            if (err.message === 'Invalid token') {
-              this.logger.error('Token de autenticación inválido o expirado. Redireccionando a login...');
-              this.socket.disconnect(); 
-            }
-          });
 
         this.socket.on('disconnect', (reason) => {
             this.logger.warn(`🔴 Desconexión de socket: ${reason}`);
-            this.startReconnectionProcess();
-        });
-
-        this.socket.on('connect_error', (error) => {
-            console.error(
-                '❌ Error de conexión de Socket:',
-                error.message,
-            );
+            if (reason === 'transport close') { 
+                this.startReconnectionProcess();
+            }
         });
     }
 
@@ -129,14 +126,11 @@ class SocketManager {
             const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
             
             if (token) {
-                this.socket.auth = {
-                    token: `Bearer ${token}`
-                };
-                this.socket.connect();
+                this.connect(token);
                 this.connectionAttempts++;
             } else {
                 this.logger.error('❌ No se puede reconectar: token no disponible');
-                this.socket.disconnect();
+                this.socket?.disconnect();
             }
         }, delay);
     }

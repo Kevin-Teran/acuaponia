@@ -1,7 +1,7 @@
 /**
  * @file page.tsx
  * @route frontend/src/app/(main)/reports
- * @description 
+ * @description Página de la sección de reportes.
  * @author Kevin Mariano
  * @version 1.0.0
  * @since 1.0.0
@@ -123,8 +123,8 @@ export default function Reports() {
   }, [fetchInitialData]);
 
   useEffect(() => {
-    if (!socketManager || !socketManager.socket) {
-        console.warn('Socket no está disponible. No se pueden recibir actualizaciones en tiempo real.');
+    if (!socketManager) {
+        console.warn('SocketManager no está disponible. No se pueden recibir actualizaciones en tiempo real.');
         return;
     }
 
@@ -134,15 +134,35 @@ export default function Reports() {
         );
     };
 
-    socketManager.socket.on('report_status_update', handleReportUpdate);
-    socketManager.init();
+    const handleConnect = () => {
+      if (socketManager.socket) {
+        console.log('🔌 Socket conectado, suscribiendo a eventos de reportes...');
+        socketManager.socket.on('report_status_update', handleReportUpdate);
+      }
+    };
+    
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+        if (!socketManager.getSocket() || !socketManager.getSocket()?.connected) {
+            socketManager.connect(token);
+        }
+    } else {
+        console.warn('No hay token de acceso, el socket no se conectará.');
+    }
+
+    if (socketManager.getSocket()?.connected) {
+      handleConnect();
+    } else {
+      socketManager.getSocket()?.on('connect', handleConnect);
+    }
     
     return () => {
       if (socketManager && socketManager.socket) {
         socketManager.socket.off('report_status_update', handleReportUpdate);
+        socketManager.socket.off('connect', handleConnect);
       }
     };
-  }, []);
+  }, [fetchInitialData, currentUser]);
 
   useEffect(() => {
     if (reportForm.tankId && currentUser) {

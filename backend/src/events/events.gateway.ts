@@ -51,6 +51,7 @@ interface ReportWithUser extends Report {
   },
   transports: ['websocket', 'polling'],
 })
+
 export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;

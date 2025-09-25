@@ -56,7 +56,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(userData);
         console.log('🔌 [AuthContext] Conectando socket después de verificar sesión...');
         if (socketManager) {
-          socketManager.init();
+          socketManager.connect(token);
         }
         
       } catch (error) {
@@ -65,7 +65,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.removeItem('refreshToken');
         setUser(null);
         
-        // Desconectar socket si hay error de autenticación
         console.log('🔌 [AuthContext] Desconectando socket por error de autenticación...');
         if (socketManager) {
             socketManager.close();
@@ -73,7 +72,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     } else {
       console.log('⚠️ [AuthContext] No hay token, usuario no autenticado');
-      // Asegurar que el socket esté desconectado si no hay token
       if (socketManager) {
         socketManager.close();
       }
@@ -84,7 +82,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     checkUserSession();
 
-    // Cleanup al desmontar el componente
     return () => {
       if (socketManager) {
         socketManager.close();
@@ -104,10 +101,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(response.user);
         console.log('✅ [AuthContext] Usuario establecido y token guardado');
         
-        // Conectar socket después de login exitoso
         console.log('🔌 [AuthContext] Conectando socket después de login exitoso...');
         if (socketManager) {
-          socketManager.init();
+          socketManager.connect(response.accessToken);
         }
         
         router.push('/dashboard');
@@ -120,7 +116,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       localStorage.removeItem('refreshToken');
       setUser(null);
       
-      // Asegurar desconexión del socket en caso de error
       if (socketManager) {
         socketManager.close();
       }
@@ -135,7 +130,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     
-    // Desconectar socket al hacer logout
     console.log('🔌 [AuthContext] Desconectando socket por logout...');
     if (socketManager) {
       socketManager.close();
@@ -159,11 +153,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Efecto para monitorear el estado del socket (solo en desarrollo)
   useEffect(() => {
-    // Definimos la función de limpieza
     const cleanup = () => {
-      // Limpia los listeners y el estado del socket si es necesario
       console.log('🔌 Limpiando listeners de socket...');
     };
 
@@ -191,17 +182,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       socket.on('reconnect', handleReconnect);
       socket.on('connect_error', handleError);
 
-      // La función de limpieza que se devuelve siempre
       return () => {
         socket.off('connect', handleConnect);
         socket.off('disconnect', handleDisconnect);
         socket.off('reconnect', handleReconnect);
         socket.off('connect_error', handleError);
-        cleanup(); // Llama a la limpieza definida arriba
+        cleanup();
       };
     }
 
-    // Si no es un entorno de desarrollo, aún así devolvemos una función de limpieza vacía
     return cleanup;
   }, []);
 
