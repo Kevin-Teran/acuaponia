@@ -11,7 +11,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AnalyticsFiltersDto } from './dto/analytics-filters.dto';
-import { User, Role, Prisma, SensorType } from '@prisma/client';
+import { User, Role, Prisma, sensors_type as SensorType } from '@prisma/client';
 import { CorrelationFiltersDto } from './dto/correlation-filters.dto';
 import { subDays, startOfDay, endOfDay, subMonths, subYears, parseISO, isValid } from 'date-fns';
 

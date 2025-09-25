@@ -12,7 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateSensorDto } from './dto/create-sensor.dto';
 import { UpdateSensorDto } from './dto/update-sensor.dto';
 import { FindSensorsDto } from './dto/find-sensors.dto';
-import { Sensor, SensorType } from '@prisma/client';
+import { Sensor, sensors_type as SensorType } from '@prisma/client';
 
 const MAX_SENSORS_PER_TYPE_PER_TANK = 1;
 
@@ -22,7 +22,7 @@ export class SensorsService {
 
   async create(createSensorDto: CreateSensorDto): Promise<Sensor> {
     const { tankId, type, hardwareId, ...sensorData } = createSensorDto;
-
+  
     const tank = await this.prisma.tank.findUnique({
       where: { id: tankId },
       include: {
@@ -31,27 +31,27 @@ export class SensorsService {
         },
       },
     });
-
+  
     if (!tank) {
       throw new NotFoundException(`El tanque con ID "${tankId}" no fue encontrado.`);
     }
-
+  
     if (tank.sensors.length >= MAX_SENSORS_PER_TYPE_PER_TANK) {
       throw new ConflictException(
         `El tanque "${tank.name}" ya tiene un sensor de tipo ${type}.`,
       );
     }
-
+  
     const existingHardwareSensor = await this.prisma.sensor.findUnique({
       where: { hardwareId },
     });
-
+  
     if (existingHardwareSensor) {
       throw new ConflictException(
         `Ya existe un sensor con el ID de hardware "${hardwareId}".`,
       );
     }
-
+  
     return this.prisma.sensor.create({
       data: {
         ...sensorData,
@@ -205,9 +205,10 @@ export class SensorsService {
         },
       },
     });
-
+  
     return tanks.filter(tank => tank.sensors.length < MAX_SENSORS_PER_TYPE_PER_TANK);
   }
+  
 
   async getSensorCountByTypeForTank(tankId: string): Promise<Record<SensorType, number>> {
     const sensors = await this.prisma.sensor.findMany({

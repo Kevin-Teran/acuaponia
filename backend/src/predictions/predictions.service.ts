@@ -19,7 +19,7 @@ import { GeneratePredictionDto } from './dto/generate-prediction.dto';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import { SensorData, SensorType } from '@prisma/client';
+import { SensorData, sensors_type as SensorType } from '@prisma/client';
 
 @Injectable()
 export class PredictionsService {

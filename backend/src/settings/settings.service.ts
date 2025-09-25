@@ -60,7 +60,7 @@ export class SettingsService {
       throw new NotFoundException('Usuario no encontrado.');
     }
 
-    const currentSettings = (user.settings as object) || {};
+    const currentSettings = (user.settings as Prisma.JsonValue) || {};
     const newSettings = { ...currentSettings, ...settings };
 
     return this.prisma.user.update({

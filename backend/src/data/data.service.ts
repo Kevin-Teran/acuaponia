@@ -15,7 +15,7 @@ import { EventsGateway } from '../events/events.gateway';
 import { MqttService } from '../mqtt/mqtt.service';
 import { ManualEntryDto } from './dto/manual-entry.dto';
 import { GetLatestDataDto } from './dto/get-latest-data.dto';
-import { SensorData, SensorType, User, Role } from '@prisma/client';
+import { SensorData, sensors_type as SensorType, User, Role, Prisma } from '@prisma/client';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 

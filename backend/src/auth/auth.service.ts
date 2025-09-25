@@ -9,7 +9,7 @@
  * @copyright SENA 2025
  */
 
-import { Injectable, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -17,9 +17,7 @@ import { ConfigService } from '@nestjs/config';
 import { LoginDto } from './dto/login.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Role, User } from '@prisma/client';
-import * as crypto from 'crypto';
 import { EmailService } from '../email/email.service';
-import { NotFoundException } from '@nestjs/common';
 
 @Injectable()
 export class AuthService {
@@ -95,6 +93,10 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
+  /**
+   * Genera un token JWT para restablecer la contraseña y envía el correo.
+   * No requiere cambios en la base de datos.
+   */
   async forgotPassword(email: string) {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
@@ -102,16 +104,14 @@ export class AuthService {
       return { message: 'Si tu correo electrónico está en nuestros registros, recibirás un enlace para restablecer tu contraseña.' };
     }
   
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hora de validez
-  
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        resetPasswordToken: resetToken,
-        resetPasswordExpiry: resetTokenExpiry, 
+    // Genera un JWT para el restablecimiento de contraseña
+    const resetToken = this.jwtService.sign(
+      { sub: user.id, purpose: 'password-reset' },
+      {
+        secret: this.configService.get<string>('JWT_RESET_SECRET') || this.configService.get<string>('JWT_SECRET'),
+        expiresIn: '1h', // Token válido por 1 hora
       },
-    });
+    );
   
     const resetUrl = `${this.configService.get<string>('FRONTEND_URL')}/recover-password/${resetToken}`;
     await this.emailService.sendResetPasswordEmail(user.email, resetUrl);
@@ -121,29 +121,31 @@ export class AuthService {
     return { message: 'Si tu correo electrónico está en nuestros registros, recibirás un enlace para restablecer tu contraseña.' };
   }
 
+  /**
+   * Valida el JWT y actualiza la contraseña del usuario.
+   * No requiere consultar la base de datos para la validez del token.
+   */
   async resetPassword(token: string, newPassword: string) {
-    const user = await this.prisma.user.findFirst({
-      where: {
-        resetPasswordToken: token,
-        resetPasswordExpiry: { gt: new Date() },
-      },
-    });
+    try {
+      const payload = await this.jwtService.verifyAsync(token, {
+        secret: this.configService.get<string>('JWT_RESET_SECRET') || this.configService.get<string>('JWT_SECRET'),
+      });
 
-    if (!user) {
+      if (payload.purpose !== 'password-reset') {
+        throw new BadRequestException('Token inválido.');
+      }
+      
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      
+      // @ts-ignore
+      await this.prisma.user.update({
+        where: { id: payload.sub },
+        data: { password: hashedPassword },
+      });
+      
+      return { message: 'Contraseña actualizada correctamente.' };
+    } catch (error) {
       throw new BadRequestException('El token es inválido o ha expirado.');
     }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        password: hashedPassword,
-        resetPasswordToken: null,
-        resetPasswordExpiry: null,
-      },
-    });
-    
-    return { message: 'Contraseña actualizada correctamente.' };
   }
 }

@@ -16,7 +16,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DashboardFiltersDto } from './dto/dashboard-filters.dto';
-import { Role, SensorType, User } from '@prisma/client';
+import { Role, sensors_type as SensorType, User } from '@prisma/client';
 import { startOfDay, endOfDay, parseISO } from 'date-fns';
 
 @Injectable()
