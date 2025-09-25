@@ -207,7 +207,7 @@ class MqttService {
    * @param {Function} reject - Función de rechazo de la promesa
    * @private
    */
-  private setupEventHandlers(resolve: Function, reject: Function): void {
+   private setupEventHandlers(resolve: Function, reject: Function): void {
     if (!this.client) return;
 
     this.client.on('connect', () => {
@@ -286,7 +286,7 @@ class MqttService {
         this.status.messagesPublished++;
       }
     });
-
+    // @ts-ignore
     this.client.on('pingresp', () => {
     });
   }

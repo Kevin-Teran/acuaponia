@@ -398,13 +398,15 @@ export interface PredictionData {
  * @property {string} startDate - Fecha de inicio en formato ISO 8601
  * @property {string} endDate - Fecha de fin en formato ISO 8601
  * @property {string} [tankId] - ID del tanque a consultar (opcional)
+ * @property {string} [sensorId] - ID del sensor a consultar (opcional)
  * @property {SensorType} [sensorType] - Tipo de sensor a filtrar (opcional)
  * @property {number} [limit] - Límite de registros a obtener (opcional)
  */
-export interface HistoricalDataParams {
+ export interface HistoricalDataParams {
   startDate: string;
   endDate: string;
   tankId?: string;
+  sensorId?: string;
   sensorType?: SensorType;
   limit?: number;
 }
@@ -513,8 +515,6 @@ export interface UserSettings {
   newPassword: string;
 }
 
-// --- Dashboard Types (NUEVO) ---
-
 /**
  * @typedef {object} TimePoint
  * @description Representa un único punto de datos en una serie de tiempo para los gráficos.
@@ -622,7 +622,7 @@ export interface KpiData {
  * @typedef {object} AlertsSummaryData
  * @description Estructura del resumen de alertas que devuelve el backend.
  */
-export interface AlertsSummaryData {
+ export interface AlertsSummaryData {
   alertsByType: Array<{ type: string; _count: { type: number } }>;
   alertsBySeverity: Array<{ severity: string; _count: { severity: number } }>;
 }
@@ -885,4 +885,42 @@ export interface SystemHealth {
   criticalAlerts: number;
   lastDataReceived: string;
   uptime: number;
+}
+
+
+/**
+ * @typedef {object} ManualEntryDto
+ * @description Estructura para el registro manual de datos de un sensor.
+ */
+ export interface ManualEntryDto {
+  sensorId: string;
+  value: number;
+  timestamp?: Date;
+}
+
+
+/**
+ * @typedef {object} Report
+ * @description Interfaz que define la estructura de un reporte.
+ */
+ export interface Report {
+  id: string;
+  name: string;
+  userId: string;
+  generationDate: string;
+  fileUrl: string;
+  status: 'GENERATED' | 'PENDING' | 'FAILED';
+}
+
+/**
+ * @typedef {object} CreateReportDto
+ * @description DTO para la creación de un reporte.
+ */
+export interface CreateReportDto {
+  reportName: string;
+  userId: string;
+  startDate?: string;
+  endDate?: string;
+  tankId?: string;
+  sensorId?: string;
 }

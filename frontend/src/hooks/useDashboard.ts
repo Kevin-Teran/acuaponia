@@ -193,7 +193,8 @@ export const useDashboard = () => {
 		try {
 			setLoading(prev => ({ ...prev, summary: true }));
 			const data = await getSummary(filters);
-			setSummaryData(data);
+			// CORRECCIÓN: Asegurar que el tipo de 'data' sea el esperado por 'setSummaryData'
+			setSummaryData(data as DashboardSummary);
 			setError(null); // Limpiar errores previos
 		} catch (err) {
 			setError('Error al cargar el resumen de datos.');

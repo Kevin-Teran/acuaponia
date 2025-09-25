@@ -10,8 +10,10 @@
  * @since 1.0.0
  */
 import { useState, useEffect, useCallback } from 'react';
-import { getHistoricalData } from '@/services/dataService'; 
-import { SensorData, HistoricalDataParams } from '@/types';
+import { getHistoricalData } from '@/services/dashboardService';
+import { HistoricalData } from '@/types/dashboard';
+import { SensorData, HistoricalDataParams, SensorType } from '@/types';
+
 
 /**
  * @typedef {object} UseSensorDataResult
@@ -50,8 +52,22 @@ export const useSensorData = (initialParams: HistoricalDataParams) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await getHistoricalData(params);
-      setData(result);
+      // Importante: La función getHistoricalData de dashboardService devuelve un objeto.
+      const result: HistoricalData = await getHistoricalData(params);
+
+      // Aplanamos el objeto de datos históricos en un array de SensorData
+      const flattenedData: SensorData[] = Object.entries(result).flatMap(([sensorType, entries]) =>
+        entries.map(entry => ({
+          sensorId: (params.sensorId || 'unknown'),
+          value: entry.value,
+          timestamp: entry.time,
+          ph: sensorType === 'PH' ? entry.value : undefined,
+          temperature: sensorType === 'TEMPERATURE' ? entry.value : undefined,
+          oxygen: sensorType === 'OXYGEN' ? entry.value : undefined,
+        }))
+      );
+      
+      setData(flattenedData);
     } catch (err: any) {
       setError(err.message || 'Error al cargar los datos de los sensores');
     } finally {

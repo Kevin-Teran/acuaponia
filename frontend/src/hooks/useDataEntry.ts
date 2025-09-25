@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Tank, Sensor, UserFromApi as User, SensorData, Role } from '@/types';
+import { Tank, Sensor, UserFromApi as User, SensorData, Role, SensorType, ManualEntryDto } from '@/types';
 import * as tankService from '@/services/tankService';
 import * as sensorService from '@/services/sensorService';
 import * as userService from '@/services/userService';
@@ -34,14 +34,12 @@ export const useDataEntry = () => {
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'ADMIN';
 
-  // Estados de datos y selección
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(currentUser?.id || null);
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [selectedTankId, setSelectedTankId] = useState<string>('');
   const [sensors, setSensors] = useState<Sensor[]>([]);
 
-  // Estados de UI y control
   const [loading, setLoading] = useState<LoadingState>({ users: true, tanks: true, sensors: true, simulations: true });
   const [error, setError] = useState<string | null>(null);
   const [isSubmittingManual, setIsSubmittingManual] = useState(false);
@@ -53,8 +51,6 @@ export const useDataEntry = () => {
   const [mqttStatus, setMqttStatus] = useState<MqttStatus>('disconnected');
 
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // --- Sincronización y Efectos ---
 
   const syncSimulationStatus = useCallback(async () => {
     if (!currentUser) return;
@@ -68,13 +64,9 @@ export const useDataEntry = () => {
     }
   }, [currentUser]);
 
-  // Efecto para conexiones (WebSocket y MQTT) y sincronización
   useEffect(() => {
-    // Conectar servicios
     socketManager.connect();
     mqttService.connect();
-
-    // Suscribirse a cambios de estado de MQTT
     const unsubscribeMqtt = mqttService.onStatusChange(status => {
       if (status.connected) setMqttStatus('connected');
       else if (status.connecting) setMqttStatus('connecting');
@@ -163,11 +155,9 @@ export const useDataEntry = () => {
     loadSensors();
   }, [selectedTankId]);
 
-  // --- Handlers Optimizados ---
-
   const handleUserChange = useCallback((userId: string) => {
     setSelectedUserId(userId);
-    setSelectedTankId(''); // Resetea el tanque para forzar recarga
+    setSelectedTankId('');
   }, []);
 
   const handleTankChange = useCallback((tankId: string) => {
@@ -209,7 +199,7 @@ export const useDataEntry = () => {
       } else {
         await dataService.startEmitters([sensorId]);
       }
-      await syncSimulationStatus(); // Sincroniza solo el estado de los emisores
+      await syncSimulationStatus(); 
     } catch (error) {
       Swal.fire('Error', 'No se pudo cambiar el estado de la simulación.', 'error');
     } finally {
@@ -234,12 +224,10 @@ export const useDataEntry = () => {
     return units[type] || '';
   }, []);
 
-  // Lógica para determinar si un sensor está activo
   const isSimulationActive = useCallback((sensorId: string) => {
     return activeSimulations.some(sim => sim.sensorId === sensorId);
   }, [activeSimulations]);
 
-  // Lógica para obtener el estado de un sensor
   const getSimulationStatus = useCallback((sensorId: string) => {
     return activeSimulations.find(sim => sim.sensorId === sensorId);
   }, [activeSimulations]);
@@ -285,7 +273,7 @@ export const useDataEntry = () => {
     },
     isSimulationActive,
     getSimulationStatus,
-    simulationMetrics: { systemUptime: 0 }, // Aquí se debe conectar a un servicio real
+    simulationMetrics: { systemUptime: 0 }, 
     lastSyncTime: Date.now(),
   };
 };
