@@ -69,4 +69,31 @@ export class EmailService implements OnModuleInit {
       this.logger.error(`🚨 Fallo al enviar correo a ${user.email}:`, error);
     }
   }
+
+  /**
+   * Envía un correo de restablecimiento de contraseña.
+   * @param email - El correo electrónico del destinatario.
+   * @param url - La URL para restablecer la contraseña.
+   */
+  async sendResetPasswordEmail(email: string, url: string): Promise<void> {
+    if (!this.transporter) {
+      this.logger.error('El transportador de correo no está inicializado. No se puede enviar el email.');
+      return;
+    }
+
+    const mailOptions = {
+      from: this.configService.get('MAIL_FROM'),
+      to: email,
+      subject: 'Restablecimiento de Contraseña',
+      text: `Para restablecer tu contraseña, haz clic en el siguiente enlace: ${url}`,
+      html: `<p>Para restablecer tu contraseña, haz clic en el siguiente enlace: <a href="${url}">${url}</a></p>`,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`📧 Correo de restablecimiento de contraseña enviado a ${email}`);
+    } catch (error) {
+      this.logger.error(`🚨 Fallo al enviar correo de restablecimiento a ${email}:`, error);
+    }
+  }
 }

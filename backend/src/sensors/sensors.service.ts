@@ -7,12 +7,13 @@
  * @since 1.0.0
  * @copyright SENA 2025
  */
+
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSensorDto } from './dto/create-sensor.dto';
 import { UpdateSensorDto } from './dto/update-sensor.dto';
 import { FindSensorsDto } from './dto/find-sensors.dto';
-import { Sensor, sensors_type as SensorType } from '@prisma/client';
+import { Sensor, sensors_type as SensorType, Prisma } from '@prisma/client';
 
 const MAX_SENSORS_PER_TYPE_PER_TANK = 1;
 
@@ -36,9 +37,14 @@ export class SensorsService {
       throw new NotFoundException(`El tanque con ID "${tankId}" no fue encontrado.`);
     }
   
-    if (tank.sensors.length >= MAX_SENSORS_PER_TYPE_PER_TANK) {
+    // Correcting the type of `tank` to ensure `sensors` property is recognized.
+    const tankWithSensors = tank as Prisma.TankGetPayload<{
+      include: { sensors: { where: { type: SensorType } } };
+    }>;
+  
+    if (tankWithSensors.sensors.length >= MAX_SENSORS_PER_TYPE_PER_TANK) {
       throw new ConflictException(
-        `El tanque "${tank.name}" ya tiene un sensor de tipo ${type}.`,
+        `El tanque "${tankWithSensors.name}" ya tiene un sensor de tipo ${type}.`,
       );
     }
   
@@ -57,7 +63,7 @@ export class SensorsService {
         ...sensorData,
         hardwareId,
         type,
-        location: tank.location,
+        location: tankWithSensors.location,
         tank: {
           connect: { id: tankId },
         },
@@ -163,9 +169,13 @@ export class SensorsService {
       if (!newTank) {
         throw new NotFoundException(`El nuevo tanque con ID "${updateSensorDto.tankId}" no fue encontrado.`);
       }
+      
+      const newTankWithSensors = newTank as Prisma.TankGetPayload<{
+        include: { sensors: { where: { type: SensorType } } };
+      }>;
 
-      if (newTank.sensors.length >= MAX_SENSORS_PER_TYPE_PER_TANK) {
-        throw new ConflictException(`El tanque "${newTank.name}" ya tiene un sensor de tipo ${sensorToUpdate.type}.`);
+      if (newTankWithSensors.sensors.length >= MAX_SENSORS_PER_TYPE_PER_TANK) {
+        throw new ConflictException(`El tanque "${newTankWithSensors.name}" ya tiene un sensor de tipo ${sensorToUpdate.type}.`);
       }
     }
 
@@ -199,7 +209,7 @@ export class SensorsService {
       include: {
         sensors: {
           where: {
-            type: sensorType,
+            type: sensorType as unknown as SensorType, // Type assertion
             id: excludeSensorId ? { not: excludeSensorId } : undefined,
           },
         },

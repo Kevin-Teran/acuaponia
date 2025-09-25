@@ -11,7 +11,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AnalyticsFiltersDto } from './dto/analytics-filters.dto';
-import { User, Role, Prisma, sensors_type as SensorType } from '@prisma/client';
+import { User, Role, Prisma, sensors_type as SensorTypePrisma, SensorType } from '@prisma/client';
 import { CorrelationFiltersDto } from './dto/correlation-filters.dto';
 import { subDays, startOfDay, endOfDay, subMonths, subYears, parseISO, isValid } from 'date-fns';
 
@@ -178,11 +178,12 @@ export class AnalyticsService {
       const sensorTypeX = filters.sensorTypeX || SensorType.TEMPERATURE;
       const sensorTypeY = filters.sensorTypeY || SensorType.PH;
 
-      if (!Object.values(SensorType).includes(sensorTypeX)) {
+      // The validation should be against the `sensors_type` which is used in the Sensor model.
+      if (!Object.values(SensorTypePrisma).includes(sensorTypeX as any)) {
         throw new BadRequestException(`Tipo de sensor X inválido: ${sensorTypeX}`);
       }
 
-      if (!Object.values(SensorType).includes(sensorTypeY)) {
+      if (!Object.values(SensorTypePrisma).includes(sensorTypeY as any)) {
         throw new BadRequestException(`Tipo de sensor Y inválido: ${sensorTypeY}`);
       }
 
@@ -194,7 +195,7 @@ export class AnalyticsService {
       const dateFilter = this.getDateFilter(filters.range, filters.startDate, filters.endDate);
       const { tankId, sensorId } = filters;
 
-      const baseWhere = {
+      const baseWhere: Prisma.SensorDataWhereInput = {
         timestamp: dateFilter,
         sensor: {
           tank: {
@@ -209,7 +210,8 @@ export class AnalyticsService {
         ...baseWhere,
         sensor: {
           ...baseWhere.sensor,
-          type: sensorTypeX,
+          // Correctly use the `sensors_type` enum for the query on the Sensor model.
+          type: sensorTypeX as unknown as SensorTypePrisma,
         },
       };
 
@@ -217,7 +219,8 @@ export class AnalyticsService {
         ...baseWhere,
         sensor: {
           ...baseWhere.sensor,
-          type: sensorTypeY,
+          // Correctly use the `sensors_type` enum for the query on the Sensor model.
+          type: sensorTypeY as unknown as SensorTypePrisma,
         },
       };
 
@@ -290,7 +293,7 @@ export class AnalyticsService {
           ...(filters.tankId && filters.tankId !== 'ALL' && { id: filters.tankId }),
         },
         ...(filters.sensorId && filters.sensorId !== 'ALL' && { id: filters.sensorId }),
-        ...(filters.sensorType && { type: filters.sensorType }),
+        ...(filters.sensorType && { type: filters.sensorType as unknown as SensorTypePrisma }),
       },
     };
     return whereClause;

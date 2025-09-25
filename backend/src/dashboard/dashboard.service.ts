@@ -1,280 +1,203 @@
 /**
  * @file dashboard.service.ts
- * @route /backend/src/dashboard
- * @description Servicio para la lógica de negocio del dashboard con datos optimizados.
+ * @route backend/src/dashboard/
+ * @description Servicio para la lógica de negocio del dashboard, incluyendo analíticas en tiempo real.
  * @author Kevin Mariano
- * @version 1.0.0 
+ * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
-import {
-    BadRequestException,
-    ForbiddenException,
-    Injectable,
-    Logger,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TankStatus, SensorStatus, Prisma, sensors_type as SensorTypePrisma } from '@prisma/client';
+import { subDays, endOfDay, startOfDay, parseISO, isValid } from 'date-fns';
 import { DashboardFiltersDto } from './dto/dashboard-filters.dto';
-import { Role, sensors_type as SensorType, User } from '@prisma/client';
-import { startOfDay, endOfDay, parseISO } from 'date-fns';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class DashboardService {
-    private readonly logger = new Logger(DashboardService.name);
+  private readonly logger = new Logger(DashboardService.name);
 
-    constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private usersService: UsersService,
+  ) {}
 
-    /**
-     * @method getSummary
-     * @description Obtiene datos de resumen para las tarjetas principales del dashboard.
-     * @param {DashboardFiltersDto} filters - Filtros de la solicitud.
-     * @param {User} user - El usuario que realiza la solicitud.
-     * @returns {Promise<object>} - Datos de resumen.
-     */
-    async getSummary(filters: DashboardFiltersDto, user: User) {
-        const targetUserId = this.resolveTargetUserId(filters.userId, user);
-        const [tanksCount, sensorsCount, recentAlerts, totalDataPoints] =
-            await Promise.all([
-                this.prisma.tank.count({ where: { userId: targetUserId } }),
-                this.prisma.sensor.count({
-                    where: { tank: { userId: targetUserId } },
-                }),
-                this.prisma.alert.count({
-                    where: {
-                        userId: targetUserId,
-                        createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-                    },
-                }),
-                this.prisma.sensorData.count({
-                    where: { sensor: { tank: { userId: targetUserId } } },
-                }),
-            ]);
+  /**
+   * @method getRealtimeData
+   * @description Obtiene los últimos datos de los sensores de un tanque específico.
+   * @param {string} tankId - ID del tanque.
+   * @returns {Promise<{
+   * temperature: number | null;
+   * ph: number | null;
+   * oxygen: number | null;
+   * }>}
+   */
+  async getRealtimeData(tankId: string) {
+    // Obtener los últimos datos de cada tipo de sensor para el tanque
+    const latestData = await this.prisma.sensorData.findMany({
+      where: {
+        tankId,
+        sensor: {
+          status: 'ACTIVE',
+        },
+      },
+      orderBy: { timestamp: 'desc' },
+      distinct: ['type'],
+      select: {
+        type: true,
+        value: true,
+      },
+    });
 
-        const summary = {
-            tanksCount,
-            sensorsCount,
-            activeSimulations: 0, // Placeholder
-            recentAlerts,
-            totalDataPoints,
-        };
+    const data: { [key: string]: number | null } = {
+      temperature: null,
+      ph: null,
+      oxygen: null,
+    };
 
-        if (user.role === Role.ADMIN) {
-            const [totalUsers, totalTanks, totalSensors] = await Promise.all([
-                this.prisma.user.count(),
-                this.prisma.tank.count(),
-                this.prisma.sensor.count(),
-            ]);
-            (summary as any).adminStats = { totalUsers, totalTanks, totalSensors };
-        }
+    latestData.forEach((d) => {
+      if (d.type === 'TEMPERATURE') data.temperature = d.value;
+      if (d.type === 'PH') data.ph = d.value;
+      if (d.type === 'OXYGEN') data.oxygen = d.value;
+    });
 
-        return summary;
+    return data;
+  }
+
+  /**
+   * @method getChartData
+   * @description Obtiene datos históricos para un tipo de sensor y un rango de fechas.
+   * @param {string} tankId - ID del tanque.
+   * @param {string} sensorType - Tipo de sensor.
+   * @param {string} range - Rango de tiempo.
+   * @param {string} startDate - Fecha de inicio (opcional).
+   * @param {string} endDate - Fecha de fin (opcional).
+   * @returns {Promise<Array<{timestamp: Date, value: number}>>}
+   */
+  async getChartData(
+    tankId: string,
+    sensorType: SensorTypePrisma,
+    range: string,
+    startDate?: string,
+    endDate?: string,
+  ) {
+    const dateFilter = this.getDateFilter(range, startDate, endDate);
+    const data = await this.prisma.sensorData.findMany({
+      where: {
+        tankId,
+        timestamp: dateFilter,
+        sensor: {
+          status: 'ACTIVE',
+          // Correcting the type to use `sensors_type`
+          type: sensorType as SensorTypePrisma,
+        },
+      },
+      orderBy: { timestamp: 'asc' },
+      select: {
+        timestamp: true,
+        value: true,
+      },
+    });
+
+    return data;
+  }
+
+  /**
+   * @method getSummaryStats
+   * @description Obtiene estadísticas de resumen del sistema para usuarios no administradores.
+   * @param {string} userId - ID del usuario.
+   * @returns {Promise<any>}
+   */
+  async getSummaryStats(userId: string) {
+    const activeTanks = await this.prisma.tank.count({
+      where: { userId, status: TankStatus.ACTIVE },
+    });
+
+    const activeSensors = await this.prisma.sensor.count({
+      where: { tank: { userId }, status: SensorStatus.ACTIVE },
+    });
+
+    const totalAlerts = await this.prisma.alert.count({
+      where: { userId },
+    });
+
+    const pendingAlerts = await this.prisma.alert.count({
+      where: { userId, resolved: false },
+    });
+
+    return {
+      tanks: activeTanks,
+      sensors: activeSensors,
+      totalAlerts,
+      pendingAlerts,
+    };
+  }
+
+  /**
+   * @method getAdminStats
+   * @description Obtiene estadísticas de resumen para el dashboard de administradores.
+   * @returns {Promise<any>}
+   */
+  async getAdminStats() {
+    const totalUsers = await this.prisma.user.count();
+    const totalTanks = await this.prisma.tank.count();
+    const totalSensors = await this.prisma.sensor.count();
+    const totalAlerts = await this.prisma.alert.count();
+
+    const activeUsers = await this.prisma.user.count({
+      where: { status: 'ACTIVE' },
+    });
+
+    const activeTanks = await this.prisma.tank.count({
+      where: { status: TankStatus.ACTIVE },
+    });
+
+    const activeSensors = await this.prisma.sensor.count({
+      where: { status: SensorStatus.ACTIVE },
+    });
+
+    const userStats = await this.usersService.getUserStats();
+
+    return {
+      totalUsers,
+      totalTanks,
+      totalSensors,
+      totalAlerts,
+      activeUsers,
+      activeTanks,
+      activeSensors,
+      userStats,
+    };
+  }
+
+  /**
+   * @method getDateFilter
+   * @description Genera el filtro de fechas basado en el rango especificado o fechas custom.
+   * @private
+   * @param {string} range - Rango de tiempo (day, week, month, year)
+   * @param {string} startDate - Fecha de inicio custom (opcional)
+   * @param {string} endDate - Fecha de fin custom (opcional)
+   * @returns {{ gte: Date; lte: Date }}
+   */
+  private getDateFilter(range?: string, startDate?: string, endDate?: string): { gte: Date; lte: Date } {
+    if (startDate && endDate) {
+      const start = parseISO(startDate);
+      const end = parseISO(endDate);
+      
+      if (isValid(start) && isValid(end)) {
+        return { gte: start, lte: end };
+      }
     }
 
-    /**
-     * @method getRealtimeData
-     * @description Obtiene los últimos datos de cada sensor para la visualización en tiempo real.
-     * @param {DashboardFiltersDto} filters - Filtros de la solicitud.
-     * @param {User} user - El usuario que realiza la solicitud.
-     * @returns {Promise<object>} - Datos en tiempo real agrupados por tipo de sensor.
-     */
-    async getRealtimeData(filters: DashboardFiltersDto, user: User) {
-        const targetUserId = this.resolveTargetUserId(filters.userId, user);
-        const whereClause: any = {
-            sensor: {
-                tank: {
-                    userId: targetUserId,
-                    ...(filters.tankId && { id: filters.tankId }),
-                },
-                ...(filters.sensorType && { type: filters.sensorType }),
-            },
-        };
-        const latestData = await this.prisma.sensorData.findMany({
-            where: whereClause,
-            orderBy: { timestamp: 'desc' },
-            distinct: ['sensorId'],
-            include: {
-                sensor: {
-                    select: {
-                        id: true,
-                        name: true,
-                        type: true,
-                        hardwareId: true,
-                        tank: { select: { id: true, name: true } },
-                    },
-                },
-            },
-        });
-        return latestData.reduce((acc, data) => {
-            const type = data.sensor.type;
-            if (!acc[type]) {
-                acc[type] = [];
-            }
-            acc[type].push({
-                sensorId: data.sensor.id,
-                sensorName: data.sensor.name,
-                tankName: data.sensor.tank.name,
-                value: data.value,
-                timestamp: data.timestamp,
-                hardwareId: data.sensor.hardwareId,
-            });
-            return acc;
-        }, {} as Record<SensorType, any[]>);
+    const now = new Date();
+    switch (range) {
+      case 'day': return { gte: startOfDay(now), lte: endOfDay(now) };
+      case 'month': return { gte: subDays(now, 30), lte: now }; // Corregido: antes usaba subMonths(now, 1)
+      case 'year': return { gte: subDays(now, 365), lte: now }; // Corregido: antes usaba subYears(now, 1)
+      case 'week': 
+      default: return { gte: subDays(now, 7), lte: now };
     }
-
-    /**
-     * @method getHistoricalData
-     * @description Obtiene datos históricos para un tanque y rango de fechas.
-     * SOLUCIÓN: Se reemplaza la consulta SQL cruda por una consulta Prisma simple
-     * y se procesan los datos en la aplicación. Esto resuelve el error 500.
-     */
-    async getHistoricalData(filters: DashboardFiltersDto, user: User) {
-        const { tankId, startDate, endDate, sensorType } = filters;
-
-        if (!startDate || !endDate) {
-            throw new BadRequestException('Los parámetros startDate y endDate son requeridos.');
-        }
-
-        const formattedData = Object.values(SensorType).reduce(
-            (acc, type) => {
-                acc[type] = [];
-                return acc;
-            },
-            {} as Record<SensorType, { time: string; value: number }[]>,
-        );
-
-        if (!tankId) {
-            return formattedData;
-        }
-
-        const fromDate = startOfDay(parseISO(startDate));
-        const toDate = endOfDay(parseISO(endDate));
-
-        this.logger.debug(
-            `Fetching historical data for tank ${tankId} from ${fromDate.toISOString()} to ${toDate.toISOString()}`,
-        );
-
-        const sensorTypesToFetch = sensorType
-            ? [sensorType]
-            : [SensorType.TEMPERATURE, SensorType.PH, SensorType.OXYGEN];
-
-        for (const type of sensorTypesToFetch) {
-            const rawData = await this.prisma.sensorData.findMany({
-                where: {
-                    sensor: {
-                        tankId: tankId,
-                        type: type,
-                    },
-                    timestamp: {
-                        gte: fromDate,
-                        lte: toDate,
-                    },
-                },
-                select: {
-                    value: true,
-                    timestamp: true,
-                },
-                orderBy: {
-                    timestamp: 'asc',
-                },
-            });
-
-            if (rawData.length > 0) {
-                formattedData[type] = rawData.map((d) => ({
-                    time: d.timestamp.toISOString(),
-                    value: d.value,
-                }));
-            }
-        }
-        
-        return formattedData;
-    }
-
-    /**
-     * @method getTanksOverview
-     * @description Obtiene una vista general de todos los tanques de un usuario.
-     * @param {DashboardFiltersDto} filters - Filtros de la solicitud.
-     * @param {User} user - El usuario que realiza la solicitud.
-     * @returns {Promise<object[]>} - Lista de tanques con sus datos clave.
-     */
-    async getTanksOverview(filters: DashboardFiltersDto, user: User) {
-        const targetUserId = this.resolveTargetUserId(filters.userId, user);
-        const tanks = await this.prisma.tank.findMany({
-            where: {
-                userId: targetUserId,
-                ...(filters.tankId && { id: filters.tankId }),
-            },
-            include: {
-                sensors: {
-                    include: { sensorData: { orderBy: { timestamp: 'desc' }, take: 1 } },
-                },
-                _count: { select: { sensors: true } },
-            },
-        });
-        return tanks.map((tank) => ({
-            id: tank.id,
-            name: tank.name,
-            location: tank.location,
-            status: tank.status,
-            sensorsCount: tank._count.sensors,
-            lastReading:
-                tank.sensors.length > 0
-                    ? tank.sensors.reduce((latest, sensor) => {
-                            const sensorLastReading = sensor.sensorData[0]?.timestamp;
-                            return !latest || (sensorLastReading && sensorLastReading > latest)
-                                ? sensorLastReading
-                                : latest;
-                      }, null as Date | null)
-                    : null,
-            sensors: tank.sensors.map((sensor) => ({
-                id: sensor.id,
-                name: sensor.name,
-                type: sensor.type,
-                status: sensor.status,
-                lastValue: sensor.sensorData[0]?.value || null,
-                lastUpdate: sensor.sensorData[0]?.timestamp || null,
-            })),
-        }));
-    }
-
-    /**
-     * @method getUsersList
-     * @description Obtiene la lista de usuarios (solo para administradores).
-     * @param {User} user - El usuario que realiza la solicitud.
-     * @returns {Promise<object[]>} - Lista de usuarios.
-     */
-    async getUsersList(user: User) {
-        if (user.role !== Role.ADMIN) {
-            throw new ForbiddenException(
-                'Solo los administradores pueden acceder a la lista de usuarios',
-            );
-        }
-        return this.prisma.user.findMany({
-            select: {
-                id: true,
-                name: true,
-                email: true,
-                _count: { select: { tanks: true } },
-            },
-            orderBy: { name: 'asc' },
-        });
-    }
-
-    /**
-     * @method resolveTargetUserId
-     * @description Resuelve el ID del usuario objetivo basado en el rol del solicitante.
-     * @param {string | undefined} requestedUserId - ID del usuario solicitado en el filtro.
-     * @param {User} currentUser - El usuario autenticado que realiza la solicitud.
-     * @returns {string} - El ID del usuario final para la consulta.
-     */
-    private resolveTargetUserId(
-        requestedUserId: string | undefined,
-        currentUser: User,
-    ): string {
-        if (currentUser.role === Role.ADMIN && requestedUserId) {
-            return requestedUserId;
-        }
-        return currentUser.id;
-    }
+  }
 }
-
