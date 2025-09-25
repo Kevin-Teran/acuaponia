@@ -900,16 +900,29 @@ export interface SystemHealth {
 
 
 /**
+ * @enum {string} ReportStatus
+ * @description Posibles estados del ciclo de vida de un reporte.
+ */
+ export enum ReportStatus {
+  PENDING = 'PENDING',
+  PROCESSING = 'PROCESSING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+}
+
+/**
  * @typedef {object} Report
  * @description Interfaz que define la estructura de un reporte.
  */
- export interface Report {
+export interface Report {
   id: string;
-  name: string;
+  title: string;
   userId: string;
   generationDate: string;
   fileUrl: string;
-  status: 'GENERATED' | 'PENDING' | 'FAILED';
+  status: ReportStatus; 
+  parameters: string | object;
+  createdAt: string;
 }
 
 /**
@@ -922,5 +935,5 @@ export interface CreateReportDto {
   startDate?: string;
   endDate?: string;
   tankId?: string;
-  sensorId?: string;
+  sensorIds?: string[];
 }

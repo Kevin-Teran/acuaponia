@@ -1,10 +1,13 @@
 /**
- * @file /src/app/(main)/ai-assistant/page.tsx
+ * @file page.tsx
+ * @route frontend/src/app/(main)/ai-assistant
  * @description Interfaz de chat que utiliza el cliente Axios centralizado para la autenticación.
- * @author Tu Nombre
- * @version 12.0.0 (Refactored & Fixed Auth)
- * @date 2025-09-18
+ * @author kevin mariano
+ * @version 1.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
  */
+
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
@@ -12,9 +15,8 @@ import { Card } from '@/components/common/Card';
 import { useAuth } from '@/context/AuthContext';
 import { Bot, Sparkles, Clipboard, Trash2, Send } from 'lucide-react';
 import { clsx } from 'clsx';
-import api from '@/config/api'; // CAMBIO 1: Importamos nuestro cliente Axios preconfigurado.
+import api from '@/config/api'; 
 
-// --- Tipos y Constantes ---
 type Message = {
   id: number;
   text: string;
@@ -27,7 +29,6 @@ const PREGUNTAS_SUGERIDAS: string[] = [
   '¿Hay alguna recomendación para el oxígeno disuelto?',
 ];
 
-// --- Componente de Avatar de Usuario ---
 const UserAvatar = ({ name }: { name: string }) => {
   const getInitials = (name: string) => {
     if (!name) return '?';
@@ -48,7 +49,6 @@ const UserAvatar = ({ name }: { name: string }) => {
  * @description Renderiza una interfaz de chat pulida para conversar con el asistente de IA.
  */
 const AsistenteIAPage: React.FC = () => {
-  // CAMBIO 2: Ya no necesitamos obtener el 'token' aquí. El interceptor de Axios lo maneja.
   const { user } = useAuth();
   const [input, setInput] = useState<string>('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -85,24 +85,18 @@ const AsistenteIAPage: React.FC = () => {
 
     setCargando(true);
     try {
-      // CAMBIO 3: Usamos nuestro cliente 'api' (Axios) en lugar de 'fetch'.
-      // Esto automáticamente añade la baseURL y el token de autorización.
       const response = await api.post('/asistente', { pregunta });
 
       const aiResponseText = response.data.respuesta;
       setMessages(prev => [...prev, { id: Date.now() + 1, text: aiResponseText, sender: 'ai' }]);
       
     } catch (error: any) {
-      // CAMBIO 4: Lógica de errores simplificada.
-      // El interceptor en 'api.ts' ya maneja los errores 401 (popup y redirección).
-      // Aquí solo mostramos un mensaje genérico en el chat.
       const errorMsg = error.response?.data?.message || 'Error al contactar al servidor.';
       setMessages(prev => [...prev, { id: Date.now() + 1, text: `Error: ${errorMsg}`, sender: 'ai' }]);
     } finally {
       setCargando(false);
       inputRef.current?.focus();
     }
-  // CAMBIO 5: Eliminamos 'token' de las dependencias.
   }, [cargando, user]);
   
   const handleFormSubmit = (e: React.FormEvent) => { e.preventDefault(); sendMessage(input); };
@@ -110,7 +104,6 @@ const AsistenteIAPage: React.FC = () => {
   const handleClearChat = () => setMessages([]);
 
   return (
-    // El resto del JSX no necesita cambios.
     <div className="flex flex-col h-full -m-6 animate-in fade-in duration-500">
       <header className="flex-shrink-0 flex justify-between items-center p-6 pb-4">
         <div>

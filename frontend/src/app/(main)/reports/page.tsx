@@ -8,27 +8,24 @@
  * @copyright SENA 2025
  */
 
-'use client';
+ 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-// @ts-ignore
-import { Download, FileText, Clock, Loader, AlertCircle, Cpu, CheckSquare } from 'lucide-react';
-import { Card } from '@/components/common/Card';
-import { useAuth } from '@/context/AuthContext';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import Swal from 'sweetalert2';
-import { format, subDays, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
-import * as tankService from '@/services/tankService';
-import * as sensorService from '@/services/sensorService';
-// @ts-ignore
-import * as reportService from '@/services/reportService';
-// @ts-ignore
-import { Report, ReportStatus, Tank, Sensor } from '@/types';
-import { cn } from '@/utils/cn';
-import { socketManager } from '@/services/socketService';
-
-/**
+ import React, { useState, useEffect, useCallback, useMemo } from 'react';
+ import { Download, FileText, Clock, Loader, AlertCircle, Cpu, CheckSquare } from 'lucide-react';
+ import { Card } from '@/components/common/Card';
+ import { useAuth } from '@/context/AuthContext';
+ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+ import Swal from 'sweetalert2';
+ import { format, subDays, parseISO } from 'date-fns';
+ import { es } from 'date-fns/locale';
+ import * as tankService from '@/services/tankService';
+ import * as sensorService from '@/services/sensorService';
+ import * as reportService from '@/services/reportService';
+ import { Report, ReportStatus, Tank, Sensor } from '@/types';
+ import { cn } from '@/utils/cn';
+ import { socketManager } from '@/services/socketService';
+ 
+ /**
  * @typedef {object} ReportFilters
  * @property {string | null} tankId
  * @property {string[]} sensorIds
@@ -85,7 +82,7 @@ const SensorCard: React.FC<{ sensor: Sensor; isSelected: boolean; onToggle: () =
  * @returns {React.ReactElement}
  */
 export default function Reports() {
-  const { user } = useAuth();
+  const { user: currentUser } = useAuth();
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [sensors, setSensors] = useState<Sensor[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
@@ -101,13 +98,13 @@ export default function Reports() {
   });
 
   const fetchInitialData = useCallback(async () => {
-    if (!user) return;
+    if (!currentUser) return;
     setLoading(true);
     try {
       const [tanksData, reportsData] = await Promise.all([
-        tankService.getTanks(user.id),
+        tankService.getTanks(currentUser.id),
         // @ts-ignore
-        reportService.getReports(user.id),
+        reportService.getReports(currentUser.id),
       ]);
       setTanks(tanksData);
       setReports(reportsData);
@@ -119,7 +116,7 @@ export default function Reports() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [currentUser]);
 
   useEffect(() => {
     fetchInitialData();
@@ -141,15 +138,15 @@ export default function Reports() {
   }, []);
 
   useEffect(() => {
-    if (reportForm.tankId && user) {
-        sensorService.getSensors(user.id).then(allSensors => {
+    if (reportForm.tankId && currentUser) {
+        sensorService.getSensors(currentUser.id).then(allSensors => {
             setSensors(allSensors.filter(s => s.tankId === reportForm.tankId));
             setReportForm(prev => ({ ...prev, sensorIds: ['all'] }));
         });
     } else {
         setSensors([]);
     }
-  }, [reportForm.tankId, user]);
+  }, [reportForm.tankId, currentUser]);
 
   const handleToggleSensor = useCallback((sensorId: string) => {
     setReportForm(prev => {
@@ -177,15 +174,18 @@ export default function Reports() {
     try {
       if (!reportForm.tankId) throw new Error('Debe seleccionar un tanque.');
       if (reportForm.sensorIds.length === 0) throw new Error('Debe seleccionar al menos un sensor.');
+      if (!currentUser) throw new Error('Usuario no autenticado.');
 
       const tank = tanks.find(t => t.id === reportForm.tankId);
       const title = `Reporte ${tank?.name} - ${format(new Date(), 'dd-MM-yy')}`;
 
       const newReport = await reportService.createReport({
-        title, type: 'CUSTOM', tankId: reportForm.tankId,
+        reportName: title, 
+        userId: currentUser.id,
+        tankId: reportForm.tankId,
         sensorIds: reportForm.sensorIds.includes('all') ? sensors.map(s => s.id) : reportForm.sensorIds,
         startDate: reportForm.startDate, endDate: reportForm.endDate,
-      });
+    });
 
       setReports(prevReports => [newReport, ...prevReports]);
       Swal.fire({ icon: 'success', title: 'Reporte Solicitado', text: `El reporte "${title}" se está generando.`, timer: 3000, showConfirmButton: false });

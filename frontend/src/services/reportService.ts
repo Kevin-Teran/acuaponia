@@ -41,7 +41,7 @@ export const createReport = async (reportData: CreateReportDto): Promise<Report>
  */
 export const downloadReport = async (reportId: string, format: 'pdf' | 'csv' | 'xlsx'): Promise<Blob> => {
   const response = await api.get(`/reports/download/${reportId}/${format}`, {
-    responseType: 'blob', // Importante para manejar la descarga de archivos
+    responseType: 'blob', 
   });
   return response.data;
 };

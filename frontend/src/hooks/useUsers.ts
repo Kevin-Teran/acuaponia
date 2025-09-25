@@ -3,13 +3,11 @@
  * @description Hook personalizado para la gestión del estado de los usuarios en la UI.
  * Proporciona lógica para obtener, agregar, editar y eliminar usuarios.
  * @author Kevin Mariano 
- * @version 2.0.0
+ * @version 1.0.0
  * @since 1.0.0
  */
 
 import { useState, useEffect, useCallback } from 'react';
-// --- CORRECCIÓN CLAVE ---
-// Importamos las funciones directamente, no el objeto `userService` que ya no existe.
 import { getUsers, createUser, updateUser, deleteUser as deleteUserService } from '../services/userService';
 import { UserFromApi } from '../types';
 
@@ -38,7 +36,6 @@ export const useUsers = () => {
     try {
       setLoading(true);
       setError(null);
-      // Se llama directamente a la función importada
       const userList = await getUsers();
       setUsers(userList);
     } catch (err) {
@@ -60,7 +57,6 @@ export const useUsers = () => {
    */
   const addUser = async (userData: UserFormData) => {
     try {
-      // Se llama directamente a la función importada
       await createUser(userData);
       await fetchUsers();
     } catch (err) {
@@ -75,7 +71,6 @@ export const useUsers = () => {
    */
   const editUser = async (id: string, userData: Partial<UserFormData>) => {
     try {
-      // Se llama directamente a la función importada
       const updatedUserResponse = await updateUser(id, userData);
       setUsers(prevUsers =>
         prevUsers.map(user => (user.id === id ? { ...user, ...updatedUserResponse } : user)),
@@ -92,7 +87,6 @@ export const useUsers = () => {
    */
   const deleteUser = async (id: string) => {
     try {
-      // Se llama directamente a la función importada (con alias para evitar conflicto de nombres)
       await deleteUserService(id);
       await fetchUsers();
     } catch (err) {

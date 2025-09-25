@@ -52,10 +52,8 @@ export const useSensorData = (initialParams: HistoricalDataParams) => {
     setLoading(true);
     setError(null);
     try {
-      // Importante: La función getHistoricalData de dashboardService devuelve un objeto.
       const result: HistoricalData = await getHistoricalData(params);
 
-      // Aplanamos el objeto de datos históricos en un array de SensorData
       const flattenedData: SensorData[] = Object.entries(result).flatMap(([sensorType, entries]) =>
         entries.map(entry => ({
           sensorId: (params.sensorId || 'unknown'),

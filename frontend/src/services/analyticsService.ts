@@ -3,7 +3,7 @@
  * @route frontend/src/services/
  * @description Servicio para interactuar con el módulo de analíticas del backend - SOLUCIÓN FINAL.
  * @author kevin mariano
- * @version 2.0.0
+ * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
