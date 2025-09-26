@@ -65,10 +65,10 @@ export const useDataEntry = () => {
   }, [currentUser]);
 
   useEffect(() => {
-    if (socketManager) {
+    if (socketManager && socketManager.socket) {
       socketManager.socket.connect();
     } else {
-      console.error('❌ SocketManager no está disponible');
+      console.error('❌ SocketManager o su socket no están disponibles');
     }
 
     mqttService.connect();

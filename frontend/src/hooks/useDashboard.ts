@@ -1,293 +1,293 @@
 /**
  * @file useDashboard.ts
- * @description Hook optimizado para el dashboard, con datos en tiempo real de sensores
- * y optimización de re-renders.
+ * @route frontend/src/hooks/
+ * @description Hook corregido para el dashboard con actualizaciones en tiempo real funcionando
  * @author Kevin Mariano
  * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Tank, Sensor, UserFromApi as User, SensorData, Role, SensorType, ManualEntryDto } from '@/types';
-import * as tankService from '@/services/tankService';
-import * as sensorService from '@/services/sensorService';
-import * as userService from '@/services/userService';
-import * as dataService from '@/services/dataService';
-import { EmitterStatus } from '@/services/dataService';
+import { useState, useCallback, useEffect } from 'react';
+import {
+    getSummary,
+    getRealtimeData,
+    getHistoricalData,
+    getUsersListForAdmin,
+} from '@/services/dashboardService';
+import { DashboardFilters, DashboardSummary, RealtimeData, HistoricalData, RealtimeSensorData } from '@/types/dashboard';
+import { UserFromApi, SensorType } from '@/types';
 import { socketManager } from '@/services/socketService';
-import { mqttService } from '@/services/mqttService';
+// Importación de useAuth
 import { useAuth } from '@/context/AuthContext';
-import Swal from 'sweetalert2';
 
-type LoadingState = {
-  users: boolean;
-  tanks: boolean;
-  sensors: boolean;
-  simulations: boolean;
-};
+interface LoadingState {
+    summary: boolean;
+    realtime: boolean;
+    historical: boolean;
+    users: boolean;
+}
 
-type MqttStatus = 'disconnected' | 'connecting' | 'connected';
+// Se define la interfaz del tipo de retorno del hook
+interface UseDashboardReturn {
+    summaryData: DashboardSummary | null;
+    realtimeData: RealtimeData;
+    historicalData: HistoricalData;
+    usersList: UserFromApi[];
+    loading: LoadingState;
+    error: string | null;
+    fetchSummary: (filters: DashboardFilters) => Promise<void>;
+    fetchRealtimeData: (filters: DashboardFilters) => Promise<void>;
+    fetchHistoricalData: (filters: DashboardFilters) => Promise<void>;
+    fetchUsersList: () => Promise<void>;
+}
 
-export const useDashboard = () => {
-  const { user: currentUser } = useAuth();
-  const isAdmin = currentUser?.role === 'ADMIN';
+const MAX_LIVE_DATA_POINTS = 100;
 
-  const [users, setUsers] = useState<User[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(currentUser?.id || null);
-  const [tanks, setTanks] = useState<Tank[]>([]);
-  const [selectedTankId, setSelectedTankId] = useState<string>('');
-  const [sensors, setSensors] = useState<Sensor[]>([]);
-
-  const [loading, setLoading] = useState<LoadingState>({ users: true, tanks: true, sensors: true, simulations: true });
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmittingManual, setIsSubmittingManual] = useState(false);
-  const [isTogglingSimulation, setIsTogglingSimulation] = useState<Set<string>>(new Set());
-
-  const [manualReadings, setManualReadings] = useState<Record<string, string>>({});
-
-  const [activeSimulations, setActiveSimulations] = useState<EmitterStatus[]>([]);
-  const [mqttStatus, setMqttStatus] = useState<MqttStatus>('disconnected');
-
-  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  const syncSimulationStatus = useCallback(async () => {
-    if (!currentUser) return;
-    try {
-      const statusData = await dataService.getEmitterStatus();
-      setActiveSimulations(statusData);
-    } catch (err) {
-      console.error('❌ [SYNC] Error sincronizando estado:', err);
-    } finally {
-      setLoading(prev => ({ ...prev, simulations: false }));
-    }
-  }, [currentUser]);
-
-  useEffect(() => {
-    if (socketManager && socketManager.socket) {
-      socketManager.socket.connect();
-    } else {
-      console.error('❌ SocketManager no está disponible');
-    }
-
-    mqttService.connect();
-    
-    const unsubscribeMqtt = mqttService.onStatusChange(status => {
-      if (status.connected) setMqttStatus('connected');
-      else if (status.connecting) setMqttStatus('connecting');
-      else setMqttStatus('disconnected');
+// Se asigna explícitamente el tipo de retorno `UseDashboardReturn` al hook
+export const useDashboard = (): UseDashboardReturn => {
+    const { user } = useAuth();
+    const [summaryData, setSummaryData] = useState<DashboardSummary | null>(null);
+    const [realtimeData, setRealtimeData] = useState<RealtimeData>({});
+    const [historicalData, setHistoricalData] = useState<HistoricalData>({});
+    const [usersList, setUsersList] = useState<UserFromApi[]>([]);
+    const [loading, setLoading] = useState<LoadingState>({
+        summary: true,
+        realtime: true,
+        historical: true,
+        users: false,
     });
+    const [error, setError] = useState<string | null>(null);
 
-    const handleSensorUpdate = (data: SensorData) => {
-      setActiveSimulations(prevSims =>
-        prevSims.map(sim => {
-          if (sim.sensorId === data.sensorId) {
-            const updatedValue = data.value !== undefined ? data.value : sim.currentValue;
-            return { ...sim, currentValue: updatedValue };
-          }
-          return sim;
-        })
-      );
-    };
-
-    if (socketManager && socketManager.socket) {
-      socketManager.socket.on('new_sensor_data', handleSensorUpdate);
-    }
-
-    syncSimulationStatus();
-    syncIntervalRef.current = setInterval(syncSimulationStatus, 15000);
-
-    return () => {
-      if (socketManager && socketManager.socket) {
-        socketManager.socket.off('new_sensor_data', handleSensorUpdate);
-        socketManager.socket.disconnect();
-      }
-      
-      mqttService.disconnect();
-      unsubscribeMqtt();
-      
-      if (syncIntervalRef.current) {
-        clearInterval(syncIntervalRef.current);
-      }
-    };
-  }, [syncSimulationStatus]);
-
-  useEffect(() => {
-    const loadUsers = async () => {
-      if (!isAdmin) {
-        if (currentUser) setUsers([currentUser as User]);
-        setLoading(prev => ({ ...prev, users: false }));
-        return;
-      }
-      try {
-        const usersData = await userService.getUsers();
-        setUsers(usersData);
-      } catch (err) { setError('No se pudo cargar la lista de usuarios.'); }
-      finally { setLoading(prev => ({ ...prev, users: false })); }
-    };
-    loadUsers();
-  }, [isAdmin, currentUser]);
-
-  useEffect(() => {
-    if (!selectedUserId) {
-        setTanks([]);
-        setSensors([]);
-        setLoading(prev => ({...prev, tanks: false, sensors: false}));
-        return;
-    };
-    const loadTanks = async () => {
-      setLoading(prev => ({ ...prev, tanks: true }));
-      try {
-        const tanksData = await tankService.getTanks(selectedUserId);
-        setTanks(tanksData);
-        if (tanksData.length > 0 && !tanksData.some(t => t.id === selectedTankId)) {
-          setSelectedTankId(tanksData[0].id);
-        } else if (tanksData.length === 0) {
-          setSelectedTankId('');
-          setSensors([]);
+    useEffect(() => {
+        const token = localStorage.getItem('accessToken');
+        if (socketManager && token) {
+            socketManager.connect(token);
         }
-      } catch (err) { setError('No se pudieron cargar los tanques.'); }
-      finally { setLoading(prev => ({ ...prev, tanks: false })); }
-    };
-    loadTanks();
-  }, [selectedUserId, selectedTankId]);
 
-  useEffect(() => {
-    if (!selectedTankId) {
-        setSensors([]);
-        setLoading(prev => ({...prev, sensors: false}));
-        return;
-    };
-    const loadSensors = async () => {
-        setLoading(prev => ({ ...prev, sensors: true }));
+        /**
+         * @function handleNewSensorData
+         * @description Maneja los nuevos datos de sensores que llegan por WebSocket
+         */
+        const handleNewSensorData = (newSensorData: any) => {
+            console.log('⚡️ Nuevo dato de sensor recibido:', newSensorData);
+
+            if (!newSensorData || !newSensorData.sensor) {
+                console.warn('Datos de sensor inválidos recibidos:', newSensorData);
+                return;
+            }
+
+            const sensorType = newSensorData.sensor.type as SensorType;
+            const sensorId = newSensorData.sensor.id;
+
+            setRealtimeData(prev => {
+                const currentTypeData = prev[sensorType] || [];
+
+                const existingSensorIndex = currentTypeData.findIndex(
+                    (sensor: RealtimeSensorData) => sensor.sensorId === sensorId
+                );
+
+                let updatedTypeData;
+                if (existingSensorIndex >= 0) {
+                    updatedTypeData = currentTypeData.map((sensor: RealtimeSensorData, index) => {
+                        if (index === existingSensorIndex) {
+                            return {
+                                ...sensor,
+                                value: newSensorData.value,
+                                timestamp: newSensorData.timestamp,
+                            };
+                        }
+                        return sensor;
+                    });
+                } else {
+                    const newSensorItem: RealtimeSensorData = {
+                        sensorId: sensorId,
+                        sensorName: newSensorData.sensor.name,
+                        tankName: newSensorData.sensor.tank?.name || 'Tanque desconocido',
+                        value: newSensorData.value,
+                        timestamp: newSensorData.timestamp,
+                        hardwareId: newSensorData.sensor.hardwareId,
+                        type: sensorType,
+                    };
+                    updatedTypeData = [...currentTypeData, newSensorItem];
+                }
+
+                return {
+                    ...prev,
+                    [sensorType]: updatedTypeData,
+                };
+            });
+
+            setHistoricalData(prev => {
+                if (!prev[sensorType]) {
+                    return prev;
+                }
+
+                const currentData = prev[sensorType] || [];
+                const newDataPoint = {
+                    time: new Date(newSensorData.timestamp).toISOString(),
+                    value: newSensorData.value,
+                };
+
+                const updatedData = [...currentData, newDataPoint]
+                    .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
+                if (updatedData.length > MAX_LIVE_DATA_POINTS) {
+                    updatedData.splice(0, updatedData.length - MAX_LIVE_DATA_POINTS);
+                }
+
+                return {
+                    ...prev,
+                    [sensorType]: updatedData,
+                };
+            });
+        };
+
+        /**
+         * @function handleReportUpdate
+         * @description Maneja las actualizaciones de reportes
+         */
+        const handleReportUpdate = (reportData: any) => {
+            console.log('📊 Actualización de reporte recibida:', reportData);
+        };
+
+        /**
+         * @function handleNewAlert
+         * @description Maneja las nuevas alertas
+         */
+        const handleNewAlert = (alertData: any) => {
+            console.log('🚨 Nueva alerta recibida:', alertData);
+            setSummaryData(prev => {
+                if (prev) {
+                    return {
+                        ...prev,
+                        recentAlerts: prev.recentAlerts + 1,
+                    };
+                }
+                return prev;
+            });
+        };
+
+        /**
+         * @function subscribeToEvents
+         * @description Suscribe a los eventos del socket
+         */
+        function subscribeToEvents() {
+            if (!socketManager || !socketManager.socket) {
+                console.error('❌ Socket no está disponible para suscribirse a eventos');
+                return;
+            }
+
+            const socket = socketManager.socket;
+            socket.on('new_sensor_data', handleNewSensorData);
+            socket.on('report_status_update', handleReportUpdate);
+            socket.on('new-alert', handleNewAlert);
+        }
+
+        /**
+         * @function handleConnect
+         * @description Maneja la conexión del socket
+         */
+        const handleConnect = () => {
+            console.log('🔌 Socket conectado, suscribiendo a eventos...');
+            subscribeToEvents();
+        };
+
+        // Verificar si el socket está disponible y conectado
+        if (socketManager && socketManager.socket) {
+            if (socketManager.socket.connected) {
+                console.log('🔌 Socket ya está conectado, suscribiendo a eventos...');
+                subscribeToEvents();
+            } else {
+                console.log('🔌 Socket no conectado, esperando conexión...');
+                socketManager.socket.on('connect', handleConnect);
+            }
+        } else {
+            console.error('❌ SocketManager no está disponible');
+        }
+
+        // Cleanup function
+        return () => {
+            if (socketManager && socketManager.socket) {
+                const socket = socketManager.socket;
+                socket.off('new_sensor_data', handleNewSensorData);
+                socket.off('report_status_update', handleReportUpdate);
+                socket.off('new-alert', handleNewAlert);
+                socket.off('connect', handleConnect);
+            }
+        };
+    }, []);
+
+    const fetchSummary = useCallback(async (filters: DashboardFilters) => {
         try {
-            const sensorsData = await sensorService.getSensorsByTank(selectedTankId);
-            setSensors(sensorsData);
-        } catch(err) { setError("No se pudieron cargar los sensores."); }
-        finally { setLoading(prev => ({ ...prev, sensors: false })); }
+            setLoading(prev => ({ ...prev, summary: true }));
+            const data = await getSummary(filters);
+            setSummaryData(data as DashboardSummary);
+            setError(null);
+        } catch (err) {
+            setError('Error al cargar el resumen de datos.');
+            console.error('Error en fetchSummary:', err);
+        } finally {
+            setLoading(prev => ({ ...prev, summary: false }));
+        }
+    }, []);
+
+    const fetchRealtimeData = useCallback(async (filters: DashboardFilters) => {
+        try {
+            setLoading(prev => ({ ...prev, realtime: true }));
+            const data = await getRealtimeData(filters);
+            setRealtimeData(data);
+            setError(null);
+        } catch (err) {
+            setError('Error al cargar los datos en tiempo real.');
+            console.error('Error en fetchRealtimeData:', err);
+        } finally {
+            setLoading(prev => ({ ...prev, realtime: false }));
+        }
+    }, []);
+
+    const fetchHistoricalData = useCallback(async (filters: DashboardFilters) => {
+        if (!filters.startDate || !filters.endDate) {
+            console.warn('fetchHistoricalData requiere startDate y endDate');
+            return;
+        }
+        try {
+            setLoading(prev => ({ ...prev, historical: true }));
+            const data = await getHistoricalData(filters);
+            setHistoricalData(data);
+            setError(null);
+        } catch (err) {
+            setError('Error al cargar los datos históricos.');
+            console.error('Error en fetchHistoricalData:', err);
+        } finally {
+            setLoading(prev => ({ ...prev, historical: false }));
+        }
+    }, []);
+
+    const fetchUsersList = useCallback(async () => {
+        try {
+            setLoading(prev => ({ ...prev, users: true }));
+            const data = await getUsersListForAdmin();
+            setUsersList(data);
+            setError(null);
+        } catch (err) {
+            setError('Error al cargar la lista de usuarios.');
+            console.error('Error en fetchUsersList:', err);
+        } finally {
+            setLoading(prev => ({ ...prev, users: false }));
+        }
+    }, []);
+
+    return {
+        summaryData,
+        realtimeData,
+        historicalData,
+        usersList,
+        loading,
+        error,
+        fetchSummary,
+        fetchRealtimeData,
+        fetchHistoricalData,
+        fetchUsersList,
     };
-    loadSensors();
-  }, [selectedTankId]);
-
-  const handleUserChange = useCallback((userId: string) => {
-    setSelectedUserId(userId);
-    setSelectedTankId('');
-  }, []);
-
-  const handleTankChange = useCallback((tankId: string) => {
-    setSelectedTankId(tankId);
-  }, []);
-
-  const handleManualReadingChange = useCallback((sensorId: string, value: string) => {
-    setManualReadings(prev => ({ ...prev, [sensorId]: value }));
-  }, []);
-
-  const handleManualSubmit = useCallback(async () => {
-    const entries: ManualEntryDto[] = Object.entries(manualReadings)
-      .map(([sensorId, value]) => ({ sensorId, value: parseFloat(value), timestamp: new Date() }))
-      .filter(entry => !isNaN(entry.value));
-
-    if (entries.length === 0) {
-      Swal.fire('Atención', 'Debe ingresar al menos un valor numérico válido.', 'warning');
-      return;
-    }
-    setIsSubmittingManual(true);
-    try {
-      await dataService.addManualEntries(entries);
-      setManualReadings({});
-      Swal.fire('¡Éxito!', `Se guardaron ${entries.length} lecturas.`, 'success');
-    } catch (err) {
-      Swal.fire('Error', 'No se pudieron guardar los datos.', 'error');
-    } finally {
-      setIsSubmittingManual(false);
-    }
-  }, [manualReadings]);
-
-  const toggleSimulation = useCallback(async (sensorId: string) => {
-    if (isTogglingSimulation.has(sensorId)) return;
-    const isActive = activeSimulations.some(sim => sim.sensorId === sensorId);
-    setIsTogglingSimulation(prev => new Set(prev).add(sensorId));
-    try {
-      if (isActive) {
-        await dataService.stopEmitter(sensorId);
-      } else {
-        await dataService.startEmitters([sensorId]);
-      }
-      await syncSimulationStatus(); 
-    } catch (error) {
-      Swal.fire('Error', 'No se pudo cambiar el estado de la simulación.', 'error');
-    } finally {
-      setIsTogglingSimulation(prev => { const newSet = new Set(prev); newSet.delete(sensorId); return newSet; });
-    }
-  }, [isTogglingSimulation, activeSimulations, syncSimulationStatus]);
-
-  const batchOperation = useCallback(async (operation: 'start' | 'stop', sensorIds: string[]) => {
-    if (sensorIds.length === 0) return;
-    try {
-      operation === 'start'
-        ? await dataService.startEmitters(sensorIds)
-        : await dataService.stopMultipleEmitters(sensorIds);
-      await syncSimulationStatus();
-    } catch (error) {
-      Swal.fire('Error', `La operación por lotes (${operation}) falló.`, 'error');
-    }
-  }, [syncSimulationStatus]);
-
-  const getUnitForSensorType = useCallback((type: SensorType | string): string => {
-    const units: Record<string, string> = { TEMPERATURE: '°C', PH: 'pH', OXYGEN: 'mg/L' };
-    return units[type] || '';
-  }, []);
-
-  const isSimulationActive = useCallback((sensorId: string) => {
-    return activeSimulations.some(sim => sim.sensorId === sensorId);
-  }, [activeSimulations]);
-
-  const getSimulationStatus = useCallback((sensorId: string) => {
-    return activeSimulations.find(sim => sim.sensorId === sensorId);
-  }, [activeSimulations]);
-
-  return {
-    users, tanks, sensors, activeSimulations, mqttStatus,
-    selectedUserId, selectedTankId, manualReadings,
-    loading, error, isAdmin, isSubmittingManual, isTogglingSimulation,
-    handleUserChange, handleTankChange, handleManualReadingChange, handleManualSubmit,
-    toggleSimulation,
-    startMultipleSimulations: (ids: string[]) => batchOperation('start', ids),
-    stopMultipleSimulations: (ids: string[]) => batchOperation('stop', ids),
-    getUnitForSensorType,
-    getActiveSimulationsSummary: () => {
-      const summary: any = {
-        totalActive: 0,
-        totalMessages: 0,
-        byTank: {},
-        byType: {},
-      };
-  
-      activeSimulations.forEach(sim => {
-        summary.totalActive++;
-        summary.totalMessages += sim.messagesCount;
-  
-        if (!summary.byTank[sim.tankId]) {
-          summary.byTank[sim.tankId] = {
-            tankName: sim.tankName,
-            count: 0,
-            simulations: [],
-          };
-        }
-        summary.byTank[sim.tankId].count++;
-        summary.byTank[sim.tankId].simulations.push(sim);
-  
-        if (!summary.byType[sim.type]) {
-          summary.byType[sim.type] = 0;
-        }
-        summary.byType[sim.type]++;
-      });
-  
-      return summary;
-    },
-    isSimulationActive,
-    getSimulationStatus,
-    simulationMetrics: { systemUptime: 0 }, 
-    lastSyncTime: Date.now(),
-  };
 };

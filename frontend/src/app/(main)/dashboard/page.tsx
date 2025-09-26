@@ -2,8 +2,8 @@
  * @file page.tsx
  * @route frontend/src/app/(main)/dashboard
  * @description Página principal del dashboard, con corrección definitiva para la importación de módulos de fecha.
- * @author Kevin Mariano 
- * @version 1.0.3 
+ * @author Kevin Mariano
+ * @version 1.0.3
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -62,9 +62,13 @@ const getInitialDates = () => {
 
 const DashboardPage: React.FC = () => {
 	const { user } = useAuth();
+	
+	// Corregido: Llamada y desestructuración separada para useInfrastructure
 	const { tanks, fetchDataForUser } = useInfrastructure(
 		user?.role === Role.ADMIN,
 	);
+	
+	// Corregido: Llamada y desestructuración separada para useDashboard
 	const {
 		summaryData,
 		realtimeData,
@@ -76,6 +80,7 @@ const DashboardPage: React.FC = () => {
 		fetchHistoricalData,
 		fetchUsersList,
 	} = useDashboard();
+
 
 	const [settings, setSettings] = useState<UserSettings | null>(null);
 
