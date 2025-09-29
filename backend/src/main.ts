@@ -20,9 +20,15 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
+  const frontendProtocol = process.env.FRONTEND_PROTOCOL || 'http';
+  const frontendHost = process.env.FRONTEND_HOST || 'localhost';
+  const frontendPort = process.env.FRONTEND_PORT; 
+  const isStandardPort = (frontendPort === '80' && frontendProtocol === 'http') || (frontendPort === '443' && frontendProtocol === 'https');
+  const frontendUrl = (isStandardPort || !frontendPort) ? `${frontendProtocol}://${frontendHost}` : `${frontendProtocol}://${frontendHost}:${frontendPort}`;
+
   app.enableCors({
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: frontendUrl, 
     credentials: true,
   });
 
@@ -44,7 +50,7 @@ async function bootstrap() {
 
   setupSwagger(app);
 
-  const port = process.env.PORT || 5001; 
+  const port = process.env.PORT ? parseInt(process.env.PORT) : 5001; 
   await app.listen(port);
 
   logger.log(`🚀 La aplicación está corriendo en: http://localhost:${port}/api`);
