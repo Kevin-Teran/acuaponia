@@ -1,9 +1,9 @@
 /**
  * @file page.tsx
  * @route frontend/src/app/(main)/dashboard
- * @description Página principal del dashboard, con corrección definitiva para la importación de módulos de fecha.
+ * @description Página principal del dashboard completamente corregida y optimizada
  * @author Kevin Mariano
- * @version 1.0.3
+ * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -41,13 +41,11 @@ const LineChart = dynamic(
 	},
 );
 
-// --- Constantes ---
 const TIME_ZONE = 'America/Bogota';
 
 /**
  * @function getInitialDates
- * @description Calcula las fechas de inicio y fin iniciales en la zona horaria de la aplicación.
- * @returns {{startDate: string, endDate: string}} - Fechas formateadas como YYYY-MM-DD.
+ * @description Calcula las fechas iniciales en zona horaria local
  */
 const getInitialDates = () => {
 	const nowInAppTimeZone = fromZonedTime(new Date(), TIME_ZONE);
@@ -59,31 +57,27 @@ const getInitialDates = () => {
 	};
 };
 
-
 const DashboardPage: React.FC = () => {
 	const { user } = useAuth();
 	
-	// Corregido: Llamada y desestructuración separada para useInfrastructure
 	const { tanks, fetchDataForUser } = useInfrastructure(
 		user?.role === Role.ADMIN,
 	);
 	
-	// Corregido: Llamada y desestructuración separada para useDashboard
 	const {
 		summaryData,
 		realtimeData,
 		historicalData,
 		usersList,
 		loading,
+		error,
 		fetchSummary,
 		fetchRealtimeData,
 		fetchHistoricalData,
 		fetchUsersList,
 	} = useDashboard();
 
-
 	const [settings, setSettings] = useState<UserSettings | null>(null);
-
 	const [filters, setFilters] = useState(() => {
 		const { startDate, endDate } = getInitialDates();
 		return {
@@ -95,41 +89,70 @@ const DashboardPage: React.FC = () => {
 		};
 	});
 
+	/**
+	 * Inicialización del usuario y configuraciones
+	 */
 	useEffect(() => {
 		if (user) {
-			getSettings().then(setSettings);
+			console.log('👤 [Dashboard] Usuario autenticado:', user.email);
+			
+			getSettings()
+				.then(userSettings => {
+					console.log('⚙️ [Dashboard] Configuraciones cargadas:', userSettings);
+					setSettings(userSettings);
+				})
+				.catch(err => console.error('❌ [Dashboard] Error cargando configuraciones:', err));
+			
 			if (user.role === Role.ADMIN) {
+				console.log('👑 [Dashboard] Usuario admin, cargando lista de usuarios');
 				fetchUsersList();
 			}
+			
 			if (!filters.userId) {
 				setFilters((prev) => ({ ...prev, userId: user.id }));
 			}
 		}
 	}, [user, fetchUsersList, filters.userId]);
 
+	/**
+	 * Cargar infraestructura cuando cambia el userId
+	 */
 	useEffect(() => {
 		if (filters.userId) {
+			console.log('🏗️ [Dashboard] Cargando infraestructura para usuario:', filters.userId);
 			fetchDataForUser(filters.userId);
 		}
 	}, [filters.userId, fetchDataForUser]);
 
+	/**
+	 * Seleccionar el primer tanque automáticamente
+	 */
 	useEffect(() => {
 		if (tanks.length > 0) {
 			const currentTankIsValid = tanks.some((t) => t.id === filters.tankId);
 			if (!filters.tankId || !currentTankIsValid) {
+				console.log('🎯 [Dashboard] Seleccionando primer tanque:', tanks[0].name);
 				setFilters((prev) => ({ ...prev, tankId: tanks[0].id }));
 			}
 		} else {
 			if (filters.tankId) {
+				console.log('⚠️ [Dashboard] No hay tanques disponibles');
 				setFilters((prev) => ({ ...prev, tankId: undefined }));
 			}
 		}
 	}, [tanks, filters.tankId]);
 
+	/**
+	 * Cargar datos cuando los filtros están completos
+	 */
 	const memoizedFetchData = useCallback(() => {
 		if (!filters.userId || !filters.tankId || !filters.startDate || !filters.endDate) {
+			console.log('⏳ [Dashboard] Filtros incompletos, esperando...', filters);
 			return;
 		}
+
+		console.log('🔄 [Dashboard] Cargando datos con filtros:', filters);
+		
 		fetchSummary(filters);
 		fetchRealtimeData(filters);
 		fetchHistoricalData(filters);
@@ -139,13 +162,21 @@ const DashboardPage: React.FC = () => {
 		memoizedFetchData();
 	}, [memoizedFetchData]);
 
+	/**
+	 * Manejar cambios en los filtros
+	 */
 	const handleFiltersChange = (newFilters: Partial<typeof filters>) => {
+		console.log('🔧 [Dashboard] Actualizando filtros:', newFilters);
+		
 		setFilters((prev) => {
 			const updated = { ...prev, ...newFilters };
+			
 			if (newFilters.userId && newFilters.userId !== prev.userId) {
+				console.log('👤 [Dashboard] Usuario cambiado, reseteando tankId');
 				updated.tankId = undefined;
 				updated.sensorType = undefined;
 			}
+			
 			return updated;
 		});
 	};
@@ -172,6 +203,7 @@ const DashboardPage: React.FC = () => {
 			transition={{ duration: 0.5 }}
 			className='container mx-auto space-y-8 p-4 md:p-6 lg:p-8'
 		>
+			{/* Header */}
 			<div>
 				<h1 className='text-3xl font-bold text-gray-900 dark:text-white'>
 					Dashboard de Monitoreo
@@ -181,6 +213,7 @@ const DashboardPage: React.FC = () => {
 				</p>
 			</div>
 
+			{/* Filtros */}
 			<DashboardFilters
 				filters={filters}
 				onFiltersChange={handleFiltersChange}
@@ -190,24 +223,36 @@ const DashboardPage: React.FC = () => {
 				loading={loading.users}
 			/>
 
+			{/* Mensaje de error global */}
+			{error && (
+				<div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center dark:border-red-800 dark:bg-red-900/20">
+					<p className="text-red-800 dark:text-red-200">
+						⚠️ {error}
+					</p>
+				</div>
+			)}
+
+			{/* Estado de carga inicial */}
 			{(loading.summary || loading.historical) && !summaryData && (
 				<div className='py-12 text-center'>
 					<LoadingSpinner />
 				</div>
 			)}
 
-			{!filters.tankId ? (
+			{/* Mensaje cuando no hay tanque seleccionado */}
+			{!filters.tankId && !loading.summary ? (
 				<div className='rounded-xl border border-amber-200 bg-amber-50 p-8 text-center dark:border-amber-800 dark:bg-amber-900/20'>
 					<Container className='mx-auto mb-4 h-16 w-16 text-amber-500' />
 					<h3 className='mb-2 text-xl font-semibold text-amber-800 dark:text-amber-200'>
 						Selecciona un tanque
 					</h3>
 					<p className='text-amber-600 dark:text-amber-400'>
-						Para poder visualizar los datos, primero debes seleccionar un tanque.
+						Para visualizar los datos, primero debes seleccionar un tanque.
 					</p>
 				</div>
 			) : (
 				<>
+					{/* Estadísticas de Admin */}
 					{isAdmin && (
 						<AdminStatCards
 							stats={{
@@ -218,11 +263,15 @@ const DashboardPage: React.FC = () => {
 							loading={loading.summary}
 						/>
 					)}
+
+					{/* Tarjetas de resumen */}
 					<SummaryCards
 						data={summaryData}
 						loading={loading.summary}
 						currentUserRole={user.role}
 					/>
+
+					{/* Lecturas en tiempo real */}
 					<section>
 						<h2 className='mb-4 text-2xl font-bold text-gray-900 dark:text-white'>
 							Lecturas en Tiempo Real
@@ -234,6 +283,7 @@ const DashboardPage: React.FC = () => {
 						/>
 					</section>
 
+					{/* Gráficos históricos */}
 					<section>
 						<h2 className='mb-4 text-2xl font-bold text-gray-900 dark:text-white'>
 							Tendencias Históricas
