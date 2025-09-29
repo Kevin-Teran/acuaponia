@@ -18,7 +18,7 @@ import '../globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'SENA Acuaponia',
+  title: 'SENA-Acuaponía',
   description: 'Plataforma de monitoreo de sistemas acuapónicos.',
   icons: {
     icon: '/logo-sena.png',

@@ -12,6 +12,11 @@ import { IsOptional, IsString } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class DashboardFiltersDto {
+  @ApiPropertyOptional({ description: 'ID del usuario para filtrar los datos (generalmente para administradores).' })
+  @IsOptional()
+  @IsString()
+  userId?: string; // <- CORRECCIÓN: Se agrega userId para aceptar el filtro enviado por el frontend.
+
   @ApiPropertyOptional({ description: 'ID del tanque para filtrar los datos.' })
   @IsOptional()
   @IsString()

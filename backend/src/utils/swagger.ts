@@ -33,7 +33,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
  */
 export const setupSwagger = (app: INestApplication): void => {
   const config = new DocumentBuilder()
-    .setTitle('Acuaponia API')
+    .setTitle('Acuaponía API')
     .setDescription('Documentación completa de la API para el sistema de acuaponía.')
     .setVersion('1.0')
     .addBearerAuth()

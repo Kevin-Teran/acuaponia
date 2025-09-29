@@ -14,6 +14,7 @@ export interface DashboardFilters {
   userId?: string;
   tankId?: string;
   sensorType?: SensorType;
+  range?: 'day' | 'week' | 'month' | 'year';
   startDate?: string;
   endDate?: string;
 }

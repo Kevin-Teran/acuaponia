@@ -323,21 +323,25 @@ const GaugeItem = ({
  */
 export const GaugeChart = ({ data, settings, loading }: GaugeChartProps) => {
     const sensorData = useMemo(() => {
-        if (!data || !settings) return [];
+        if (!data) return []; 
         const allowedTypes = [
             SensorType.TEMPERATURE,
             SensorType.PH,
             SensorType.OXYGEN,
         ];
         return Object.entries(data)
-            .flatMap(([type, values]) =>
-                values.map((v) => ({ ...v, type: type as SensorType })),
-            )
+            .flatMap(([type, values]) => {
+                const normalizedType = type.toUpperCase() as SensorType; 
+
+                return Array.isArray(values) 
+                    ? values.map((v) => ({ ...v, type: normalizedType }))
+                    : []; 
+            })
             .filter((sensor) => allowedTypes.includes(sensor.type))
             .sort(
                 (a, b) => allowedTypes.indexOf(a.type) - allowedTypes.indexOf(b.type),
             );
-    }, [data, settings]);
+    }, [data, settings]); 
 
     if (loading) {
         return (
