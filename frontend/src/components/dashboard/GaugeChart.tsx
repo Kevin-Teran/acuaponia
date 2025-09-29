@@ -126,23 +126,12 @@ const SemiCircularGauge = ({
 
     const transition = { duration: 1.5, ease: circOut };
 
-    const needleAngleRad = (percentage / 100) * Math.PI;
+    // FIX DEFINITIVO: La rotación debe ir de 180 grados (0% - izquierda) a 0 grados (100% - derecha).
+    // Si la flecha sale al revés, la fórmula original es la correcta:
+    const rotationAngle = 180 - percentage * 1.8;
 
-    const needleTipX = centerX - Math.cos(needleAngleRad) * needleLength;
-    const needleTipY = centerY - Math.sin(needleAngleRad) * needleLength;
-    const baseOffsetX = (needleBaseWidth / 2) * Math.sin(needleAngleRad);
-    const baseOffsetY = (needleBaseWidth / 2) * -Math.cos(needleAngleRad);
-    const base1X = centerX + baseOffsetX;
-    const base1Y = centerY + baseOffsetY;
-    const base2X = centerX - baseOffsetX;
-    const base2Y = centerY - baseOffsetY;
-
-    const needlePathD = `M ${needleTipX} ${needleTipY} L ${base1X} ${base1Y} L ${base2X} ${base2Y} Z`;
-    const initialNeedlePathD = `M ${
-        centerX - needleLength
-    } ${centerY} L ${centerX} ${centerY - needleBaseWidth / 2} L ${centerX} ${
-        centerY + needleBaseWidth / 2
-    } Z`;
+    // DEFINICIÓN DEL PATH BASE de la aguja (Apuntando a la derecha, posición 0 grados de rotación)
+    const baseNeedlePathD = `M ${centerX + needleLength} ${centerY} L ${centerX} ${centerY - needleBaseWidth / 2} L ${centerX} ${centerY + needleBaseWidth / 2} Z`;
 
     return (
         <div className='relative w-full h-auto flex justify-center items-center'>
@@ -177,11 +166,13 @@ const SemiCircularGauge = ({
                     transition={transition}
                 />
 
-                {/* Aguja Triangular (animada) */}
+                {/* Aguja Triangular (animada) - Usando rotación estable */}
                 <motion.path
                     fill={strokeColor}
-                    initial={{ d: initialNeedlePathD }}
-                    animate={{ d: needlePathD }}
+                    d={baseNeedlePathD} // Usa el path base fijo
+                    style={{ transformOrigin: `${centerX}px ${centerY}px` }} // Define el pivote de rotación
+                    initial={{ rotate: 180 }} // Posición inicial: 180 grados (Extremo izquierdo/MIN)
+                    animate={{ rotate: rotationAngle }} // Rota al ángulo calculado (180 a 0)
                     transition={transition}
                 />
 
