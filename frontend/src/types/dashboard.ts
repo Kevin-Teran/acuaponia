@@ -1,7 +1,7 @@
 /**
  * @file dashboard.ts
  * @route frontend/src/types
- * @description Tipos específicos para el módulo de dashboard.
+ * @description Tipos corregidos y actualizados para el módulo de dashboard
  * @author Kevin Mariano
  * @version 1.0.0
  * @since 1.0.0
@@ -10,6 +10,10 @@
 import { SensorType } from './index';
 import { EmitterStatus } from '@/services/dataService';
 
+/**
+ * @interface DashboardFilters
+ * @description Filtros para consultas del dashboard
+ */
 export interface DashboardFilters {
   userId?: string;
   tankId?: string;
@@ -19,14 +23,23 @@ export interface DashboardFilters {
   endDate?: string;
 }
 
+/**
+ * @interface DashboardSummary
+ * @description Resumen de estadísticas del dashboard
+ */
 export interface DashboardSummary {
   tanksCount: number;
   sensorsCount: number;
-  activeSimulations: number;
   recentAlerts: number;
   totalDataPoints: number;
+  activeSimulations: number;
+  totalAlerts?: number;
 }
 
+/**
+ * @interface RealtimeSensorData
+ * @description Datos de un sensor en tiempo real
+ */
 export interface RealtimeSensorData {
   sensorId: string;
   sensorName: string;
@@ -37,18 +50,41 @@ export interface RealtimeSensorData {
   type: SensorType;
 }
 
+/**
+ * @interface RealtimeData
+ * @description Datos en tiempo real agrupados por tipo de sensor
+ */
+export interface RealtimeData {
+  TEMPERATURE: RealtimeSensorData[];
+  PH: RealtimeSensorData[];
+  OXYGEN: RealtimeSensorData[];
+  [key: string]: RealtimeSensorData[];
+}
+
+/**
+ * @interface HistoricalDataPoint
+ * @description Punto de datos histórico simple
+ */
 export interface HistoricalDataPoint {
-  timestamp: string;
+  time: string;
   value: number;
-  sensorName: string;
-  sensorType: SensorType;
-  tankName: string;
 }
 
+/**
+ * @interface HistoricalData
+ * @description Datos históricos agrupados por tipo de sensor
+ */
 export interface HistoricalData {
-  [key: string]: Array<{ time: string; value: number }>;
+  TEMPERATURE: HistoricalDataPoint[];
+  PH: HistoricalDataPoint[];
+  OXYGEN: HistoricalDataPoint[];
+  [key: string]: HistoricalDataPoint[];
 }
 
+/**
+ * @interface TankOverview
+ * @description Vista general de un tanque
+ */
 export interface TankOverview {
   id: string;
   name: string;
@@ -66,6 +102,10 @@ export interface TankOverview {
   }>;
 }
 
+/**
+ * @interface DashboardUserOption
+ * @description Opción de usuario para selectores
+ */
 export interface DashboardUserOption {
   id: string;
   name: string;
@@ -74,23 +114,19 @@ export interface DashboardUserOption {
 }
 
 /**
- * @typedef {object} RealtimeData
- * @description Contiene los datos en tiempo real de los sensores, agrupados por tipo.
- * @property {RealtimeSensorData[]} [TEMPERATURE] - Datos del sensor de temperatura (opcional).
- * @property {RealtimeSensorData[]} [PH] - Datos del sensor de pH (opcional).
- * @property {RealtimeSensorData[]} [OXYGEN] - Datos del sensor de oxígeno (opcional).
- * @property {RealtimeSensorData[]} [TDS] - Datos del sensor de TDS (opcional).
+ * @interface SimulationSummaryByTank
+ * @description Resumen de simulaciones por tanque
  */
- export interface RealtimeData {
-  [key: string]: RealtimeSensorData[];
-}
-
 export interface SimulationSummaryByTank {
   tankName: string;
   count: number;
   simulations: EmitterStatus[];
 }
 
+/**
+ * @interface SimulationSummary
+ * @description Resumen general de simulaciones
+ */
 export interface SimulationSummary {
   totalActive: number;
   totalMessages: number;
@@ -98,6 +134,10 @@ export interface SimulationSummary {
   byType: Record<string, number>;
 }
 
+/**
+ * @interface SimulationMetrics
+ * @description Métricas del sistema de simulación
+ */
 export interface SimulationMetrics {
   systemUptime: number;
 }

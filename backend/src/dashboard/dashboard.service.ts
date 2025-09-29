@@ -1,80 +1,160 @@
 /**
  * @file dashboard.service.ts
  * @route backend/src/dashboard/
- * @description Servicio para la lógica de negocio del dashboard, incluyendo analíticas en tiempo real.
+ * @description Servicio corregido y optimizado para el dashboard con datos reales y estructurados
  * @author Kevin Mariano
  * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { TankStatus, SensorStatus, Prisma, sensors_type as SensorTypePrisma } from '@prisma/client';
+import { TankStatus, SensorStatus, sensors_type as SensorTypePrisma } from '@prisma/client';
 import { subDays, endOfDay, startOfDay, parseISO, isValid } from 'date-fns';
 import { DashboardFiltersDto } from './dto/dashboard-filters.dto';
-import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class DashboardService {
   private readonly logger = new Logger(DashboardService.name);
 
-  constructor(
-    private prisma: PrismaService,
-    private usersService: UsersService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
+
+  /**
+   * @method getSummaryStats
+   * @description Obtiene estadísticas de resumen estructuradas correctamente
+   */
+  async getSummaryStats(userId: string) {
+    try {
+      this.logger.log(`📊 Obteniendo resumen para usuario: ${userId}`);
+
+      const [activeTanks, activeSensors, totalAlerts, pendingAlerts, totalDataPoints] = await Promise.all([
+        this.prisma.tank.count({
+          where: { userId, status: TankStatus.ACTIVE },
+        }),
+        this.prisma.sensor.count({
+          where: { tank: { userId }, status: SensorStatus.ACTIVE },
+        }),
+        this.prisma.alert.count({
+          where: { userId },
+        }),
+        this.prisma.alert.count({
+          where: { userId, resolved: false },
+        }),
+        this.prisma.sensorData.count({
+          where: { sensor: { tank: { userId } } },
+        }),
+      ]);
+
+      const summary = {
+        tanksCount: activeTanks,
+        sensorsCount: activeSensors,
+        recentAlerts: pendingAlerts,
+        totalAlerts,
+        totalDataPoints,
+      };
+
+      this.logger.log(`✅ Resumen obtenido: ${JSON.stringify(summary)}`);
+      return summary;
+    } catch (error) {
+      this.logger.error(`❌ Error obteniendo resumen: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
 
   /**
    * @method getRealtimeData
-   * @description Obtiene los últimos datos de los sensores de un tanque específico.
-   * @param {string} tankId - ID del tanque.
-   * @returns {Promise<{
-   * temperature: number | null;
-   * ph: number | null;
-   * oxygen: number | null;
-   * }>}
+   * @description Obtiene datos en tiempo real agrupados por tipo de sensor
    */
   async getRealtimeData(tankId: string) {
-    // Obtener los últimos datos de cada tipo de sensor para el tanque
-    const latestData = await this.prisma.sensorData.findMany({
-      where: {
-        tankId,
-        sensor: {
-          status: 'ACTIVE',
+    try {
+      this.logger.log(`⚡ Obteniendo datos en tiempo real para tanque: ${tankId}`);
+
+      if (!tankId) {
+        throw new NotFoundException('Se requiere tankId para obtener datos en tiempo real');
+      }
+
+      const tank = await this.prisma.tank.findUnique({
+        where: { id: tankId },
+        select: { id: true, name: true, userId: true },
+      });
+
+      if (!tank) {
+        throw new NotFoundException(`Tanque con ID ${tankId} no encontrado`);
+      }
+
+      const sensors = await this.prisma.sensor.findMany({
+        where: {
+          tankId,
+          status: SensorStatus.ACTIVE,
         },
-      },
-      orderBy: { timestamp: 'desc' },
-      distinct: ['type'],
-      select: {
-        type: true,
-        value: true,
-      },
-    });
+        include: {
+          tank: {
+            select: {
+              id: true,
+              name: true,
+              userId: true,
+            },
+          },
+        },
+      });
 
-    const data: { [key: string]: number | null } = {
-      temperature: null,
-      ph: null,
-      oxygen: null,
-    };
+      if (sensors.length === 0) {
+        this.logger.warn(`⚠️ No hay sensores activos para el tanque ${tankId}`);
+        return {
+          TEMPERATURE: [],
+          PH: [],
+          OXYGEN: [],
+        };
+      }
 
-    latestData.forEach((d) => {
-      if (d.type === 'TEMPERATURE') data.temperature = d.value;
-      if (d.type === 'PH') data.ph = d.value;
-      if (d.type === 'OXYGEN') data.oxygen = d.value;
-    });
+      const realtimeData = await Promise.all(
+        sensors.map(async (sensor) => {
+          const latestData = await this.prisma.sensorData.findFirst({
+            where: { sensorId: sensor.id },
+            orderBy: { timestamp: 'desc' },
+            select: {
+              value: true,
+              timestamp: true,
+            },
+          });
 
-    return data;
+          if (!latestData) return null;
+
+          return {
+            sensorId: sensor.id,
+            sensorName: sensor.name,
+            tankName: sensor.tank.name,
+            value: latestData.value,
+            timestamp: latestData.timestamp.toISOString(),
+            hardwareId: sensor.hardwareId,
+            type: sensor.type,
+          };
+        }),
+      );
+
+      const validData = realtimeData.filter((d) => d !== null);
+
+      const groupedData = {
+        TEMPERATURE: validData.filter((d) => d.type === 'TEMPERATURE'),
+        PH: validData.filter((d) => d.type === 'PH'),
+        OXYGEN: validData.filter((d) => d.type === 'OXYGEN'),
+      };
+
+      this.logger.log(
+        `✅ Datos en tiempo real obtenidos: ${validData.length} lecturas de ${sensors.length} sensores`,
+      );
+
+      return groupedData;
+    } catch (error) {
+      this.logger.error(`❌ Error obteniendo datos en tiempo real: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   /**
    * @method getChartData
-   * @description Obtiene datos históricos para un tipo de sensor y un rango de fechas.
-   * @param {string} tankId - ID del tanque.
-   * @param {string} sensorType - Tipo de sensor.
-   * @param {string} range - Rango de tiempo.
-   * @param {string} startDate - Fecha de inicio (opcional).
-   * @param {string} endDate - Fecha de fin (opcional).
-   * @returns {Promise<Array<{timestamp: Date, value: number}>>}
+   * @description Obtiene datos históricos formateados para gráficos
    */
   async getChartData(
     tankId: string,
@@ -83,121 +163,104 @@ export class DashboardService {
     startDate?: string,
     endDate?: string,
   ) {
-    const dateFilter = this.getDateFilter(range, startDate, endDate);
-    const data = await this.prisma.sensorData.findMany({
-      where: {
+    try {
+      this.logger.log(`📈 Obteniendo datos históricos: tanque=${tankId}, tipo=${sensorType}, rango=${range}`);
+
+      if (!tankId) {
+        throw new NotFoundException('Se requiere tankId para obtener datos históricos');
+      }
+
+      const dateFilter = this.getDateFilter(range, startDate, endDate);
+
+      const whereClause: any = {
         tankId,
         timestamp: dateFilter,
         sensor: {
-          status: 'ACTIVE',
-          // Correcting the type to use `sensors_type`
-          type: sensorType as SensorTypePrisma,
+          status: SensorStatus.ACTIVE,
         },
-      },
-      orderBy: { timestamp: 'asc' },
-      select: {
-        timestamp: true,
-        value: true,
-      },
-    });
+      };
 
-    return data;
-  }
+      if (sensorType) {
+        whereClause.sensor.type = sensorType;
+      }
 
-  /**
-   * @method getSummaryStats
-   * @description Obtiene estadísticas de resumen del sistema para usuarios no administradores.
-   * @param {string} userId - ID del usuario.
-   * @returns {Promise<any>}
-   */
-  async getSummaryStats(userId: string) {
-    const activeTanks = await this.prisma.tank.count({
-      where: { userId, status: TankStatus.ACTIVE },
-    });
+      const data = await this.prisma.sensorData.findMany({
+        where: whereClause,
+        orderBy: { timestamp: 'asc' },
+        select: {
+          timestamp: true,
+          value: true,
+          type: true,
+        },
+        take: 5000, 
+      });
 
-    const activeSensors = await this.prisma.sensor.count({
-      where: { tank: { userId }, status: SensorStatus.ACTIVE },
-    });
+      const groupedData: Record<string, Array<{ time: string; value: number }>> = {
+        TEMPERATURE: [],
+        PH: [],
+        OXYGEN: [],
+      };
 
-    const totalAlerts = await this.prisma.alert.count({
-      where: { userId },
-    });
+      data.forEach((d) => {
+        const sensorTypeKey = d.type.toString();
+        if (groupedData[sensorTypeKey]) {
+          groupedData[sensorTypeKey].push({
+            time: d.timestamp.toISOString(),
+            value: d.value,
+          });
+        }
+      });
 
-    const pendingAlerts = await this.prisma.alert.count({
-      where: { userId, resolved: false },
-    });
+      this.logger.log(
+        `✅ Datos históricos obtenidos: TEMP=${groupedData.TEMPERATURE.length}, PH=${groupedData.PH.length}, O2=${groupedData.OXYGEN.length}`,
+      );
 
-    return {
-      tanks: activeTanks,
-      sensors: activeSensors,
-      totalAlerts,
-      pendingAlerts,
-    };
-  }
-
-  /**
-   * @method getAdminStats
-   * @description Obtiene estadísticas de resumen para el dashboard de administradores.
-   * @returns {Promise<any>}
-   */
-  async getAdminStats() {
-    const totalUsers = await this.prisma.user.count();
-    const totalTanks = await this.prisma.tank.count();
-    const totalSensors = await this.prisma.sensor.count();
-    const totalAlerts = await this.prisma.alert.count();
-
-    const activeUsers = await this.prisma.user.count({
-      where: { status: 'ACTIVE' },
-    });
-
-    const activeTanks = await this.prisma.tank.count({
-      where: { status: TankStatus.ACTIVE },
-    });
-
-    const activeSensors = await this.prisma.sensor.count({
-      where: { status: SensorStatus.ACTIVE },
-    });
-
-    const userStats = await this.usersService.findAll();
-
-    return {
-      totalUsers,
-      totalTanks,
-      totalSensors,
-      totalAlerts,
-      activeUsers,
-      activeTanks,
-      activeSensors,
-      userStats,
-    };
+      return groupedData;
+    } catch (error) {
+      this.logger.error(`❌ Error obteniendo datos históricos: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   /**
    * @method getDateFilter
-   * @description Genera el filtro de fechas basado en el rango especificado o fechas custom.
-   * @private
-   * @param {string} range - Rango de tiempo (day, week, month, year)
-   * @param {string} startDate - Fecha de inicio custom (opcional)
-   * @param {string} endDate - Fecha de fin custom (opcional)
-   * @returns {{ gte: Date; lte: Date }}
+   * @description Genera filtro de fechas con validación robusta
    */
-  private getDateFilter(range?: string, startDate?: string, endDate?: string): { gte: Date; lte: Date } {
+  private getDateFilter(
+    range?: string,
+    startDate?: string,
+    endDate?: string,
+  ): { gte: Date; lte: Date } {
     if (startDate && endDate) {
       const start = parseISO(startDate);
       const end = parseISO(endDate);
-      
+
       if (isValid(start) && isValid(end)) {
-        return { gte: start, lte: end };
+        this.logger.log(`📅 Usando rango de fechas personalizado: ${startDate} - ${endDate}`);
+        return { gte: startOfDay(start), lte: endOfDay(end) };
       }
     }
 
     const now = new Date();
+    let filter: { gte: Date; lte: Date };
+
     switch (range) {
-      case 'day': return { gte: startOfDay(now), lte: endOfDay(now) };
-      case 'month': return { gte: subDays(now, 30), lte: now }; // Corregido: antes usaba subMonths(now, 1)
-      case 'year': return { gte: subDays(now, 365), lte: now }; // Corregido: antes usaba subYears(now, 1)
-      case 'week': 
-      default: return { gte: subDays(now, 7), lte: now };
+      case 'day':
+        filter = { gte: startOfDay(now), lte: endOfDay(now) };
+        break;
+      case 'month':
+        filter = { gte: subDays(now, 30), lte: now };
+        break;
+      case 'year':
+        filter = { gte: subDays(now, 365), lte: now };
+        break;
+      case 'week':
+      default:
+        filter = { gte: subDays(now, 7), lte: now };
+        break;
     }
+
+    this.logger.log(`📅 Usando rango predefinido: ${range || 'week'}`);
+    return filter;
   }
 }
