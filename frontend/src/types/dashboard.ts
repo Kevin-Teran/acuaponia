@@ -3,7 +3,7 @@
  * @route frontend/src/types
  * @description Tipos corregidos y actualizados para el módulo de dashboard
  * @author Kevin Mariano
- * @version 1.0.0
+ * @version 2.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -38,7 +38,7 @@ export interface DashboardSummary {
 
 /**
  * @interface RealtimeSensorData
- * @description Datos de un sensor en tiempo real
+ * @description Datos de un sensor en tiempo real con umbrales incluidos
  */
 export interface RealtimeSensorData {
   sensorId: string;
@@ -48,17 +48,23 @@ export interface RealtimeSensorData {
   timestamp: string;
   hardwareId: string;
   type: SensorType;
+  thresholds?: { min: number; max: number }; // Umbrales específicos del sensor
 }
 
 /**
  * @interface RealtimeData
- * @description Datos en tiempo real agrupados por tipo de sensor
+ * @description Datos en tiempo real agrupados por tipo de sensor con umbrales globales
  */
 export interface RealtimeData {
   TEMPERATURE: RealtimeSensorData[];
   PH: RealtimeSensorData[];
   OXYGEN: RealtimeSensorData[];
-  [key: string]: RealtimeSensorData[];
+  thresholds?: {
+    TEMPERATURE?: { min: number; max: number };
+    PH?: { min: number; max: number };
+    OXYGEN?: { min: number; max: number };
+  };
+  [key: string]: RealtimeSensorData[] | any;
 }
 
 /**

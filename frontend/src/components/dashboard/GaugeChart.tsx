@@ -1,9 +1,9 @@
 /**
  * @file GaugeChart.tsx
  * @route frontend/src/components/dashboard
- * @description Componente mejorado para mostrar medidores semicirculares. Ahora centrado y con un diseño más pulido.
+ * @description Componente de medidores con aguja CORREGIDA y umbrales desde settings
  * @author Kevin Mariano 
- * @version 1.0.1
+ * @version 2.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -37,18 +37,15 @@ const sensorInfo: Record<string, { icon: React.ElementType; name: string }> = {
 
 /**
  * @function getSensorConfig
- * @description Obtiene la configuración específica para un tipo de sensor, incluyendo rangos y colores.
- * @param {SensorType} type - El tipo de sensor.
- * @param {Settings | null} settings - La configuración del sistema.
- * @returns {object} - La configuración del medidor.
+ * @description Obtiene configuración del sensor con umbrales desde settings
  */
-const getSensorConfig = (type: SensorType, settings: UserSettings | null) => {
+const getSensorConfig = (type: SensorType, settings: UserSettings | null, sensorThresholds?: any) => {
     const defaultThresholds = {
         temperature: { min: 22, max: 28 },
         ph: { min: 6.8, max: 7.6 },
-        oxygen: { min: 5, max: 8 },
+        oxygen: { min: 6, max: 10 },
     };
-    const currentThresholds = settings?.thresholds;
+
     let config;
     let unit = '';
     const colors = {
@@ -57,34 +54,43 @@ const getSensorConfig = (type: SensorType, settings: UserSettings | null) => {
         high: '#ef4444',
     };
 
+    // Prioridad: 1. Umbrales del sensor, 2. Settings del usuario, 3. Defaults
+    let thresholds;
+
     switch (type) {
         case SensorType.TEMPERATURE:
-            config = currentThresholds
-                ? { min: currentThresholds.temperatureMin, max: currentThresholds.temperatureMax }
-                : defaultThresholds.temperature;
+            thresholds = sensorThresholds || 
+                (settings?.thresholds ? {
+                    min: settings.thresholds.temperatureMin,
+                    max: settings.thresholds.temperatureMax
+                } : defaultThresholds.temperature);
             unit = '°C';
             break;
         case SensorType.PH:
-            config = currentThresholds
-                ? { min: currentThresholds.phMin, max: currentThresholds.phMax }
-                : defaultThresholds.ph;
+            thresholds = sensorThresholds || 
+                (settings?.thresholds ? {
+                    min: settings.thresholds.phMin,
+                    max: settings.thresholds.phMax
+                } : defaultThresholds.ph);
             unit = 'pH';
             break;
         case SensorType.OXYGEN:
-            config = currentThresholds
-                ? { min: currentThresholds.oxygenMin, max: currentThresholds.oxygenMax }
-                : defaultThresholds.oxygen;
+            thresholds = sensorThresholds || 
+                (settings?.thresholds ? {
+                    min: settings.thresholds.oxygenMin,
+                    max: settings.thresholds.oxygenMax
+                } : defaultThresholds.oxygen);
             unit = 'mg/L';
             break;
         default:
-            config = { min: 0, max: 100 };
+            thresholds = { min: 0, max: 100 };
             unit = '';
             break;
     }
 
-    const { min, max } = config;
+    const { min, max } = thresholds;
     const range = max - min;
-    const buffer = range > 0 ? range * 0.6 : 3;
+    const buffer = range > 0 ? range * 0.4 : 2; // Reducido de 0.6 a 0.4
 
     return {
         unit,
@@ -97,9 +103,7 @@ const getSensorConfig = (type: SensorType, settings: UserSettings | null) => {
 
 /**
  * @component SemiCircularGauge
- * @description Renderiza el medidor semicircular con la aguja animada.
- * @param {{ percentage: number; strokeColor: string }} props - Propiedades del componente.
- * @returns {React.ReactElement}
+ * @description Medidor semicircular con aguja CORREGIDA para permanecer dentro del arco
  */
 const SemiCircularGauge = ({
     percentage,
@@ -110,8 +114,10 @@ const SemiCircularGauge = ({
 }) => {
     const radius = 35;
     const strokeWidth = 8;
-    const needleLength = radius - 5;
-    const needleBaseWidth = 8;
+    const needleBaseWidth = 6; // Reducido de 8 a 6
+    
+    // CORRECCIÓN CRÍTICA: Reducir longitud de la aguja para que no se salga
+    const needleLength = radius - 12; // Cambiado de radius - 5 a radius - 12
 
     const svgWidth = 100;
     const svgHeight = 60;
@@ -126,12 +132,25 @@ const SemiCircularGauge = ({
 
     const transition = { duration: 1.5, ease: circOut };
 
-    // FIX DEFINITIVO: La rotación debe ir de 180 grados (0% - izquierda) a 0 grados (100% - derecha).
-    // Si la flecha sale al revés, la fórmula original es la correcta:
-    const rotationAngle = 180 - percentage * 1.8;
+    // CORRECCIÓN: Limitar el percentage al rango 0-100
+    const clampedPercentage = Math.max(0, Math.min(100, percentage));
+    const needleAngleRad = (clampedPercentage / 100) * Math.PI;
 
-    // DEFINICIÓN DEL PATH BASE de la aguja (Apuntando a la derecha, posición 0 grados de rotación)
-    const baseNeedlePathD = `M ${centerX + needleLength} ${centerY} L ${centerX} ${centerY - needleBaseWidth / 2} L ${centerX} ${centerY + needleBaseWidth / 2} Z`;
+    const needleTipX = centerX - Math.cos(needleAngleRad) * needleLength;
+    const needleTipY = centerY - Math.sin(needleAngleRad) * needleLength;
+    const baseOffsetX = (needleBaseWidth / 2) * Math.sin(needleAngleRad);
+    const baseOffsetY = (needleBaseWidth / 2) * -Math.cos(needleAngleRad);
+    const base1X = centerX + baseOffsetX;
+    const base1Y = centerY + baseOffsetY;
+    const base2X = centerX - baseOffsetX;
+    const base2Y = centerY - baseOffsetY;
+
+    const needlePathD = `M ${needleTipX} ${needleTipY} L ${base1X} ${base1Y} L ${base2X} ${base2Y} Z`;
+    const initialNeedlePathD = `M ${
+        centerX - needleLength
+    } ${centerY} L ${centerX} ${centerY - needleBaseWidth / 2} L ${centerX} ${
+        centerY + needleBaseWidth / 2
+    } Z`;
 
     return (
         <div className='relative w-full h-auto flex justify-center items-center'>
@@ -150,7 +169,7 @@ const SemiCircularGauge = ({
                     strokeLinecap='round'
                 />
 
-                {/* Arco de progreso (animado) */}
+                {/* Arco de progreso */}
                 <motion.path
                     d={`M ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`}
                     fill='none'
@@ -161,22 +180,20 @@ const SemiCircularGauge = ({
                     initial={{ strokeDashoffset: circumference }}
                     animate={{
                         strokeDashoffset:
-                            circumference - (circumference * percentage) / 100,
+                            circumference - (circumference * clampedPercentage) / 100,
                     }}
                     transition={transition}
                 />
 
-                {/* Aguja Triangular (animada) - Usando rotación estable */}
+                {/* Aguja Triangular */}
                 <motion.path
                     fill={strokeColor}
-                    d={baseNeedlePathD} // Usa el path base fijo
-                    style={{ transformOrigin: `${centerX}px ${centerY}px` }} // Define el pivote de rotación
-                    initial={{ rotate: 180 }} // Posición inicial: 180 grados (Extremo izquierdo/MIN)
-                    animate={{ rotate: rotationAngle }} // Rota al ángulo calculado (180 a 0)
+                    initial={{ d: initialNeedlePathD }}
+                    animate={{ d: needlePathD }}
                     transition={transition}
                 />
 
-                {/* Pivote central de la aguja */}
+                {/* Pivote central */}
                 <circle cx={centerX} cy={centerY} r='4' fill={strokeColor} />
                 <circle cx={centerX} cy={centerY} r='2' fill='white' />
             </svg>
@@ -186,9 +203,7 @@ const SemiCircularGauge = ({
 
 /**
  * @component GaugeItem
- * @description Tarjeta individual para un medidor de sensor.
- * @param {{ data: any; type: SensorType; settings: Settings | null }} props - Propiedades del componente.
- * @returns {React.ReactElement}
+ * @description Tarjeta individual para un medidor
  */
 const GaugeItem = ({
     data,
@@ -199,7 +214,8 @@ const GaugeItem = ({
     type: SensorType;
     settings: UserSettings | null;
 }) => {
-    const config = getSensorConfig(type, settings);
+    // Usar umbrales del sensor si están disponibles, sino usar settings
+    const config = getSensorConfig(type, settings, data.thresholds);
     const { icon: Icon, name } = sensorInfo[type];
 
     const getStatus = (value: number): StatusInfo => {
@@ -223,8 +239,9 @@ const GaugeItem = ({
     };
 
     const status = getStatus(data.value);
-    const rawPercent =
-        ((data.value - config.min) / (config.max - config.min)) * 100;
+    
+    // CORRECCIÓN: Calcular percentage con clamp para evitar que se salga
+    const rawPercent = ((data.value - config.min) / (config.max - config.min)) * 100;
     const valuePercent = Math.max(0, Math.min(100, rawPercent));
 
     const formattedTimestamp = useMemo(() => {
@@ -236,7 +253,6 @@ const GaugeItem = ({
             return "Fecha inválida";
         }
     }, [data.timestamp]);
-
 
     return (
         <motion.div
@@ -308,9 +324,7 @@ const GaugeItem = ({
 
 /**
  * @component GaugeChart
- * @description Componente principal que renderiza una cuadrícula de medidores de sensores.
- * @param {GaugeChartProps} props - Propiedades del componente.
- * @returns {React.ReactElement}
+ * @description Componente principal que renderiza los medidores
  */
 export const GaugeChart = ({ data, settings, loading }: GaugeChartProps) => {
     const sensorData = useMemo(() => {
@@ -322,6 +336,9 @@ export const GaugeChart = ({ data, settings, loading }: GaugeChartProps) => {
         ];
         return Object.entries(data)
             .flatMap(([type, values]) => {
+                // Ignorar la key 'thresholds' si existe
+                if (type === 'thresholds') return [];
+                
                 const normalizedType = type.toUpperCase() as SensorType; 
 
                 return Array.isArray(values) 
