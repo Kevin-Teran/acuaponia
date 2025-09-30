@@ -1,10 +1,9 @@
 /**
  * @file data.service.ts
  * @route /backend/src/data
- * @description Servicio completo y robusto para toda la gestión de datos de sensores.
- * Incluye: simulación, persistencia, recepción y guardado desde MQTT, y endpoints de consulta de datos.
+ * @description Servicio de datos con integración de reportes automáticos
  * @author Kevin Mariano 
- * @version 1.1.0
+ * @version 1.2.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -13,6 +12,7 @@ import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenEx
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../events/events.gateway';
 import { MqttService } from '../mqtt/mqtt.service';
+import { ReportService } from '../reports/reports.service';
 import { ManualEntryDto } from './dto/manual-entry.dto';
 import { GetLatestDataDto } from './dto/get-latest-data.dto';
 import { SensorData, sensors_type as SensorTypePrisma, User, Role, Prisma } from '@prisma/client';
@@ -62,6 +62,8 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
     private eventsGateway: EventsGateway,
     @Inject(forwardRef(() => MqttService))
     private mqttService: MqttService,
+    @Inject(forwardRef(() => ReportService)) // NUEVA INYECCIÓN
+    private reportService: ReportService,
   ) {}
 
   async onModuleInit() {
@@ -137,6 +139,14 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
       activeEmitter.currentValue = data.value;
       activeEmitter.messagesCount++;
     }
+
+    // **NUEVA FUNCIONALIDAD**: Incrementar contador de reportes automáticos
+    try {
+      await this.reportService.incrementDataCounter(sensor.tankId, sensor.tank.userId);
+    } catch (error) {
+      this.logger.error('Error incrementando contador de reportes:', error);
+      // No lanzamos el error para no interrumpir el guardado de datos
+    }
   
     return this.createAndBroadcastEntry({
       sensorId: sensor.id,
@@ -176,6 +186,13 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
       });
       
       if (sensor) {
+        // **NUEVA FUNCIONALIDAD**: Incrementar contador para entradas manuales también
+        try {
+          await this.reportService.incrementDataCounter(sensor.tankId, sensor.tank.userId);
+        } catch (error) {
+          this.logger.error('Error incrementando contador de reportes (manual):', error);
+        }
+
         const data = await this.createAndBroadcastEntry({
           sensorId: entry.sensorId,
           tankId: sensor.tankId,

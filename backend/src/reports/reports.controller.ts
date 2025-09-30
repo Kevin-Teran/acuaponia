@@ -1,94 +1,155 @@
 /**
- * @file reports.controller.ts
- * @route backend/src/reports
- * @description 
- * @author Kevin Mariano 
- * @version 1.0.0 
+ * @file report.controller.ts
+ * @route /backend/src/reports
+ * @description Controlador para endpoints de reportes
+ * @author Kevin Mariano
+ * @version 1.0.1
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
-import {
-  Controller, Post, Body, Get, UseGuards, Req, Query, Res, Param,
-  NotFoundException, InternalServerErrorException, Logger
+ import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  Query,
+  Body,
+  Res,
+  UseGuards,
+  Req,
+  HttpStatus,
+  StreamableFile,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { ReportsService } from './reports.service';
-import { CreateReportDto } from './dto/create-report.dto';
+import { ReportService } from './reports.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { User } from '@prisma/client';
-import * as fs from 'fs';
+import { Role } from '@prisma/client';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 
-/**
- * @controller ReportsController
- * @description Gestiona los endpoints para la creación y descarga de reportes.
- */
-@Controller('reports')
+// Define una interfaz simple para el DTO de creación de reporte
+interface CreateReportDto {
+  reportName: string;
+  tankId: string;
+  sensorIds: string[];
+  startDate: string;
+  endDate: string;
+}
+
+@ApiTags('Reports')
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-export class ReportsController {
-  private readonly logger = new Logger(ReportsController.name);
-
-  constructor(private readonly reportsService: ReportsService) {}
-
-  /**
-   * @route   POST /api/reports
-   * @desc    Crea la solicitud para un nuevo reporte.
-   */
-  @Post()
-  @Roles('ADMIN', 'USER')
-  create(@Body() createReportDto: CreateReportDto, @Req() req: { user: User }) {
-    return this.reportsService.create(createReportDto, req.user);
-  }
+@Controller('reports')
+export class ReportController {
+  constructor(private readonly reportService: ReportService) {}
 
   /**
-   * @route   GET /api/reports
-   * @desc    Obtiene el historial de reportes.
+   * Obtiene todos los reportes del usuario
+   * Permite a los administradores obtener reportes de otros usuarios usando 'userId'.
    */
   @Get()
-  @Roles('ADMIN', 'USER')
-  findAll(@Req() req: { user: User }, @Query('userId') userId?: string) {
-    return this.reportsService.findAll(req.user, userId);
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Obtener lista de reportes' })
+  @ApiQuery({ name: 'userId', required: false, description: 'ID del usuario (opcional, solo para ADMIN)' })
+  @ApiResponse({ status: 200, description: 'Lista de reportes obtenida exitosamente' })
+  async getReports(@Req() req: any, @Query('userId') userId?: string) {
+    // Si el usuario es ADMIN y proporciona un userId, usa ese ID.
+    // De lo contrario, usa el ID del usuario autenticado.
+    const targetUserId = req.user.role === Role.ADMIN && userId ? userId : req.user.id;
+    
+    return this.reportService.getReports(targetUserId);
   }
 
+  // --------------------------------------------------------------------------
+  
   /**
-   * @route   GET /api/reports/download/:id/:format
-   * @desc    Descarga un archivo de reporte generado en el formato especificado.
-   * @returns {void} Envía el archivo como respuesta para su descarga en el navegador.
+   * Crea un nuevo reporte (manual)
    */
-  @Get('download/:id/:format')
-  @Roles('ADMIN', 'USER')
-  async download(
+  @Post()
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Crear un nuevo reporte manual' })
+  @ApiResponse({ status: HttpStatus.CREATED, description: 'Reporte creado y puesto en cola para procesamiento' })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Datos inválidos o falta de parámetros' })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Recurso (Tanque/Sensor) no encontrado' })
+  async createReport(@Body() createReportDto: CreateReportDto, @Req() req: any) {
+    // Inyecta el userId del usuario autenticado en el DTO
+    return this.reportService.createReport({
+      ...createReportDto,
+      userId: req.user.id,
+      // isAutomatic: false por defecto para reportes POST (manuales)
+    });
+  }
+  
+  // --------------------------------------------------------------------------
+
+  /**
+   * Descarga un reporte en formato PDF o Excel
+   */
+  @Get(':id/download')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Descargar un reporte generado' })
+  @ApiParam({ name: 'id', description: 'ID del reporte' })
+  @ApiQuery({ name: 'format', enum: ['pdf', 'xlsx'], description: 'Formato del archivo' })
+  @ApiResponse({ status: 200, description: 'Archivo descargado exitosamente' })
+  @ApiResponse({ status: 404, description: 'Reporte o archivo no encontrado' })
+  @ApiResponse({ status: 400, description: 'El reporte no ha terminado de procesarse' })
+  async downloadReport(
     @Param('id') id: string,
-    @Param('format') format: 'pdf' | 'xlsx',
-    @Req() req: { user: User },
-    @Res() res: Response
+    @Query('format') format: 'pdf' | 'xlsx',
+    @Res({ passthrough: true }) res: Response,
   ) {
-    try {
-      const report = await this.reportsService.findOne(id, req.user);
-      
-      const { filePath, title } = await this.reportsService.generateFileFromData(report, format);
-      
-      if (!fs.existsSync(filePath)) {
-          this.logger.error(`El archivo generado no se encontró en la ruta: ${filePath}`);
-          throw new InternalServerErrorException('No se pudo encontrar el archivo del reporte generado.');
-      }
-      
-      res.download(filePath, `${title}.${format}`, (err) => {
-        if (err) {
-          this.logger.error(`Error al enviar el archivo de reporte ${id} al cliente:`, err);
-          if (!res.headersSent) {
-            res.status(500).send({ message: "No se pudo descargar el archivo." });
-          }
-        }
-      });
-    } catch (error) {
-      this.logger.error(`Fallo completo en el proceso de descarga del reporte ${id}:`, error);
-      if (!res.headersSent) {
-          const status = error instanceof NotFoundException ? 404 : 500;
-          res.status(status).send({ message: error.message || 'Error interno del servidor.' });
-      }
-    }
+    const buffer = await this.reportService.downloadReport(id, format);
+    
+    // Definición de tipos MIME y extensiones
+    const mimeTypes = {
+      pdf: 'application/pdf',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    };
+    const extensions = {
+      pdf: 'pdf',
+      xlsx: 'xlsx',
+    };
+
+    // Configura las cabeceras de respuesta para la descarga
+    res.set({
+      'Content-Type': mimeTypes[format],
+      'Content-Disposition': `attachment; filename="reporte_${id}.${extensions[format]}"`,
+      'Content-Length': buffer.length,
+    });
+
+    // Envía el buffer como un archivo descargable
+    return new StreamableFile(buffer);
+  }
+  
+  // --------------------------------------------------------------------------
+
+  /**
+   * Elimina un reporte y sus archivos asociados
+   */
+  @Delete(':id')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Eliminar un reporte' })
+  @ApiParam({ name: 'id', description: 'ID del reporte' })
+  @ApiResponse({ status: 200, description: 'Reporte eliminado exitosamente' })
+  @ApiResponse({ status: 400, description: 'El usuario no tiene permiso para eliminar el reporte' })
+  @ApiResponse({ status: 404, description: 'Reporte no encontrado' })
+  async deleteReport(@Param('id') id: string, @Req() req: any) {
+    // El servicio maneja la lógica de verificación de propiedad/permisos
+    await this.reportService.deleteReport(id, req.user.id);
+    
+    return { 
+      statusCode: HttpStatus.OK,
+      message: 'Reporte eliminado exitosamente' 
+    };
   }
 }

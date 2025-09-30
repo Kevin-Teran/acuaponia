@@ -1,27 +1,29 @@
 /**
  * @file data.module.ts
  * @route /backend/src/data
- * @description Módulo para la gestión de datos, corrigiendo dependencias circulares.
+ * @description Módulo para la gestión de datos con integración de reportes
  * @author Kevin Mariano
- * @version 1.0.0
+ * @version 1.1.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
- import { Module, forwardRef } from '@nestjs/common';
- import { DataService } from './data.service';
- import { DataController } from './data.controller';
- import { PrismaModule } from '../prisma/prisma.module';
- import { EventsModule } from '../events/events.module';
- import { MqttModule } from '../mqtt/mqtt.module';
- 
- @Module({
-   imports: [
-     PrismaModule,
-     EventsModule,
-     forwardRef(() => MqttModule),
-   ],
-   controllers: [DataController],
-   providers: [DataService],
-   exports: [DataService],
- })
- export class DataModule {}
+import { Module, forwardRef } from '@nestjs/common';
+import { DataService } from './data.service';
+import { DataController } from './data.controller';
+import { PrismaModule } from '../prisma/prisma.module';
+import { EventsModule } from '../events/events.module';
+import { MqttModule } from '../mqtt/mqtt.module';
+import { ReportModule } from '../reports/reports.module'; 
+
+@Module({
+  imports: [
+    PrismaModule,
+    EventsModule,
+    forwardRef(() => MqttModule),
+    forwardRef(() => ReportModule), 
+  ],
+  controllers: [DataController],
+  providers: [DataService],
+  exports: [DataService],
+})
+export class DataModule {}

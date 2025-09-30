@@ -1,47 +1,109 @@
 /**
  * @file reportService.ts
  * @route frontend/src/services
- * @description Servicio para la creación y gestión de reportes.
- * @author kevin mariano
- * @version 1.0.0
+ * @description Servicio frontend para gestión de reportes (CORREGIDO)
+ * @author Kevin Mariano
+ * @version 2.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
 import api from '@/config/api';
-import { Report, CreateReportDto } from '@/types';
+import { Report, ReportStatus } from '@/types';
+
+export interface CreateReportDto {
+  reportName: string;
+  tankId: string;
+  sensorIds: string[];
+  startDate: string;
+  endDate: string;
+}
 
 /**
- * Obtiene una lista de todos los reportes generados.
- * @returns {Promise<Report[]>} Una promesa que se resuelve con un array de reportes.
- * @throws {Error} Si ocurre un error durante la llamada a la API.
+ * Obtiene todos los reportes de un usuario
  */
-export const getReports = async (): Promise<Report[]> => {
-  const response = await api.get('/reports');
-  return response.data;
+export const getReports = async (userId?: string): Promise<Report[]> => {
+  try {
+    console.log('📊 [ReportService] Obteniendo reportes...');
+    const params = userId ? { userId } : {};
+    const response = await api.get('/reports', { params });
+    console.log('✅ [ReportService] Reportes obtenidos:', response.data.length);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ [ReportService] Error obteniendo reportes:', error);
+    throw error;
+  }
 };
 
 /**
- * Crea una solicitud para generar un nuevo reporte.
- * @param {CreateReportDto} reportData - Los parámetros para el nuevo reporte.
- * @returns {Promise<Report>} Una promesa que se resuelve con los datos del reporte creado.
- * @throws {Error} Si ocurre un error durante la llamada a la API.
+ * Crea un nuevo reporte
  */
 export const createReport = async (reportData: CreateReportDto): Promise<Report> => {
-  const response = await api.post('/reports', reportData);
-  return response.data;
+  try {
+    console.log('🆕 [ReportService] Creando reporte:', reportData.reportName);
+    const response = await api.post('/reports', reportData);
+    console.log('✅ [ReportService] Reporte creado:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ [ReportService] Error creando reporte:', error);
+    throw error;
+  }
 };
 
 /**
- * Descarga un archivo de reporte generado.
- * @param {string} reportId - El ID del reporte a descargar.
- * @param {'pdf' | 'csv' | 'xlsx'} format - El formato en el que se desea descargar el reporte.
- * @returns {Promise<Blob>} Una promesa que se resuelve con el archivo del reporte como un Blob.
- * @throws {Error} Si ocurre un error durante la llamada a la API.
+ * Descarga un reporte en el formato especificado
  */
-export const downloadReport = async (reportId: string, format: 'pdf' | 'csv' | 'xlsx'): Promise<Blob> => {
-  const response = await api.get(`/reports/download/${reportId}/${format}`, {
-    responseType: 'blob', 
-  });
-  return response.data;
+export const downloadReport = async (
+  reportId: string,
+  format: 'pdf' | 'xlsx'
+): Promise<void> => {
+  try {
+    console.log(`📥 [ReportService] Descargando reporte ${reportId} en formato ${format.toUpperCase()}...`);
+    
+    const response = await api.get(`/reports/${reportId}/download`, {
+      params: { format },
+      responseType: 'blob', // IMPORTANTE: debe ser blob para archivos binarios
+    });
+
+    // Crear un enlace temporal para descargar el archivo
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // Determinar el nombre del archivo
+    const extension = format === 'pdf' ? 'pdf' : 'xlsx';
+    link.setAttribute('download', `reporte_${reportId}.${extension}`);
+    
+    // Agregar al DOM, hacer clic y remover
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Liberar el objeto URL
+    window.URL.revokeObjectURL(url);
+    
+    console.log(`✅ [ReportService] Reporte ${reportId} descargado exitosamente`);
+  } catch (error: any) {
+    console.error(`❌ [ReportService] Error descargando reporte:`, error);
+    console.error('Detalles del error:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+    });
+    throw error;
+  }
+};
+
+/**
+ * Elimina un reporte
+ */
+export const deleteReport = async (reportId: string): Promise<void> => {
+  try {
+    console.log(`🗑️ [ReportService] Eliminando reporte ${reportId}...`);
+    await api.delete(`/reports/${reportId}`);
+    console.log(`✅ [ReportService] Reporte ${reportId} eliminado exitosamente`);
+  } catch (error: any) {
+    console.error(`❌ [ReportService] Error eliminando reporte:`, error);
+    throw error;
+  }
 };

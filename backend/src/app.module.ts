@@ -14,6 +14,7 @@ import { ConfigModule } from '@nestjs/config';
 import { DataModule } from './data/data.module';
 import { MqttModule } from './mqtt/mqtt.module';
 import { AuthModule } from './auth/auth.module';
+import { ScheduleModule } from '@nestjs/schedule'; 
 import { EmailModule } from './email/email.module';
 import { TanksModule } from './tanks/tanks.module';
 import { UsersModule } from './users/users.module';
@@ -21,7 +22,7 @@ import { AlertsModule } from './alerts/alerts.module';
 import { EventsModule } from './events/events.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SensorsModule } from './sensors/sensors.module';
-import { ReportsModule } from './reports/reports.module';
+import { ReportModule } from './reports/reports.module';
 import { SettingsModule } from './settings/settings.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -46,12 +47,13 @@ import { AiAssistantModule } from './ai-assistant/ai-assistant.module';
     EventsModule,
     AlertsModule, 
     SensorsModule,
-    ReportsModule,
+    ReportModule,
     SettingsModule,
     DashboardModule, 
     AnalyticsModule,
     PredictionsModule,
     AiAssistantModule,
+    ScheduleModule.forRoot(),
   ],
   providers: [
     {
