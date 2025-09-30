@@ -191,10 +191,6 @@ export default function DevicesPage() {
         }
     }, [handleActionCompletion]);
 
-    if (loading && tanks.length === 0) {
-        return <LoadingSpinner fullScreen message="Cargando infraestructura..." />;
-    }
-
     return (
         <div className="container mx-auto p-4 md:p-6 lg:p-8">
             <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">

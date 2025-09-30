@@ -36,7 +36,7 @@ export const LoginForm: React.FC = () => {
 
     const demoAccounts = [
         { email: 'admin@sena.edu.co', password: '123456', role: 'Administrador' },
-        { email: 'usuario@sena.edu.co', password: '123456', role: 'Usuario' },
+        { email: 'acuaponiasena@gmail.com', password: '123456', role: 'Usuario' },
     ];
     
     const validateForm = useCallback((): boolean => {
@@ -115,7 +115,7 @@ export const LoginForm: React.FC = () => {
                                     value={email} 
                                     onChange={handleInputChange(setEmail)} 
                                     className="w-full rounded-lg border border-gray-300 bg-white py-3 pl-10 pr-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-500"
-                                    placeholder="usuario@sena.edu.co" 
+                                    placeholder="acuaponiasena@gmail.com" 
                                     required 
                                 />
                             </div>
