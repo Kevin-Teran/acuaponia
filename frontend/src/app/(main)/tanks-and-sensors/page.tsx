@@ -192,7 +192,7 @@ export default function DevicesPage() {
     }, [handleActionCompletion]);
 
     return (
-        <div className="container mx-auto p-4 md:p-6 lg:p-8">
+        <div className="w-full">
             <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestión de Tanques y Sensores</h1>
@@ -202,7 +202,7 @@ export default function DevicesPage() {
                 </div>
                 <button
                     onClick={() => handleOpenModal('create-tank', { userId: selectedUserId })}
-                    className="flex items-center px-6 py-3 bg-[#39A900] text-white rounded-lg hover:bg-[#2F8B00] transition-all duration-200 shadow-md hover:shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed transform hover:scale-105"
+                    className="rounded-xl flex items-center px-6 py-3 bg-[#39A900] text-white rounded-xl hover:bg-[#2F8B00] transition-all duration-200 shadow-md hover:shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed transform hover:scale-105"
                     disabled={!selectedUserId}
                 >
                     <MapPin className="w-5 h-5 mr-2" />
@@ -219,7 +219,7 @@ export default function DevicesPage() {
             </div>
 
             {/* Filters */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+            <div className="rounded-xl bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 mb-6">
                 <div className={clsx(
                     "grid gap-4",
                     isAdmin ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2"
@@ -232,7 +232,7 @@ export default function DevicesPage() {
                             placeholder="Buscar por nombre o ubicación..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] transition-colors"
+                            className="w-full pl-10 pr-4 py-2.5 border rounded-xl dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] transition-colors"
                         />
                     </div>
                     
@@ -243,7 +243,7 @@ export default function DevicesPage() {
                             <select
                                 value={selectedUserId || ''}
                                 onChange={(e) => handleUserChange(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] transition-colors appearance-none cursor-pointer"
+                                className="w-full pl-10 pr-4 py-2.5 border rounded-xl dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] transition-colors appearance-none cursor-pointer"
                             >
                                 {users.map(user => (
                                     <option key={user.id} value={user.id}>
@@ -260,7 +260,7 @@ export default function DevicesPage() {
                         <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value as any)}
-                            className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] transition-colors appearance-none cursor-pointer"
+                            className="w-full pl-10 pr-4 py-2.5 border rounded-xl dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] transition-colors appearance-none cursor-pointer"
                         >
                             <option value="all">Todos los estados</option>
                             <option value="ACTIVE">Activos</option>
@@ -273,7 +273,7 @@ export default function DevicesPage() {
 
             {/* Error Display */}
             {error && (
-                <div className="text-center text-red-500 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg flex items-center justify-center mb-6 border border-red-200 dark:border-red-800">
+                <div className="text-center text-red-500 p-4 bg-red-50 dark:bg-red-900/20 rounded-xl flex items-center justify-center mb-6 border border-red-200 dark:border-red-800">
                     <AlertCircle className="w-6 h-6 mr-2 flex-shrink-0" />
                     <span>{error}</span>
                 </div>
@@ -321,7 +321,7 @@ export default function DevicesPage() {
                                 })}
                             >
                                 <div className="flex items-center space-x-4">
-                                    <div className="p-3 bg-[#39A900]/10 rounded-lg">
+                                    <div className="p-3 bg-[#39A900]/10 rounded-xl">
                                         <MapPin className="w-8 h-8 text-[#39A900]" />
                                     </div>
                                     <div>
@@ -482,7 +482,7 @@ const StatCard = ({
     color: string; 
 }) => (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 flex items-center border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
-        <div className={clsx("p-3 rounded-lg", color.replace('text-', 'bg-') + '/10')}>
+        <div className={clsx("p-3 rounded-xl", color.replace('text-', 'bg-') + '/10')}>
             {/* @ts-ignore */}
             <Icon className={clsx("h-8 w-8", color)} />
         </div>
@@ -567,7 +567,7 @@ const AddSensorCard = ({
             onClick={onClick} 
             className="flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-900/50 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-[#39A900] hover:bg-[#39A900]/5 text-[#39A900] transition-all duration-200 h-full min-h-[180px] group"
         >
-            <div className="p-3 rounded-lg bg-[#39A900]/10 group-hover:bg-[#39A900]/20 transition-colors mb-3">
+            <div className="p-3 rounded-xl bg-[#39A900]/10 group-hover:bg-[#39A900]/20 transition-colors mb-3">
                 <Icon className="w-8 h-8" />
             </div>
             <Plus className="w-6 h-6 mb-2" />
@@ -599,7 +599,7 @@ const SensorCard = ({
             <div>
                 <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center space-x-3">
-                        <div className={clsx("p-2 rounded-lg", color.replace('text-', 'bg-') + '/10')}>
+                        <div className={clsx("p-2 rounded-xl", color.replace('text-', 'bg-') + '/10')}>
                             <Icon className={clsx("w-5 h-5", color)} />
                         </div>
                         <div>

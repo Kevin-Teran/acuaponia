@@ -108,22 +108,18 @@ export class ReportController {
     @Query('format') format: 'pdf' | 'xlsx',
     @Res({ passthrough: true }) res: Response,
   ) {
-    const buffer = await this.reportService.downloadReport(id, format);
+    const { buffer, filename } = await this.reportService.downloadReport(id, format); // <--- OBTENER FILENAME LIMPIO
     
-    // Definición de tipos MIME y extensiones
+    // Definición de tipos MIME
     const mimeTypes = {
       pdf: 'application/pdf',
       xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    };
-    const extensions = {
-      pdf: 'pdf',
-      xlsx: 'xlsx',
     };
 
     // Configura las cabeceras de respuesta para la descarga
     res.set({
       'Content-Type': mimeTypes[format],
-      'Content-Disposition': `attachment; filename="reporte_${id}.${extensions[format]}"`,
+      'Content-Disposition': `attachment; filename="${filename}"`, // <--- USAR FILENAME LIMPIO
       'Content-Length': buffer.length,
     });
 

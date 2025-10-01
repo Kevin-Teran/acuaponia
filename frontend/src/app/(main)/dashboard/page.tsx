@@ -131,12 +131,10 @@ const DashboardPage: React.FC = () => {
 		if (tanks.length > 0) {
 			const currentTankIsValid = tanks.some((t) => t.id === filters.tankId);
 			if (!filters.tankId || !currentTankIsValid) {
-				console.log('🎯 [Dashboard] Seleccionando primer tanque:', tanks[0].name);
 				setFilters((prev) => ({ ...prev, tankId: tanks[0].id }));
 			}
 		} else {
 			if (filters.tankId) {
-				console.log('⚠️ [Dashboard] No hay tanques disponibles');
 				setFilters((prev) => ({ ...prev, tankId: undefined }));
 			}
 		}
@@ -201,14 +199,14 @@ const DashboardPage: React.FC = () => {
 			initial={{ opacity: 0 }}
 			animate={{ opacity: 1 }}
 			transition={{ duration: 0.5 }}
-			className='container mx-auto space-y-8 p-4 md:p-6 lg:p-8'
+			className='w-full'
 		>
 			{/* Header */}
 			<div>
-				<h1 className='text-3xl font-bold text-gray-900 dark:text-white'>
+				<h1 className='text-3xl font-bold text-gray-900 dark:text-white mb-3'>
 					Dashboard de Monitoreo
 				</h1>
-				<p className='mt-1 text-gray-500 dark:text-gray-400'>
+				<p className='mt-1 text-gray-500 dark:text-gray-400 mb-8'>
 					Bienvenido, {user.name}. Estado de tu sistema en tiempo real.
 				</p>
 			</div>
@@ -221,8 +219,9 @@ const DashboardPage: React.FC = () => {
 				usersList={usersList}
 				currentUserRole={user.role}
 				loading={loading.users}
+				
 			/>
-
+			<div className='mb-12'></div>
 			{/* Mensaje de error global */}
 			{error && (
 				<div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center dark:border-red-800 dark:bg-red-900/20">
@@ -288,7 +287,7 @@ const DashboardPage: React.FC = () => {
 						<h2 className='mb-4 text-2xl font-bold text-gray-900 dark:text-white'>
 							Tendencias Históricas
 						</h2>
-						<div className='mx-auto max-w-7xl space-y-8'>
+						<div className='space-y-8'>
 							<Card>
 								<LineChart
 									data={historicalData?.TEMPERATURE || []}

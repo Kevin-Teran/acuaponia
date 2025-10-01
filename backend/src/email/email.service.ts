@@ -28,18 +28,51 @@ export class EmailService implements OnModuleInit {
   onModuleInit() {
     try {
       this.transporter = nodemailer.createTransport({
-        host: this.configService.get('SMTP_HOST'),
-        port: parseInt(this.configService.get('SMTP_PORT', '587')),
-        secure: false, 
+        // CORRECCIÓN: Usar MAIL_HOST en lugar de SMTP_HOST
+        host: this.configService.get('MAIL_HOST'), 
+        // CORRECCIÓN: Usar MAIL_PORT en lugar de SMTP_PORT
+        port: parseInt(this.configService.get('MAIL_PORT', '587')), 
+        secure: false, // TLS en 587
         auth: {
-          user: this.configService.get('SMTP_USER'),
-          pass: this.configService.get('SMTP_PASS'),
+          // CORRECCIÓN: Usar MAIL_USER en lugar de SMTP_USER
+          user: this.configService.get('MAIL_USER'), 
+          // CORRECCIÓN: Usar MAIL_PASS en lugar de SMTP_PASS
+          pass: this.configService.get('MAIL_PASS'), 
         },
       });
 
       this.logger.log('✅ Transportador de Nodemailer inicializado correctamente.');
     } catch (error) {
       this.logger.error('❌ Error al inicializar el transportador de Nodemailer:', error);
+    }
+  }
+
+  /**
+   * Envía un correo con un reporte adjunto (PDF y Excel).
+   * @param userEmail - El correo electrónico del destinatario.
+   * @param subject - El asunto del correo.
+   * @param htmlContent - El contenido HTML del cuerpo.
+   * @param attachments - Array de objetos de adjuntos { filename: string, content: Buffer, contentType: string }.
+   */
+  async sendReportEmail(userEmail: string, subject: string, htmlContent: string, attachments: { filename: string, content: Buffer, contentType: string }[]): Promise<void> {
+    if (!this.transporter) {
+      this.logger.error('El transportador de correo no está inicializado. No se puede enviar el email.');
+      return;
+    }
+    
+    const mailOptions = {
+      from: this.configService.get('MAIL_FROM'),
+      to: userEmail,
+      subject: subject,
+      html: htmlContent, 
+      attachments: attachments,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`📧 Correo de reporte enviado exitosamente a ${userEmail}`);
+    } catch (error) {
+      this.logger.error(`🚨 Fallo al enviar correo de reporte a ${userEmail}:`, error);
     }
   }
 

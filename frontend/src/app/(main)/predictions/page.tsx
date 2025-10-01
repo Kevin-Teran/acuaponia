@@ -118,9 +118,12 @@ export default function PredictionsPage() {
           <p className='text-default-500'>Anticípate al futuro de tus cultivos. Visualiza tendencias y compara con los umbrales operativos.</p>
         </div>
         
-        <Card className='shadow-md border border-default-200 dark:border-default-100'>
+        {/* Usamos shadow-xl y un fondo ligeramente diferente para que la tarjeta de filtro destaque */}
+        <Card className='shadow-xl border border-default-200 dark:border-default-800 bg-white dark:bg-gray-900'>
           <CardBody>
-            <div className="flex flex-col md:flex-row gap-4 items-center">
+            <div className="flex flex-col md:flex-row gap-6 items-center">
+              
+              {/* Selector de Tanque con estilos que imitan tus campos de filtro */}
               <Select 
                 label="Tanque"
                 placeholder="Selecciona un tanque"
@@ -131,13 +134,20 @@ export default function PredictionsPage() {
                 // @ts-ignore
                 onSelectionChange={(keys) => setSelectedTankId((keys as Set<string>).values().next().value)} 
                 disabled={tanks.length === 0}
-                className="min-w-64"
+                className="min-w-[200px] md:min-w-64"
                 classNames={{
-                  trigger: "shadow-sm bg-gray-100 dark:bg-zinc-800 data-[hover=true]:bg-gray-200 dark:data-[hover=true]:bg-zinc-700 border border-transparent dark:border-zinc-700",
+                  // Etiqueta más limpia y en la izquierda
+                  label: "text-base font-medium text-gray-700 dark:text-gray-300 pr-4 whitespace-nowrap",
+                  // Estilo de la caja de selección: alto, bordes redondeados (rounded-xl) y fondo blanco/gris.
+                  trigger: "h-[48px] rounded-xl shadow-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 data-[hover=true]:bg-gray-50 dark:data-[hover=true]:bg-gray-700",
+                  mainWrapper: "flex-1",
+                  base: "flex-none md:flex-1 w-full flex items-center gap-3",
                 }}
               >
                 {(tank) => <SelectItem key={tank.id} value={tank.id}>{tank.name}</SelectItem>}
               </Select>
+
+              {/* Selector de Horizonte con estilos que imitan tus campos de filtro */}
               <Select 
                 label="Horizonte"
                 labelPlacement="outside-left"
@@ -149,9 +159,14 @@ export default function PredictionsPage() {
                   }
                 }}
                 disabled={!selectedTankId}
-                className="min-w-64"
+                className="min-w-[200px] md:min-w-64"
                 classNames={{
-                  trigger: "shadow-sm bg-gray-100 dark:bg-zinc-800 data-[hover=true]:bg-gray-200 dark:data-[hover=true]:bg-zinc-700 border border-transparent dark:border-zinc-700",
+                  // Etiqueta más limpia y en la izquierda
+                  label: "text-base font-medium text-gray-700 dark:text-gray-300 pr-4 whitespace-nowrap",
+                  // Estilo de la caja de selección: alto, bordes redondeados (rounded-xl) y fondo blanco/gris.
+                  trigger: "h-[48px] rounded-xl shadow-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 data-[hover=true]:bg-gray-50 dark:data-[hover=true]:bg-gray-700",
+                  mainWrapper: "flex-1",
+                  base: "flex-none md:flex-1 w-full flex items-center gap-3",
                 }}
               >
                 {horizonOptions.map((option) => <SelectItem key={option.value}>{option.label}</SelectItem>)}

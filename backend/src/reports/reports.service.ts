@@ -23,6 +23,7 @@ import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { EmailService } from '../email/email.service'; // <--- NUEVA IMPORTACIÓN
 
 // 💡 INTERFACES DE TRABAJO
 interface ReportFilePaths {
@@ -62,6 +63,7 @@ export class ReportService {
   constructor(
     private prisma: PrismaService,
     private eventsGateway: EventsGateway,
+    private emailService: EmailService, // <--- INYECCIÓN DE EMAIL SERVICE
   ) {
     this.ensureReportsDirectory();
     this.initializeDataCounters();
@@ -152,7 +154,7 @@ export class ReportService {
     });
 
     const settings = user?.settings ? JSON.parse(user.settings as string) : {};
-    const reportsEnabled = settings.notifications?.reports === true;
+    const reportsEnabled = settings.notifications?.reports === true; // <--- VERIFICACIÓN DE reports: true
 
     if (!reportsEnabled) {
       return;
@@ -242,7 +244,7 @@ export class ReportService {
 
       for (const user of users) {
         const settings = user.settings ? JSON.parse(user.settings as string) : {};
-        const reportsEnabled = settings.notifications?.reports === true;
+        const reportsEnabled = settings.notifications?.reports === true; // <--- VERIFICACIÓN DE reports: true
 
         if (!reportsEnabled) {
           continue;
@@ -324,7 +326,7 @@ export class ReportService {
       startDate: dto.startDate,
       endDate: dto.endDate,
       isAutomatic: dto.isAutomatic || false,
-      automaticType: dto.isAutomatic ? (dto.reportName.includes('200') ? 'batch' : 'daily') : undefined,
+      automaticType: dto.isAutomatic ? (dto.reportName.includes('Acumulativo') ? 'batch' : 'daily') : undefined,
     };
     
     // Lógica para determinar el ReportType (usando valores existentes: DAILY/CUSTOM)
@@ -369,7 +371,7 @@ export class ReportService {
 
       const report = await this.prisma.report.findUnique({
         where: { id: reportId },
-        include: { user: true }
+        include: { user: true } // Incluir usuario para acceder a settings y email
       });
 
       if (!report) {
@@ -412,23 +414,51 @@ export class ReportService {
       const filePaths = { pdfPath, excelPath };
       const filePathsJson = JSON.stringify(filePaths);
 
-      await this.prisma.report.update({
+      const updatedReport = await this.prisma.report.update({
         where: { id: reportId },
         data: {
           status: 'COMPLETED',
           // Guardamos el JSON de nombres PULIDOS en la base de datos
           filePath: filePathsJson, 
         },
+        include: { user: true } // Asegurar que user esté incluido para el email
       });
 
       this.logger.log(`✅ Reporte ${reportId} completado exitosamente`);
 
       this.eventsGateway.broadcastReportUpdate({
-        ...report,
+        ...updatedReport,
         status: 'COMPLETED',
         filePath: filePathsJson,
-        userId: report.userId,
+        userId: updatedReport.userId,
       });
+
+      // 💡 NUEVA LÓGICA: ENVÍO DE CORREO ELECTRÓNICO
+      const userSettings = updatedReport.user.settings ? JSON.parse(updatedReport.user.settings as string) : {};
+      // Verificación de que 'reports' Y 'email' están habilitados.
+      const emailReportsEnabled = userSettings.notifications?.reports === true && userSettings.notifications?.email === true;
+      
+      if (emailReportsEnabled) {
+          const bufferPDF = await fs.readFile(path.join(this.reportsDir, pdfPath));
+          const bufferExcel = await fs.readFile(path.join(this.reportsDir, excelPath));
+
+          const attachments = [
+              { filename: pdfPath, content: bufferPDF, contentType: 'application/pdf' },
+              { filename: excelPath, content: bufferExcel, contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+          ];
+
+          const emailSubject = `✅ Reporte Generado: ${updatedReport.title}`;
+          const emailBody = `
+            <p>Estimado/a ${updatedReport.user.name},</p>
+            <p>Adjunto encontrará el reporte de monitoreo solicitado o generado automáticamente.</p>
+            <p><strong>Título:</strong> ${updatedReport.title}</p>
+            <p><strong>Período:</strong> ${format(parseISO(params.startDate), 'dd/MM/yyyy')} al ${format(parseISO(params.endDate), 'dd/MM/yyyy')}</p>
+            <p>Gracias por usar el Sistema de Monitoreo Acuaponía SENA.</p>
+          `;
+          
+          await this.emailService.sendReportEmail(updatedReport.user.email, emailSubject, emailBody, attachments);
+      }
+      // 💡 FIN LÓGICA ENVÍO DE CORREO
 
     } catch (error) {
       this.logger.error(`❌ Error procesando reporte ${reportId}:`, error);
@@ -633,7 +663,7 @@ export class ReportService {
   /**
    * Genera archivo Excel del reporte con filtros y formato profesional
    */
-  private async generateExcel(
+   private async generateExcel(
     report: Report,
     params: ReportParameters,
     data: any[]
@@ -654,15 +684,15 @@ export class ReportService {
     workbook.created = new Date();
 
     const dataSheet = workbook.addWorksheet('Datos Completos', {
-      views: [{ state: 'frozen', xSplit: 0, ySplit: 1 }]
+      views: [{ state: 'frozen', xSplit: 0, ySplit: 2 }] // Dejar las dos primeras filas congeladas
     });
     const statsSheet = workbook.addWorksheet('Resumen');
-    // const chartSheet = workbook.addWorksheet('Gráficos'); // Eliminado por incompatibilidad
     
     const VERDE_SENA_ARGB = 'FF39B54A';
-    const NARANJA_CONSTRASTE_ARGB = 'FFDD5733'; // Color ARGB asumido
+    const NARANJA_CONSTRASTE_ARGB = 'FFDD5733'; 
     const GRIS_CLARO_ARGB = 'FFF5F5F5';
     const stats = this.aggregateStats(data); // Obtener stats una vez
+    const COLUMNAS_ESTADISTICAS = 5; // Columnas: Tipo, Registros, Promedio, Mínimo, Máximo
 
     // -----------------------------------------------------
     // HOJA DE RESUMEN/ESTADÍSTICAS
@@ -673,15 +703,28 @@ export class ReportService {
     statsSheet.getCell('A1').value = 'Reporte de Monitoreo Acuático';
     statsSheet.getCell('A1').font = { size: 18, bold: true };
     statsSheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+    statsSheet.getRow(1).height = 30; // Altura fija para el título principal
     
     statsSheet.mergeCells('A2:E2');
     statsSheet.getCell('A2').value = 'Servicio Nacional de Aprendizaje - SENA';
     statsSheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
+    statsSheet.getRow(2).height = 20; // Altura fija para el subtítulo
 
     statsSheet.getCell('A4').value = 'Título:';
     statsSheet.getCell('B4').value = report.title;
     statsSheet.getCell('A5').value = 'Período:';
     statsSheet.getCell('B5').value = `${format(parseISO(params.startDate), 'dd/MM/yyyy')} al ${format(parseISO(params.endDate), 'dd/MM/yyyy')}`;
+    
+    // FÓRMULA Y ESTILO PARA TOTALES
+    statsSheet.getCell('A7').value = 'Total de Registros Monitoreados:'; 
+    statsSheet.getCell('A7').font = { bold: true };
+    const lastStatRow = 9 + stats.length - 1;
+    statsSheet.getCell('B7').value = { formula: `SUM(B9:B${lastStatRow})` };
+    statsSheet.getCell('B7').fill = { 
+        type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9EAD3' }
+    };
+    statsSheet.getCell('B7').alignment = { vertical: 'middle', horizontal: 'center' };
+    statsSheet.getRow(7).height = 20; 
 
     // Cabecera de la tabla de estadísticas
     statsSheet.getRow(8).values = ['Tipo de Sensor', 'Nº Registros', 'Promedio', 'Mínimo', 'Máximo'];
@@ -715,6 +758,8 @@ export class ReportService {
               fgColor: { argb: GRIS_CLARO_ARGB }
           };
         }
+        statsSheet.getRow(row).alignment = { vertical: 'middle', horizontal: 'center' };
+        statsSheet.getRow(row).getCell(1).alignment = { horizontal: 'left' };
         row++;
     });
     
@@ -722,9 +767,9 @@ export class ReportService {
         { width: 25 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 18 }
     ];
     
-    // Aplicación de bordes para la tabla de estadísticas
-    for (let i = 8; i < row; i++) {
-        for (let j = 1; j <= 5; j++) {
+    // APLICACIÓN DE BORDES: Delimitado hasta la columna Máximo (E)
+    for (let i = 7; i < row; i++) { 
+        for (let j = 1; j <= COLUMNAS_ESTADISTICAS; j++) { // <--- DELIMITACIÓN HASTA COLUMNA E (5)
             statsSheet.getRow(i).getCell(j).border = {
                 top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' }
             };
@@ -732,22 +777,26 @@ export class ReportService {
     }
     
     // -----------------------------------------------------
-    // HOJA DE GRÁFICOS (Ahora está vacía, para estabilidad)
-    // -----------------------------------------------------
-
-    // -----------------------------------------------------
     // HOJA DE DATOS COMPLETOS (Detallada)
     // -----------------------------------------------------
     
-    // Definición de columnas reordenada: Fecha/Hora, Tipo, Valor, Sensor, Hardware ID
+    // 💡 CAMBIO: Separación de Fecha y Hora, e inclusión de Hardware ID
     dataSheet.columns = [
-      { header: 'Fecha/Hora', key: 'timestamp', width: 20 },
+      { header: 'Fecha', key: 'date', width: 15 }, // Nuevo campo
+      { header: 'Hora', key: 'time', width: 15 }, // Nuevo campo
       { header: 'Tipo', key: 'sensorType', width: 15 },
-      { header: 'Valor', key: 'value', width: 12 },
+      { 
+        header: 'Valor', 
+        key: 'value', 
+        width: 12,
+        style: { numFmt: '0.00' }
+      },
       { header: 'Sensor', key: 'sensorName', width: 25 }, 
       { header: 'Hardware ID', key: 'hardwareId', width: 15 },
     ];
     
+    const COLUMNAS_DATOS = dataSheet.columns.length; // Total: 6 columnas (A-F)
+
     // Estilo de la cabecera (Naranja/Rojo - Contraste)
     dataSheet.getRow(1).height = 25;
     dataSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -760,8 +809,12 @@ export class ReportService {
 
     // Llenado de datos
     data.forEach(item => {
+        const datePart = format(item.timestamp, 'dd/MM/yyyy', { locale: es });
+        const timePart = format(item.timestamp, 'HH:mm:ss', { locale: es });
+
       dataSheet.addRow({
-        timestamp: format(item.timestamp, 'dd/MM/yyyy HH:mm:ss', { locale: es }),
+        date: datePart, // Separado
+        time: timePart, // Separado
         sensorType: item.sensor.type,
         value: item.value,
         sensorName: item.sensor.name, 
@@ -769,10 +822,11 @@ export class ReportService {
       });
     });
 
-    // Aplicación de sombreado y bordes
+    // APLICACIÓN DE SOMBREADO Y BORDES: Delimitado hasta la columna Hardware ID
     const lastDataRow = dataSheet.rowCount;
     for (let i = 1; i <= lastDataRow; i++) {
-      for (let j = 1; j <= dataSheet.columns.length; j++) {
+        // La iteración 'j' ahora llega hasta la columna COLUMNAS_DATOS (Hardware ID)
+      for (let j = 1; j <= COLUMNAS_DATOS; j++) { 
         const cell = dataSheet.getRow(i).getCell(j);
         
         // Bordes 
@@ -796,7 +850,7 @@ export class ReportService {
 
     dataSheet.autoFilter = {
       from: { row: 1, column: 1 },
-      to: { row: 1, column: dataSheet.columns.length }
+      to: { row: 1, column: COLUMNAS_DATOS }
     };
 
     // Guardar archivo
@@ -849,9 +903,10 @@ export class ReportService {
   /**
    * Descarga un reporte generado
    */
-  async downloadReport(reportId: string, fileFormat: 'pdf' | 'xlsx'): Promise<Buffer> {
+  async downloadReport(reportId: string, fileFormat: 'pdf' | 'xlsx'): Promise<{ buffer: Buffer, filename: string }> { // <--- CAMBIO DE RETORNO
     const report = await this.prisma.report.findUnique({
       where: { id: reportId },
+      include: { user: true }
     });
 
     if (!report) {
@@ -872,14 +927,15 @@ export class ReportService {
     
     // Usamos la función format de date-fns
     const start = format(parseISO(paramsObj.startDate), 'dd_MM_yyyy');
-    const end = format(parseISO(paramsObj.endDate), 'dd_MM_yyyy');
+    const end = format(parseISO(paramsObj.endDate), 'dd_MM/yyyy');
     const tankName = paramsObj.tankName.replace(/ /g, '_'); 
     
     // Construye el nombre del archivo legible
     const baseName = `Reporte_Monitoreo_${tankName}_${start}_a_${end}`;
     
     // Determina el nombre final con la extensión correcta
-    const filename = `${baseName}.${fileFormat === 'pdf' ? 'pdf' : 'xlsx'}`; 
+    const extension = fileFormat === 'pdf' ? 'pdf' : 'xlsx';
+    const filename = `${baseName}.${extension}`; // <--- FILENAME CORRECTO Y LIMPIO
     // --- Fin Lógica de Nombre ---
     
     // ⚠️ Importante: fileToDownload DEBE ser el nombre que se guardó en Prisma (el nombre pulido)
@@ -894,10 +950,7 @@ export class ReportService {
     try {
       const buffer = await fs.readFile(filepath);
       
-      // NOTA: Si el frontend sigue mostrando el nombre feo (cmg...), la corrección debe hacerse en el controlador HTTP
-      // añadiendo el header 'Content-Disposition' con el 'filename' (pulido) que calculamos aquí.
-      
-      return buffer;
+      return { buffer, filename }; // <--- RETORNO DEL BUFFER Y EL FILENAME
     } catch (error) {
       this.logger.error(`Error leyendo archivo ${filepath}:`, error);
       throw new NotFoundException('Archivo no encontrado en el servidor');

@@ -1,9 +1,9 @@
 /**
  * @file page.tsx
  * @route frontend/src/app/(main)/reports
- * @description Página de reportes completamente funcional con descarga corregida
+ * @description Página de reportes completamente funcional con descarga corregida y diseño mejorado.
  * @author Kevin Mariano
- * @version 2.0.0
+ * @version 2.7.1
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -11,7 +11,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Download, FileText, Clock, Loader, AlertCircle, Cpu, CheckSquare, Info } from 'lucide-react';
+import { 
+    Download, FileText, Clock, Loader, AlertCircle, Cpu, CheckSquare, Info, Filter, 
+    Thermometer, Droplet, Wind 
+} from 'lucide-react'; 
 import { Card } from '@/components/common/Card';
 import { useAuth } from '@/context/AuthContext';
 import Swal from 'sweetalert2';
@@ -20,10 +23,19 @@ import { es } from 'date-fns/locale';
 import * as tankService from '@/services/tankService';
 import * as sensorService from '@/services/sensorService';
 import * as reportService from '@/services/reportService';
-import { Report, ReportStatus, Tank, Sensor } from '@/types';
+import * as settingsService from '@/services/settingsService'; 
+import { Report, ReportStatus, Tank, Sensor } from '@/types'; 
 import { cn } from '@/utils/cn';
 import { socketManager } from '@/services/socketService';
 
+/**
+ * @interface ReportFilters
+ * @description Interfaz para los filtros del formulario de reportes.
+ * @property {string | null} tankId - ID del tanque seleccionado.
+ * @property {string[]} sensorIds - IDs de los sensores seleccionados.
+ * @property {string} startDate - Fecha de inicio del reporte (formato YYYY-MM-DD).
+ * @property {string} endDate - Fecha de fin del reporte (formato YYYY-MM-DD).
+ */
 interface ReportFilters {
   tankId: string | null;
   sensorIds: string[];
@@ -31,6 +43,10 @@ interface ReportFilters {
   endDate: string;
 }
 
+/**
+ * @const statusTranslations
+ * @description Traducciones de los estados de los reportes.
+ */
 const statusTranslations: Record<ReportStatus, string> = {
   PENDING: 'Pendiente',
   PROCESSING: 'Procesando',
@@ -39,7 +55,46 @@ const statusTranslations: Record<ReportStatus, string> = {
 };
 
 /**
- * Componente de tarjeta de sensor seleccionable
+ * @interface UserSettings
+ * @description Tipo para la configuración de notificaciones del usuario.
+ */
+interface UserSettings {
+  notifications: {
+    reports: boolean;
+    email: boolean;
+    critical: boolean;
+  };
+}
+
+/**
+ * @const sensorTypeIcons
+ * @description Mapa de íconos por tipo de sensor.
+ */
+const sensorTypeIcons: Record<string, React.ElementType> = {
+  PH: Droplet, 
+  TEMPERATURE: Thermometer, 
+  OXYGEN: Wind,
+  GENERIC: Cpu, 
+};
+
+/**
+ * @function getSensorIcon
+ * @description Obtiene el componente de ícono React basado en el tipo de sensor.
+ * @param {string} type - Tipo de sensor (ej: 'DO', 'PH').
+ * @returns {React.ElementType} Componente de ícono.
+ */
+const getSensorIcon = (type: string) => {
+  return sensorTypeIcons[type.toUpperCase()] || sensorTypeIcons.GENERIC;
+};
+
+/**
+ * @component SensorCard
+ * @description Componente de tarjeta de sensor seleccionable con diseño de botón.
+ * @param {object} props - Propiedades del componente.
+ * @param {Sensor} props.sensor - Objeto sensor.
+ * @param {boolean} props.isSelected - Indica si el sensor está seleccionado.
+ * @param {() => void} props.onToggle - Función para alternar la selección.
+ * @returns {JSX.Element}
  */
 const SensorCard: React.FC<{ 
   sensor: Sensor; 
@@ -47,7 +102,8 @@ const SensorCard: React.FC<{
   onToggle: () => void;
 }> = ({ sensor, isSelected, onToggle }) => {
   const isAllCard = sensor.id === 'all';
-  
+  const displayIcon = isAllCard ? CheckSquare : getSensorIcon(sensor.type || 'GENERIC');
+
   return (
     <div
       onClick={onToggle}
@@ -61,27 +117,29 @@ const SensorCard: React.FC<{
       aria-checked={isSelected}
       tabIndex={0}
       className={cn(
-        'p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 flex items-center space-x-3 text-left relative group',
+        'p-2.5 rounded-xl border-2 cursor-pointer transition-all duration-200 flex items-center space-x-3 text-left relative shadow-sm ',
         isSelected
-          ? 'border-sena-green bg-sena-green/10 dark:bg-sena-green/20 shadow-lg' 
-          : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-sena-green/50',
-        'focus:outline-none focus:ring-2 focus:ring-sena-green focus:ring-offset-2 dark:focus:ring-offset-gray-900'
+          ? 'border-sena-green bg-sena-green/10 dark:bg-sena-green/20 shadow-lg ' 
+          : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800',
+        'hover:border-sena-green/70 hover:shadow-md',
+        'focus:outline-none focus:ring-2 focus:ring-sena-green/50 focus:ring-offset-2 dark:focus:ring-offset-gray-900',
+        'max-h-[100px] overflow-hidden'
       )}
     >
       <div className={cn(
-        "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0",
+        "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0",
         isSelected 
           ? 'bg-sena-green text-white' 
-          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+          : 'bg-gray-100 dark:bg-gray-700 text-sena-green dark:text-sena-green/80' 
       )}>
-        {isAllCard ? <CheckSquare className="w-5 h-5" /> : <Cpu className="w-5 h-5" />}
+        {React.createElement(displayIcon, { className: "w-4 h-4" })}
       </div>
       <div>
-        <p className="font-bold text-sm text-gray-900 dark:text-white truncate">
+        <p className="font-semibold text-sm text-gray-900 dark:text-white leading-tight truncate">
           {sensor.name}
         </p>
         {!isAllCard && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 capitalize truncate">
+          <p className="text-xs text-gray-500 dark:text-gray-400 capitalize truncate leading-none">
             {sensor.type}
           </p>
         )}
@@ -91,7 +149,9 @@ const SensorCard: React.FC<{
 };
 
 /**
- * Componente principal de la página de reportes
+ * @component Reports
+ * @description Componente principal de la página de reportes.
+ * @returns {JSX.Element}
  */
 export default function Reports() {
   const { user: currentUser } = useAuth();
@@ -101,7 +161,7 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloading, setIsDownloading] = useState<Record<string, boolean>>({});
-
+  const [isAutoReportEnabled, setIsAutoReportEnabled] = useState(false);
   const [reportForm, setReportForm] = useState<ReportFilters>({
     tankId: null,
     sensorIds: ['all'],
@@ -110,31 +170,28 @@ export default function Reports() {
   });
 
   /**
-   * Carga inicial de datos
+   * @function fetchInitialData
+   * @description Carga inicial de datos (tanques, reportes y settings).
    */
   const fetchInitialData = useCallback(async () => {
     if (!currentUser) return;
     setLoading(true);
     try {
-      console.log('🔄 [Reports] Cargando datos iniciales...');
-      const [tanksData, reportsData] = await Promise.all([
+      const [tanksData, reportsData, settingsData] = await Promise.all([
         tankService.getTanks(currentUser.id),
         reportService.getReports(currentUser.id),
+        settingsService.getSettings(currentUser.id) as Promise<UserSettings>, 
       ]);
-      
-      console.log('✅ [Reports] Datos cargados:', {
-        tanks: tanksData.length,
-        reports: reportsData.length
-      });
       
       setTanks(tanksData);
       setReports(reportsData);
+      
+      setIsAutoReportEnabled(settingsData.notifications?.reports === true);
       
       if (tanksData.length > 0) {
         setReportForm(prev => ({ ...prev, tankId: tanksData[0].id }));
       }
     } catch (error: any) {
-      console.error('❌ [Reports] Error cargando datos:', error);
       Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -150,24 +207,26 @@ export default function Reports() {
   }, [fetchInitialData]);
 
   /**
-   * Configuración de WebSocket para actualizaciones en tiempo real
+   * @function useEffect - WebSocket Setup
+   * @description Configuración de WebSocket para actualizaciones en tiempo real de reportes.
    */
   useEffect(() => {
     if (!socketManager) {
-      console.warn('⚠️ [Reports] SocketManager no disponible');
       return;
     }
 
     const handleReportUpdate = (updatedReport: Report) => {
-      console.log('📨 [Reports] Actualización de reporte recibida:', updatedReport.id);
-      setReports(prevReports =>
-        prevReports.map(r => r.id === updatedReport.id ? updatedReport : r)
-      );
+      setReports(prevReports => {
+        const index = prevReports.findIndex(r => r.id === updatedReport.id);
+        if (index !== -1) {
+            return prevReports.map((r, i) => i === index ? updatedReport : r);
+        }
+        return [updatedReport, ...prevReports]; 
+      });
     };
 
     const handleConnect = () => {
       if (socketManager.socket) {
-        console.log('✅ [Reports] Socket conectado, suscribiendo a eventos...');
         socketManager.socket.on('report_status_update', handleReportUpdate);
       }
     };
@@ -194,20 +253,26 @@ export default function Reports() {
   }, []);
 
   /**
-   * Carga sensores cuando cambia el tanque seleccionado
+   * @const orderedSensors
+   * @description Sensores cargados para el tanque actual, ordenados por nombre.
+   */
+  const orderedSensors = useMemo(() => {
+    return [...sensors].sort((a, b) => a.name.localeCompare(b.name));
+  }, [sensors]);
+
+  /**
+   * @function useEffect - Load Sensors
+   * @description Carga sensores cuando cambia el tanque seleccionado.
    */
   useEffect(() => {
     if (reportForm.tankId && currentUser) {
-      console.log('🔄 [Reports] Cargando sensores para tanque:', reportForm.tankId);
       sensorService.getSensors(currentUser.id)
         .then(allSensors => {
           const tankSensors = allSensors.filter(s => s.tankId === reportForm.tankId);
-          console.log('✅ [Reports] Sensores cargados:', tankSensors.length);
           setSensors(tankSensors);
           setReportForm(prev => ({ ...prev, sensorIds: ['all'] }));
         })
         .catch(error => {
-          console.error('❌ [Reports] Error cargando sensores:', error);
         });
     } else {
       setSensors([]);
@@ -215,7 +280,9 @@ export default function Reports() {
   }, [reportForm.tankId, currentUser]);
 
   /**
-   * Maneja la selección/deselección de sensores
+   * @function handleToggleSensor
+   * @description Maneja la selección/deselección de sensores.
+   * @param {string} sensorId - ID del sensor a alternar.
    */
   const handleToggleSensor = useCallback((sensorId: string) => {
     setReportForm(prev => {
@@ -235,7 +302,7 @@ export default function Reports() {
       }
       
       if (newSelection.length === 0) {
-        return { ...prev, sensorIds: [] };
+        return { ...prev, sensorIds: ['all'] };
       }
 
       return { ...prev, sensorIds: newSelection };
@@ -243,21 +310,20 @@ export default function Reports() {
   }, [sensors]);
 
   /**
-   * Genera un nuevo reporte
+   * @function handleGenerateReport
+   * @description Genera un nuevo reporte manual.
+   * @param {React.FormEvent} e - Evento de envío del formulario.
    */
   const handleGenerateReport = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsGenerating(true);
     
     try {
-      console.log('🚀 [Reports] Generando reporte...');
-      
-      // Validaciones
       if (!reportForm.tankId) {
         throw new Error('Debe seleccionar un tanque.');
       }
       if (reportForm.sensorIds.length === 0) {
-        throw new Error('Debe seleccionar al menos un sensor.');
+        throw new Error('Debe seleccionar al menos un parámetro (sensor).');
       }
       if (!currentUser) {
         throw new Error('Usuario no autenticado.');
@@ -276,12 +342,8 @@ export default function Reports() {
         endDate: reportForm.endDate,
       };
 
-      console.log('📤 [Reports] Enviando datos del reporte:', reportData);
-
       const newReport = await reportService.createReport(reportData);
       
-      console.log('✅ [Reports] Reporte creado:', newReport.id);
-
       setReports(prevReports => [newReport, ...prevReports]);
       
       await Swal.fire({
@@ -293,7 +355,6 @@ export default function Reports() {
       });
       
     } catch (error: any) {
-      console.error('❌ [Reports] Error generando reporte:', error);
       Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -305,16 +366,17 @@ export default function Reports() {
   };
 
   /**
-   * Descarga un reporte en el formato especificado
+   * @function handleDownload
+   * @description Descarga un reporte en el formato especificado.
+   * @param {string} reportId - ID del reporte a descargar.
+   * @param {'pdf' | 'xlsx'} format - Formato de descarga ('pdf' o 'xlsx').
    */
   const handleDownload = async (reportId: string, format: 'pdf' | 'xlsx') => {
     const downloadKey = `${reportId}-${format}`;
     setIsDownloading(prev => ({ ...prev, [downloadKey]: true }));
     
     try {
-      console.log(`📥 [Reports] Descargando reporte ${reportId} en formato ${format}...`);
       await reportService.downloadReport(reportId, format);
-      console.log(`✅ [Reports] Descarga completada`);
       
       await Swal.fire({
         icon: 'success',
@@ -325,7 +387,6 @@ export default function Reports() {
       });
       
     } catch (error: any) {
-      console.error(`❌ [Reports] Error en descarga:`, error);
       Swal.fire({
         icon: 'error',
         title: 'Error de Descarga',
@@ -337,7 +398,10 @@ export default function Reports() {
   };
 
   /**
-   * Chip de estado con estilos según el estado del reporte
+   * @function getStatusChip
+   * @description Retorna un chip de estado con estilos según el estado del reporte.
+   * @param {ReportStatus} status - Estado del reporte.
+   * @returns {JSX.Element}
    */
   const getStatusChip = (status: ReportStatus) => {
     const styles: Record<ReportStatus, string> = {
@@ -355,7 +419,8 @@ export default function Reports() {
   };
 
   /**
-   * Mapa de nombres de tanques para referencia rápida
+   * @const tankMap
+   * @description Mapa de nombres de tanques para referencia rápida.
    */
   const tankMap = useMemo(() => {
     return tanks.reduce((acc, tank) => {
@@ -365,17 +430,6 @@ export default function Reports() {
   }, [tanks]);
 
   const isAllSelected = reportForm.sensorIds.includes('all');
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Loader className="w-12 h-12 animate-spin mx-auto mb-4 text-sena-green" />
-          <p className="text-gray-600 dark:text-gray-400">Cargando reportes...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8">
@@ -390,36 +444,40 @@ export default function Reports() {
       </div>
 
       {/* Información de reportes automáticos */}
-      <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-        <div className="flex items-start space-x-3">
-          <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-          <div className="flex-1">
-            <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
-              Reportes Automáticos
-            </h3>
-            <p className="text-sm text-blue-800 dark:text-blue-200">
-              El sistema genera reportes automáticamente cada 200 datos registrados y al final de cada día. 
-              Puedes habilitar o deshabilitar esta función en la sección de{' '}
-              <a href="/settings" className="underline font-medium hover:text-blue-600">
-                Configuración → Notificaciones
-              </a>.
-            </p>
+      {!isAutoReportEnabled && (
+        <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+          <div className="flex items-start space-x-3 p-3 rounded-full "> 
+            <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                Reportes Automáticos
+              </h3>
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                El sistema genera reportes automáticamente cada 200 datos registrados y al final de cada día. 
+                Puedes habilitar o deshabilitar esta función en la sección de{' '}
+                <a href="/settings" className="underline font-medium hover:text-blue-600">
+                  Configuración → Notificaciones
+                </a>.
+              </p>
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      )}
 
       {/* Formulario de generación de reportes */}
       <Card 
-        title="Generar Nuevo Reporte" 
-        className="border-l-4 border-sena-orange shadow-xl p-8"
+        title="Generar Nuevo Reporte Manual" 
+        className="rounded-xl border-l-4 border-sena-orange p-5 md:p-8" 
       >
         <form onSubmit={handleGenerateReport}>
-          <fieldset disabled={isGenerating} className="group space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+          <fieldset disabled={isGenerating} className="group space-y-6 md:space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-6"> 
               
               {/* Selección de Tanque */}
-              <div className="order-1">
-                <label className="label mb-4">Seleccione un Tanque</label>
+              <div className="order-1 md:col-span-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                  Tanque
+                </label>
                 <select 
                   value={reportForm.tankId || ''} 
                   onChange={e => setReportForm(prev => ({ 
@@ -428,14 +486,14 @@ export default function Reports() {
                     sensorIds: ['all'] 
                   }))} 
                   className={cn(
-                    "form-select w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600",
+                    "form-select w-xl px-4 py-2 border border-gray-300 dark:border-gray-600", 
                     "rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-sena-orange",
-                    "focus:border-sena-orange dark:bg-gray-700 dark:text-white",
+                    "focus:border-sena-orange dark:bg-gray-700 dark:text-white text-sm", 
                     "group-disabled:opacity-50 group-disabled:cursor-not-allowed"
                   )}
                   required
                 >
-                  <option value="" disabled>Seleccione...</option>
+                  <option value="" disabled>Seleccione un Tanque</option>
                   {tanks.map(tank => (
                     <option key={tank.id} value={tank.id}>{tank.name}</option>
                   ))}
@@ -443,9 +501,11 @@ export default function Reports() {
               </div>
               
               {/* Rango de Fechas */}
-              <div className="md:col-span-1 order-3 md:order-2">
-                <label className="label mb-4">Defina el Rango de Fechas</label>
-                <div className="space-y-3">
+              <div className="order-3 md:order-2 md:col-span-3">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                  Rango de Fechas
+                </label>
+                <div className="flex space-x-3">
                   <input 
                     type="date" 
                     value={reportForm.startDate} 
@@ -454,9 +514,9 @@ export default function Reports() {
                       startDate: e.target.value 
                     }))} 
                     className={cn(
-                      "form-input w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600",
+                      "form-input w-1/2 px-3 py-2 border border-gray-300 dark:border-gray-600",
                       "rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-sena-orange",
-                      "focus:border-sena-orange dark:bg-gray-700 dark:text-white",
+                      "focus:border-sena-orange dark:bg-gray-700 dark:text-white text-sm",
                       "group-disabled:opacity-50"
                     )}
                     required 
@@ -470,9 +530,9 @@ export default function Reports() {
                       endDate: e.target.value 
                     }))} 
                     className={cn(
-                      "form-input w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600",
+                      "form-input w-1/2 px-3 py-2 border border-gray-300 dark:border-gray-600",
                       "rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-sena-orange",
-                      "focus:border-sena-orange dark:bg-gray-700 dark:text-white",
+                      "focus:border-sena-orange dark:bg-gray-700 dark:text-white text-sm",
                       "group-disabled:opacity-50"
                     )}
                     required 
@@ -482,18 +542,21 @@ export default function Reports() {
                 </div>
               </div>
 
-              {/* Selección de Sensores */}
-              <div className="md:col-span-2 lg:col-span-3 order-2 md:order-3">
-                <label className="label mb-4">Seleccione Sensores</label>
+              {/* Selección de Sensores (Parámetros a Reportar) */}
+              <div className="md:col-span-5 order-2 md:order-3">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-sena-green"/>
+                  Parámetros a Reportar
+                </label>
                 {sensors.length > 0 ? (
-                  <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-xl mt-1 group-disabled:opacity-50">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                  <div className="p-3 border border-gray-200 dark:border-gray-700 rounded-xl mt-1 ">
+                    <div className="bg-[#39A900]/10 group-hover:bg-[#39A900]/20 transition-colors grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-2"> 
                       <SensorCard 
-                        sensor={{ id: 'all', name: 'Todos los Sensores' } as Sensor} 
+                        sensor={{ id: 'all', name: 'Todos los Parámetros' } as Sensor} 
                         isSelected={isAllSelected} 
                         onToggle={() => handleToggleSensor('all')} 
                       />
-                      {sensors.map(sensor => (
+                      {orderedSensors.map(sensor => (
                         <SensorCard 
                           key={sensor.id} 
                           sensor={sensor} 
@@ -504,8 +567,8 @@ export default function Reports() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500 mt-2 p-4 text-center bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                    Seleccione un tanque para ver sus sensores.
+                  <p className="text-sm text-gray-500 mt-2 p-3 text-center bg-gray-50 dark:bg-gray-700/50 rounded-full">
+                    Seleccione un tanque para ver sus parámetros de monitoreo.
                   </p>
                 )}
               </div>
@@ -522,7 +585,7 @@ export default function Reports() {
               <button 
                 type="submit" 
                 disabled={isGenerating || !reportForm.tankId || reportForm.sensorIds.length === 0} 
-                className="btn-primary min-w-[200px] rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-primary min-w-[200px] rounded-full shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FileText className="w-4 h-4 mr-2" />
                 <span>Generar Reporte</span>
@@ -533,7 +596,7 @@ export default function Reports() {
       </Card>
 
       {/* Historial de Reportes */}
-      <Card title="Historial de Reportes Generados" className="shadow-xl">
+      <Card title="Historial de Reportes Generados" className="shadow-xl rounded-xl">
         {reports.length === 0 ? (
           <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
@@ -588,10 +651,10 @@ export default function Reports() {
                           {format(new Date(params.endDate + 'T00:00:00'), 'dd-MM-yy', { locale: es })}
                         </p>
                         <p>
-                          <strong>Sensores:</strong>{' '}
+                          <strong>Parámetros:</strong>{' '}
                           {params.sensorIds.length >= sensors.length 
                             ? 'Todos' 
-                            : `${params.sensorIds.length} Sensores`}
+                            : `${params.sensorIds.length} Seleccionados`}
                         </p>
                       </td>
                       <td className="px-4 py-4">
@@ -603,7 +666,7 @@ export default function Reports() {
                             <button 
                               onClick={() => handleDownload(report.id, 'pdf')} 
                               disabled={isDownloading[`${report.id}-pdf`]} 
-                              className="btn-secondary px-4 py-2 text-xs flex items-center rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="btn-secondary px-4 py-2 text-xs flex items-center rounded-full font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {isDownloading[`${report.id}-pdf`] ? (
                                 <Loader className="w-3.5 h-3.5 animate-spin"/>
@@ -617,7 +680,7 @@ export default function Reports() {
                             <button 
                               onClick={() => handleDownload(report.id, 'xlsx')} 
                               disabled={isDownloading[`${report.id}-xlsx`]} 
-                              className="btn-primary bg-sena-green px-4 py-2 text-xs flex items-center rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="btn-primary bg-sena-green px-4 py-2 text-xs flex items-center rounded-full font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {isDownloading[`${report.id}-xlsx`] ? (
                                 <Loader className="w-3.5 h-3.5 animate-spin"/>

@@ -67,7 +67,7 @@ export const DashboardFilters: React.FC<DashboardFiltersProps> = ({
   const today = new Date().toISOString().split('T')[0];
   const isAdmin = currentUserRole === Role.ADMIN;
 
-  const inputBaseClasses = "w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 disabled:opacity-50";
+  const inputBaseClasses = "w-full px-3 py-2 border rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 disabled:opacity-50";
   const inputFocusClasses = "focus:ring-2 focus:ring-blue-500 focus:border-blue-500";
 
   const filteredTanksList = React.useMemo(() => {
