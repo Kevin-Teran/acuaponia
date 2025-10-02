@@ -45,16 +45,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isAuthenticated = !!user;
 
   const checkUserSession = useCallback(async () => {
-    console.log('🔍 [AuthContext] Verificando sesión existente...');
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     
     if (token) {
       try {
-        console.log('📡 [AuthContext] Obteniendo datos del usuario...');
         const userData = await authService.getMe();
-        console.log('✅ [AuthContext] Usuario obtenido:', userData.email);
         setUser(userData);
-        console.log('🔌 [AuthContext] Conectando socket después de verificar sesión...');
         if (socketManager) {
           socketManager.connect(token);
         }
@@ -65,7 +61,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.removeItem('refreshToken');
         setUser(null);
         
-        console.log('🔌 [AuthContext] Desconectando socket por error de autenticación...');
+        //console.log('🔌 [AuthContext] Desconectando socket por error de autenticación...');
         if (socketManager) {
             socketManager.close();
         }
@@ -90,7 +86,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [checkUserSession]);
 
   const login = async (credentials: LoginCredentials) => {
-    console.log('🚀 [AuthContext] Iniciando proceso de login...');
     try {
       const response = await authService.login(credentials);
       if (response && response.accessToken && response.user) {
@@ -99,9 +94,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           localStorage.setItem('refreshToken', response.refreshToken);
         }
         setUser(response.user);
-        console.log('✅ [AuthContext] Usuario establecido y token guardado');
-        
-        console.log('🔌 [AuthContext] Conectando socket después de login exitoso...');
         if (socketManager) {
           socketManager.connect(response.accessToken);
         }
@@ -125,12 +117,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
-    console.log('🚪 [AuthContext] Cerrando sesión...');
+    //console.log('🚪 [AuthContext] Cerrando sesión...');
     setUser(null);
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     
-    console.log('🔌 [AuthContext] Desconectando socket por logout...');
+    //console.log('🔌 [AuthContext] Desconectando socket por logout...');
     if (socketManager) {
       socketManager.close();
     }
@@ -142,35 +134,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (!user) {
       throw new Error("No se puede actualizar el perfil: no hay usuario autenticado.");
     }
-    console.log(`🚀 [AuthContext] Iniciando actualización de perfil para ${user.email}...`);
+    //console.log(`🚀 [AuthContext] Iniciando actualización de perfil para ${user.email}...`);
     try {
       const updatedUser = await updateUserService(user.id, dataToUpdate);
       setUser(updatedUser); 
-      console.log('✅ [AuthContext] Perfil actualizado y estado sincronizado.');
+      //console.log('✅ [AuthContext] Perfil actualizado y estado sincronizado.');
     } catch (error) {
-      console.error('💥 [AuthContext] Falló la actualización del perfil:', error);
+      //console.error('💥 [AuthContext] Falló la actualización del perfil:', error);
       throw error;
     }
   };
 
   useEffect(() => {
     const cleanup = () => {
-      console.log('🔌 Limpiando listeners de socket...');
+      //console.log('🔌 Limpiando listeners de socket...');
     };
 
     if (process.env.NODE_ENV === 'development' && socketManager && socketManager.socket) {
       const socket = socketManager.socket;
 
       const handleConnect = () => {
-        console.log('✅ Socket conectado:', socket.id);
+        //console.log('✅ Socket conectado:', socket.id);
       };
 
       const handleDisconnect = (reason: any) => {
-        console.log('❌ Socket desconectado:', reason);
+        //console.log('❌ Socket desconectado:', reason);
       };
 
       const handleReconnect = (attempt: any) => {
-        console.log(`🔄 Reconectando (intento ${attempt})...`);
+        //console.log(`🔄 Reconectando (intento ${attempt})...`);
       };
 
       const handleError = (error: any) => {

@@ -4,7 +4,7 @@
  * @description
  * Componente de UI para el formulario de solicitud de restablecimiento de contraseña.
  * @author Kevin Mariano
- * @version 1.1.1
+ * @version 1.0.1
  * @since 1.0.0
  * @copyright SENA 2025
 */
@@ -52,7 +52,7 @@ export const ForgotPasswordForm: React.FC = () => {
     };
 
     return (
-        <div className="relative flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4 transition-colors duration-500 dark:bg-gray-900">
+        <div className="relative flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4 text-gray-900 transition-colors duration-500 dark:bg-gray-900 dark:text-gray-100">
             <div className="absolute top-4 right-4 z-10">
                 <button
                     onClick={toggleTheme}
@@ -78,7 +78,7 @@ export const ForgotPasswordForm: React.FC = () => {
                     <p className="text-sm text-gray-500 dark:text-gray-400">Ingrese su correo para recibir instrucciones</p>
                 </header>
 
-                <div className="rounded-2xl border border-gray-200 bg-white/80 p-8 shadow-xl backdrop-blur-sm dark:border-gray-700/50 dark:bg-gray-800/80">
+                <div className="rounded-xl border border-gray-200 bg-white/80 p-8 shadow-xl backdrop-blur-sm dark:border-gray-700/50 dark:bg-gray-800/80">
                     <form onSubmit={handleSubmit} className="space-y-6" noValidate>
                         <div>
                             <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300" htmlFor="email">
@@ -91,16 +91,14 @@ export const ForgotPasswordForm: React.FC = () => {
                                     type="email" 
                                     value={email} 
                                     onChange={(e) => setEmail(e.target.value)} 
-                                    className="w-full rounded-lg border border-gray-300 bg-white py-3 pl-10 pr-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-500" 
+                                    className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-500" 
                                     placeholder="usuario@sena.edu.co" 
                                     required 
                                 />
                             </div>
                         </div>
-
-                        {/* ... (el resto del formulario no cambia) ... */}
                         {error && (
-                            <div className="relative flex items-center justify-between rounded-lg border border-red-400/50 bg-red-100/80 px-4 py-3 text-red-700 dark:bg-red-900/50 dark:text-red-300" role="alert">
+                            <div className="relative flex items-center justify-between rounded-xl border border-red-400/50 bg-red-100/80 px-4 py-3 text-red-700 dark:bg-red-900/50 dark:text-red-300" role="alert">
                                 <div className="flex items-center">
                                     <AlertTriangle className="mr-3 h-5 w-5" />
                                     <span className="block text-sm sm:inline">{error}</span>
@@ -112,13 +110,13 @@ export const ForgotPasswordForm: React.FC = () => {
                         )}
 
                         {successMessage && (
-                             <div className="relative flex items-center rounded-lg border border-green-400/50 bg-green-100/80 px-4 py-3 text-green-700 dark:bg-green-900/50 dark:text-green-300" role="alert">
+                             <div className="relative flex items-center rounded-xl border border-green-400/50 bg-green-100/80 px-4 py-3 text-green-700 dark:bg-green-900/50 dark:text-green-300" role="alert">
                                 <CheckCircle className="mr-3 h-5 w-5" />
                                 <span className="block text-sm sm:inline">{successMessage}</span>
                             </div>
                         )}
 
-                        <button type="submit" disabled={loading || !!successMessage} className="flex w-full items-center justify-center space-x-2 rounded-lg bg-gradient-to-r from-green-600 to-green-700 py-3 font-semibold text-white hover:from-green-700 hover:to-green-800 disabled:cursor-not-allowed disabled:opacity-60">
+                        <button type="submit" disabled={loading || !!successMessage} className="flex w-full items-center justify-center space-x-2 rounded-xl bg-gradient-to-r from-green-600 to-green-700 py-3 font-semibold text-white hover:from-green-700 hover:to-green-800 disabled:cursor-not-allowed disabled:opacity-60">
                             <Send className="h-5 w-5" />
                             <span>{loading ? 'Enviando...' : 'Enviar Enlace'}</span>
                         </button>

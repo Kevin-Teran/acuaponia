@@ -1,183 +1,367 @@
 /**
  * @file page.tsx
  * @route frontend/src/app/(main)/predictions
- * @description 
+ * @description Página de predicciones integrada con datos REALES de la API.
  * @author Kevin Mariano
- * @version 1.0.0
+ * @version 2.5.0 // Versión final, corrigiendo el estilo del menú desplegable y la alineación.
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { Card, CardBody, Select, SelectItem, CircularProgress, Skeleton } from '@nextui-org/react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Card, CardBody, Select, SelectItem, Button, Skeleton } from '@nextui-org/react';
 import type { Selection } from '@nextui-org/react';
 import { toast } from 'react-hot-toast';
-import { Calendar, ChevronsRight } from 'lucide-react';
+import { RefreshCw, Download, MapPin, BarChart3, CloudRain, Calendar, ChevronDown } from 'lucide-react'; 
 import { useAuth } from '@/context/AuthContext';
 import { getTanks, getTankById } from '@/services/tankService';
 import { generatePrediction } from '@/services/predictionService';
-import { Sensor, Tank } from '@/types';
+import { getWeatherForecast } from '@/services/weatherService';
+import { Sensor, Tank, SensorType } from '@/types';
 import { PredictionCard } from '@/components/predictions/PredictionCard';
+import { PredictionSummary } from '@/components/predictions/PredictionSummary';
 
-const horizonOptions = [{ label: '7 Días', value: '7' }, { label: '15 Días', value: '15' }];
+// ... (Resto de interfaces, constantes y lógica de la página se mantienen iguales) ...
+
+// 1. FIX DE TIPO: Extensión local de la interfaz Tank para incluir sensores
+interface TankWithSensors extends Tank {
+  sensors?: Sensor[];
+}
+
+// 2. FIX DE TIPO: Definición explícita para los datos del clima
+interface WeatherDataPoint {
+  date: string; 
+  temp_max: number;
+}
+
+const horizonOptions = [
+  { label: '7 Días', value: '7' },
+  { label: '15 Días', value: '15' }
+];
+
+interface PredictionResults {
+  [sensorId: string]: any;
+}
 
 export default function PredictionsPage() {
-    const { user } = useAuth();
-    const [tanks, setTanks] = useState<Tank[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [selectedTankId, setSelectedTankId] = useState<string | null>(null);
-    const [horizon, setHorizon] = useState<string>('7');
-    const [resultsBySensor, setResultsBySensor] = useState({});
-    const [sensors, setSensors] = useState<Sensor[]>([]);
+  const { user } = useAuth();
+  const [tanks, setTanks] = useState<Tank[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedTankId, setSelectedTankId] = useState<string | null>(null);
+  const [horizon, setHorizon] = useState<string>('7');
+  const [resultsBySensor, setResultsBySensor] = useState<PredictionResults>({});
+  const [sensors, setSensors] = useState<Sensor[]>([]);
+  const [weatherData, setWeatherData] = useState<WeatherDataPoint[]>([]); 
+  const [selectedTank, setSelectedTank] = useState<TankWithSensors | null>(null);
 
-    useEffect(() => {
-        if (!user) return;
-        const fetchInitialData = async () => {
-          setIsLoading(true);
-          try {
-            const userTanks = await getTanks(user.id);
-            setTanks(userTanks);
-            if (userTanks.length > 0 && !selectedTankId) {
-              setSelectedTankId(userTanks[0].id);
-            } else if (userTanks.length === 0) {
-              setIsLoading(false);
-            }
-          } catch (error) {
-            toast.error('No se pudieron cargar los tanques.');
-            setIsLoading(false);
-          }
-        };
-        fetchInitialData();
-    }, [user]);
-
-    useEffect(() => {
-        if (!selectedTankId || !horizon) return;
-        const runPredictionsForTank = async () => {
-            setIsLoading(true);
-            try {
-                const tankDetails = await getTankById(selectedTankId);
-                // @ts-ignore
-                setSensors(tankDetails.sensors || []);
-                const newResults = {};
-                // @ts-ignore
-                if (tankDetails.sensors && tankDetails.sensors.length > 0) {
-                  await Promise.all(
-                      // @ts-ignore
-                      tankDetails.sensors.map(async (sensor) => {
-                          // @ts-ignore
-                          const prediction = await generatePrediction({ tankId: selectedTankId, type: sensor.type, horizon: parseInt(horizon, 10) });
-                          // @ts-ignore
-                          newResults[sensor.id] = { ...prediction, sensorId: sensor.id, sensorName: sensor.name, sensorType: sensor.type };
-                      })
-                  );
-                }
-                setResultsBySensor(newResults);
-            } catch (error) {
-                toast.error(`Error al generar predicciones.`);
-                setResultsBySensor({});
-                setSensors([]);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        runPredictionsForTank();
-    }, [selectedTankId, horizon]);
-
-    const selectedTankKeys = useMemo(() => {
-        if (selectedTankId && tanks.some(tank => tank.id === selectedTankId)) {
-            return new Set([selectedTankId]);
-        }
-        return new Set();
-    }, [selectedTankId, tanks]);
+  // Lógica de carga y manejo de datos (se mantiene igual)
+  useEffect(() => {
+    if (!user) return;
     
-    const selectedHorizonKeys = useMemo(() => new Set([horizon]), [horizon]);
-
-    const renderContent = () => {
-        if (isLoading) {
-            return Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className='w-full h-[400px] rounded-xl' />
-            ));
+    const fetchInitialData = async () => {
+      setIsLoading(true);
+      try {
+        const userTanks = await getTanks(user.id);
+        setTanks(userTanks);
+        
+        if (userTanks.length > 0 && !selectedTankId) {
+          setSelectedTankId(userTanks[0].id);
         }
-        if (sensors.length === 0) {
-            return <div className="text-center py-16 text-default-500">El tanque seleccionado no tiene sensores registrados.</div>;
-        }
-        return sensors.map(sensor => {
-            // @ts-ignore
-            const result = resultsBySensor[sensor.id];
-            // @ts-ignore
-            return result ? <PredictionCard key={sensor.id} result={result} /> : <Skeleton key={sensor.id} className='w-full h-[400px] rounded-xl' />;
-        });
+      } catch (error) {
+        toast.error('No se pudieron cargar los tanques.');
+      } finally {
+        setIsLoading(false);
+      }
     };
+    
+    fetchInitialData();
+  }, [user]);
 
-    return (
-      <div className="space-y-6">
+  const generatePredictions = useCallback(async () => {
+    // ... (Lógica de generatePredictions se mantiene igual)
+    if (!selectedTankId || !horizon) return;
+    
+    setIsGenerating(true);
+    try {
+      const tankDetails = await getTankById(selectedTankId);
+      const tankDetailsWithSensors = tankDetails as TankWithSensors;
+
+      setSelectedTank(tankDetailsWithSensors);
+      setSensors(tankDetailsWithSensors.sensors || []); 
+
+      let weather: WeatherDataPoint[] = []; 
+      if (tankDetailsWithSensors.location) {
+        try {
+          weather = await getWeatherForecast(tankDetailsWithSensors.location, parseInt(horizon));
+          setWeatherData(weather);
+        } catch (error) {
+          console.warn('No se pudo obtener el pronóstico del clima:', error);
+          setWeatherData([]);
+        }
+      }
+
+      const newResults: PredictionResults = {};
+      
+      if (tankDetailsWithSensors.sensors && tankDetailsWithSensors.sensors.length > 0) {
+        await Promise.all(
+          tankDetailsWithSensors.sensors.map(async (sensor: Sensor) => {
+            try {
+              const prediction = await generatePrediction({
+                tankId: selectedTankId,
+                type: sensor.type as SensorType,
+                horizon: parseInt(horizon, 10),
+              });
+
+              newResults[sensor.id] = {
+                ...prediction,
+                sensorId: sensor.id,
+                sensorName: sensor.name,
+                sensorType: sensor.type,
+                weatherData: sensor.type === SensorType.TEMPERATURE ? weather : null,
+              };
+            } catch (error) {
+              console.error(`Error generando predicción para sensor ${sensor.name}:`, error);
+              toast.error(`Error en predicción de ${sensor.name}`);
+            }
+          })
+        );
+      }
+
+      setResultsBySensor(newResults);
+      toast.success('Predicciones generadas exitosamente');
+      
+    } catch (error) {
+      console.error('Error al generar predicciones:', error);
+      toast.error('Error al generar predicciones');
+      setResultsBySensor({});
+      setSensors([]);
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [selectedTankId, horizon]);
+
+  useEffect(() => {
+    if (!selectedTankId || !horizon) return;
+    
+    if (!isLoading) {
+        generatePredictions();
+    }
+  }, [selectedTankId, horizon, isLoading, generatePredictions]);
+
+
+  const handleExportAll = async () => {
+    toast.error('Función de exportación en desarrollo');
+  };
+
+  const handleTankSelectionChange = (keys: Selection) => {
+    const rawValue = Array.from(keys).at(0) as string | undefined;
+    setSelectedTankId(rawValue || null);
+  };
+  
+  const handleHorizonSelectionChange = (keys: Selection) => {
+    const value = Array.from(keys).at(0) as string | undefined;
+    if (value) setHorizon(value);
+  };
+
+  const selectedTankKeys = useMemo(
+    (): Set<string> => selectedTankId ? new Set([selectedTankId]) : new Set(), 
+    [selectedTankId]
+  );
+
+  const selectedHorizonKeys = useMemo(
+    (): Set<string> => new Set([horizon]),
+    [horizon]
+  );
+  
+  const renderContent = () => {
+    // ... (Lógica de renderContent se mantiene igual)
+    if (isGenerating) {
+      return Array.from({ length: 3 }).map((_, i) => (
+        <Skeleton key={i} className='w-full h-[600px] rounded-xl' />
+      ));
+    }
+
+    if (!selectedTankId || sensors.length === 0) {
+      return (
+        <div className="text-center py-16">
+          <p className="text-default-500 text-lg">
+            {selectedTank ? `El tanque "${selectedTank.name}" no tiene sensores registrados.` : 'Por favor, selecciona un tanque para generar predicciones.'}
+          </p>
+          <p className="text-default-400 mt-2 text-sm">
+            Se requiere al menos un sensor para el análisis predictivo.
+          </p>
+        </div>
+      );
+    }
+
+    return sensors.map(sensor => {
+      const result = resultsBySensor[sensor.id];
+      return result ? (
+        <PredictionCard 
+          key={sensor.id} 
+          result={result}
+          tankName={selectedTank?.name || ''}
+        />
+      ) : (
+        <Skeleton key={sensor.id} className='w-full h-[600px] rounded-xl' />
+      );
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header (Se mantiene igual) */}
+      <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold">Análisis Predictivo</h1>
-          <p className='text-default-500'>Anticípate al futuro de tus cultivos. Visualiza tendencias y compara con los umbrales operativos.</p>
+          <p className='text-default-500'>
+            Proyecciones inteligentes basadas en datos históricos y condiciones climáticas
+          </p>
         </div>
-        
-        {/* Usamos shadow-xl y un fondo ligeramente diferente para que la tarjeta de filtro destaque */}
-        <Card className='shadow-xl border border-default-200 dark:border-default-800 bg-white dark:bg-gray-900'>
-          <CardBody>
-            <div className="flex flex-col md:flex-row gap-6 items-center">
-              
-              {/* Selector de Tanque con estilos que imitan tus campos de filtro */}
-              <Select 
-                label="Tanque"
-                placeholder="Selecciona un tanque"
-                labelPlacement="outside-left"
-                items={tanks} 
-                // @ts-ignore
-                selectedKeys={selectedTankKeys} 
-                // @ts-ignore
-                onSelectionChange={(keys) => setSelectedTankId((keys as Set<string>).values().next().value)} 
-                disabled={tanks.length === 0}
-                className="min-w-[200px] md:min-w-64"
-                classNames={{
-                  // Etiqueta más limpia y en la izquierda
-                  label: "text-base font-medium text-gray-700 dark:text-gray-300 pr-4 whitespace-nowrap",
-                  // Estilo de la caja de selección: alto, bordes redondeados (rounded-xl) y fondo blanco/gris.
-                  trigger: "h-[48px] rounded-xl shadow-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 data-[hover=true]:bg-gray-50 dark:data-[hover=true]:bg-gray-700",
-                  mainWrapper: "flex-1",
-                  base: "flex-none md:flex-1 w-full flex items-center gap-3",
-                }}
-              >
-                {(tank) => <SelectItem key={tank.id} value={tank.id}>{tank.name}</SelectItem>}
-              </Select>
-
-              {/* Selector de Horizonte con estilos que imitan tus campos de filtro */}
-              <Select 
-                label="Horizonte"
-                labelPlacement="outside-left"
-                selectedKeys={selectedHorizonKeys} 
-                onSelectionChange={(keys) => {
-                  const value = (keys as Set<string>).values().next().value;
-                  if (value) {
-                    setHorizon(value);
-                  }
-                }}
-                disabled={!selectedTankId}
-                className="min-w-[200px] md:min-w-64"
-                classNames={{
-                  // Etiqueta más limpia y en la izquierda
-                  label: "text-base font-medium text-gray-700 dark:text-gray-300 pr-4 whitespace-nowrap",
-                  // Estilo de la caja de selección: alto, bordes redondeados (rounded-xl) y fondo blanco/gris.
-                  trigger: "h-[48px] rounded-xl shadow-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 data-[hover=true]:bg-gray-50 dark:data-[hover=true]:bg-gray-700",
-                  mainWrapper: "flex-1",
-                  base: "flex-none md:flex-1 w-full flex items-center gap-3",
-                }}
-              >
-                {horizonOptions.map((option) => <SelectItem key={option.value}>{option.label}</SelectItem>)}
-              </Select>
+        <Button
+          color="success"
+          variant="flat"
+          startContent={<Download className="w-4 h-4" />}
+          onPress={handleExportAll}
+          isDisabled={Object.keys(resultsBySensor).length === 0}
+        >
+          Exportar Todo
+        </Button>
+      </div>
+      
+      {/* --- */}
+      
+      {/* Filtros - CORRECCIÓN DE ESTILO Y DESPLIEGUE */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 mb-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            
+            {/* Selector de Tanque */}
+            <div className="relative">
+                {/* Ícono MapPin para el tanque */}
+                <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
+                <Select 
+                    placeholder={isLoading ? "Cargando Tanques..." : "Selecciona un tanque"}
+                    items={tanks} 
+                    selectedKeys={selectedTankKeys} 
+                    onSelectionChange={handleTankSelectionChange} 
+                    isDisabled={tanks.length === 0 || isLoading || isGenerating}
+                    aria-label="Selector de Tanque"
+                    classNames={{
+                        // Ajuste pl-8 para acercar el texto al ícono (causando el efecto de superposición)
+                        trigger: "h-12 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus-within:ring-1 focus-within:ring-[#39A900] focus-within:border-[#39A900] transition-colors pl-10",
+                        // El valor del select (el texto visible)
+                        value: "text-default-700 dark:text-default-200 pl-2", // Ajuste de padding al valor
+                        mainWrapper: "rounded-xl",
+                        // CORRECCIÓN CLAVE: Estilizar el Popover (menú desplegable)
+                        popoverContent: "rounded-xl bg-gray-800 border border-blue-600 shadow-xl p-0", // Fondo oscuro y borde azul
+                    }}
+                    // CORRECCIÓN DE LA FLECHA: Reemplazar el icono por defecto con ChevronDown
+                    selectorIcon={<ChevronDown className="w-4 h-4 text-gray-400" />}
+                >
+                    {(tank) => (
+                        <SelectItem key={tank.id} value={tank.id} classNames={{
+                             // Estilo para el ítem seleccionado (fondo oscuro)
+                            selectedIcon: "text-blue-400",
+                            base: "text-white hover:bg-gray-700/50 data-[selected=true]:bg-gray-700 data-[selected=true]:text-white",
+                        }}>
+                            {tank.name}
+                        </SelectItem>
+                    )}
+                </Select>
             </div>
-          </CardBody>
-        </Card>
-        
-        <div className="flex flex-col gap-6">
-          {renderContent()}
+
+            {/* Selector de Horizonte */}
+            <div className="relative">
+                {/* Ícono Calendar para el horizonte */}
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
+                <Select 
+                    placeholder="Horizonte de Predicción"
+                    selectedKeys={selectedHorizonKeys} 
+                    onSelectionChange={handleHorizonSelectionChange}
+                    isDisabled={!selectedTankId || isGenerating || tanks.length === 0}
+                    aria-label="Selector de Horizonte de Predicción"
+                    classNames={{
+                         // Estilo del campo (trigger)
+                        trigger: "h-12 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus-within:ring-1 focus-within:ring-[#39A900] focus-within:border-[#39A900] transition-colors pl-10",
+                        value: "text-default-700 dark:text-default-200 pl-2",
+                        mainWrapper: "rounded-xl",
+                        // CORRECCIÓN CLAVE: Estilizar el Popover (menú desplegable)
+                        popoverContent: "rounded-xl bg-gray-800 border border-blue-600 shadow-xl p-0", // Fondo oscuro y borde azul
+                    }}
+                    // CORRECCIÓN DE LA FLECHA: Reemplazar el icono por defecto con ChevronDown
+                    selectorIcon={<ChevronDown className="w-4 h-4 text-gray-400" />}
+                >
+                    {horizonOptions.map((option) => (
+                        <SelectItem key={option.value} classNames={{
+                             // Estilo para el ítem seleccionado (fondo oscuro)
+                            selectedIcon: "text-blue-400",
+                            base: "text-white hover:bg-gray-700/50 data-[selected=true]:bg-gray-700 data-[selected=true]:text-white",
+                        }}>
+                            {option.label}
+                        </SelectItem>
+                    ))}
+                </Select>
+            </div>
+
+            {/* Botón de Actualizar / Generar */}
+            <div className="md:w-auto"> 
+                <Button
+                    color="success"
+                    size="lg"
+                    className="w-full h-12 font-semibold rounded-xl text-white bg-[#39A900] hover:bg-[#2F8B00]" 
+                    startContent={
+                        <RefreshCw className={`w-5 h-5 ${isGenerating ? 'animate-spin' : ''}`} />
+                    }
+                    onPress={generatePredictions}
+                    isDisabled={!selectedTankId || isGenerating || tanks.length === 0}
+                    isLoading={isGenerating}
+                >
+                    {isGenerating ? 'Generando Predicciones' : 'Generar Predicciones'}
+                </Button>
+            </div>
         </div>
       </div>
-    );
+      
+      {/* Información de estado y Resumen (Se mantienen iguales) */}
+      {selectedTank && (
+        <div className="mt-2 pt-2 text-sm text-default-500 flex flex-wrap gap-4 items-center">
+            <p className="inline-flex items-center">
+                <MapPin className="w-4 h-4 mr-1 text-primary" />
+                Tanque: <strong className="text-default-700 dark:text-default-300 ml-1">{selectedTank.name}</strong>
+            </p>
+            <p className="inline-flex items-center">
+                <MapPin className="w-4 h-4 mr-1 text-default-400" />
+                Ubicación: <strong className="text-default-700 dark:text-default-300 ml-1">{selectedTank.location || 'N/A'}</strong>
+            </p>
+            <p className="inline-flex items-center">
+                <BarChart3 className="w-4 h-4 mr-1 text-default-400" />
+                Sensores a predecir: <strong className="text-default-700 dark:text-default-300 ml-1">{sensors.length}</strong>
+            </p>
+            {weatherData.length > 0 && (
+                <p className="inline-flex items-center text-blue-500 font-medium">
+                    <CloudRain className="w-4 h-4 mr-1" />
+                    Clima integrado ({horizon} días)
+                </p>
+            )}
+        </div>
+      )}
+
+      {/* Resumen General */}
+      {Object.keys(resultsBySensor).length > 0 && (
+        <PredictionSummary 
+          results={resultsBySensor} 
+          horizon={horizon}
+          weatherData={weatherData}
+        />
+      )}
+      
+      {/* Tarjetas de Predicción */}
+      <div className="flex flex-col gap-6">
+        {renderContent()}
+      </div>
+    </div>
+  );
 }

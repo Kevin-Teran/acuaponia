@@ -58,7 +58,7 @@ const DataEntryPage: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-6">
+    <div className="w-full">
       <PageHeader mqttStatus={mqttStatus} />
 
       <StatCardsGrid stats={stats} />
@@ -117,16 +117,12 @@ const PageHeader = memo(({ mqttStatus }: { mqttStatus: string }) => {
   const status = MqttStatusInfo[mqttStatus as keyof typeof MqttStatusInfo] || { icon: AlertTriangle, color: 'text-gray-500', text: 'Desconocido' };
 
   return (
-    <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Recolección de Datos</h1>
         <p className="text-gray-600 dark:text-gray-400 mt-1">
           Gestiona y simula el flujo de datos de tus sensores.
         </p>
-      </div>
-      <div className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-          <status.icon className={`h-5 w-5 ${status.color}`} />
-          <span className="text-sm font-medium text-foreground">MQTT: {status.text}</span>
       </div>
     </header>
   );
@@ -134,7 +130,7 @@ const PageHeader = memo(({ mqttStatus }: { mqttStatus: string }) => {
 PageHeader.displayName = 'PageHeader';
 
 const StatCardsGrid = memo(({ stats }: { stats: any }) => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {/* @ts-ignore */}
         <StatCard icon={Activity} title="Simulaciones Activas" value={stats.activeSimulations} color="text-primary" />
         {/* @ts-ignore */}
@@ -149,7 +145,7 @@ StatCardsGrid.displayName = 'StatCardsGrid';
 // @ts-ignore
 const StatCard = memo(({ icon: Icon, title, value, color }) => (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 flex items-center border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
-        <div className={clsx("p-3 rounded-lg", color.replace('text-', 'bg-') + '/10')}>
+        <div className={clsx("p-3 rounded-xl", color.replace('text-', 'bg-') + '/10')}>
             <Icon className={clsx("h-8 w-8", color)} />
         </div>
         <div className="ml-4">
@@ -161,12 +157,12 @@ const StatCard = memo(({ icon: Icon, title, value, color }) => (
 StatCard.displayName = 'StatCard';
 // @ts-ignore
 const Filters = memo(({ isAdmin, users, selectedUserId, handleUserChange, tanks, selectedTankId, handleTankChange, searchTerm, setSearchTerm }) => (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 mb-8">
         <div className={clsx("grid gap-4", isAdmin ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2")}>
             {isAdmin && users.length > 0 && (
                 <div className="relative">
                     <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                    <select value={selectedUserId || ''} onChange={(e) => handleUserChange(e.target.value)} className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] transition-colors appearance-none cursor-pointer">
+                    <select value={selectedUserId || ''} onChange={(e) => handleUserChange(e.target.value)} className="w-full pl-10 pr-4 py-2.5 border rounded-xl dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] transition-colors appearance-none cursor-pointer">
                         {/* @ts-ignore */}
                         {users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
                     </select>
@@ -174,15 +170,15 @@ const Filters = memo(({ isAdmin, users, selectedUserId, handleUserChange, tanks,
             )}
             <div className="relative">
                 <LayoutGrid className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                <select value={selectedTankId || ''} onChange={(e) => handleTankChange(e.target.value)} disabled={!selectedUserId || tanks.length === 0} className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] transition-colors appearance-none cursor-pointer">
-                    <option value="">{tanks.length > 0 ? 'Seleccionar tanque...' : 'Sin tanques disponibles'}</option>
+                <select value={selectedTankId || ''} onChange={(e) => handleTankChange(e.target.value)} disabled={!selectedUserId || tanks.length === 0} className="w-full pl-10 pr-4 py-2.5 border rounded-xl dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] transition-colors appearance-none cursor-pointer">
+                    <option value="">{tanks.length > 0 ? '' : 'Sin tanques disponibles'}</option>
                     {/* @ts-ignore */}
                     {tanks.map(tank => <option key={tank.id} value={tank.id}>{tank.name}</option>)}
                 </select>
             </div>
             <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                <input type="text" placeholder="Buscar sensor por nombre..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] transition-colors" />
+                <input type="text" placeholder="Buscar sensor por nombre..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 border rounded-xl dark:bg-gray-700 dark:border-gray-600 focus:ring-[#39A900] focus:border-[#39A900] transition-colors" />
             </div>
         </div>
     </div>
@@ -190,7 +186,7 @@ const Filters = memo(({ isAdmin, users, selectedUserId, handleUserChange, tanks,
 Filters.displayName = 'Filters';
 // @ts-ignore
 const DataInputTabs = memo(({ activeTab, setActiveTab, sensors, selectedTankId, isLoadingSensors, ...props }) => (
-    <Card className="rounded-2xl">
+    <Card className="rounded-xl mb-8">
         <div className="border-b border-border grid grid-cols-2">
             <TabButton icon={Signal} label="Simulación" isActive={activeTab === 'simulation'} onClick={() => setActiveTab('simulation')} />
             <TabButton icon={Database} label="Entrada Manual" isActive={activeTab === 'manual'} onClick={() => setActiveTab('manual')} />
@@ -218,7 +214,7 @@ const ActiveSimulationsPanel = memo(({ activeSimulations, getSensorIcon, getUnit
     }, [activeSimulations]);
 
     return (
-        <Card className="rounded-2xl">
+        <Card className="rounded-xl">
             <CardHeader>
                 <CardTitle className="flex items-center text-xl gap-2"><Activity className="h-5 w-5 text-primary" />Simulaciones Activas</CardTitle>
                 <CardDescription>Vista en tiempo real de los sensores simulados.</CardDescription>
@@ -235,7 +231,7 @@ const ActiveSimulationsPanel = memo(({ activeSimulations, getSensorIcon, getUnit
                         <div className="space-y-2">
                         {/* @ts-ignore */}
                         {data.simulations.map(sim => (
-                            <div key={sim.sensorId} className="flex items-center justify-between text-xs bg-gray-100 dark:bg-gray-800/50 p-3 rounded-lg">
+                            <div key={sim.sensorId} className="flex items-center justify-between text-xs bg-gray-100 dark:bg-gray-800/50 p-3 rounded-xl">
                               <div className="flex items-center gap-3 text-foreground font-medium">{getSensorIcon(sim.type)}<span>{sim.sensorName} ({sim.tankName})</span></div>
                               <div className="text-right">
                                   <div className="font-mono text-lg font-bold text-primary dark:text-primary-400">{sim.currentValue.toFixed(2)}</div>
@@ -259,7 +255,7 @@ const SimulationTabContent = ({ sensors, activeSimulations, isTogglingSimulation
   return (
     <div className="space-y-4">
       <BatchActions selectedCount={selectedSensors.size} onStart={() => startMultipleSimulations(Array.from(selectedSensors))} onStop={() => stopMultipleSimulations(Array.from(selectedSensors))} onClear={() => setSelectedSensors(new Set())} />
-      <div className="border border-border rounded-lg">
+      <div className="border border-border rounded-xl">
         <div className="flex items-center p-3 border-b border-border">
             <input type="checkbox" onChange={handleSelectAll} checked={selectedSensors.size > 0 && selectedSensors.size === sensors.length} className="w-4 h-4 rounded text-primary-600 bg-gray-200 dark:bg-gray-700 border-border focus:ring-primary" />
             <label className="text-sm font-medium text-foreground ml-3">Seleccionar todos</label>
@@ -289,10 +285,10 @@ const SensorRow = ({ sensor, simulation, isToggling, isSelected, onToggle, onSel
           {isActive && <span className="font-mono text-primary dark:text-primary-400 animate-pulse-dot">{simulation.currentValue.toFixed(2)}</span>}
         </div>
         <div className="flex items-center justify-end gap-3">
-          <span className={clsx("px-2 py-0.5 text-xs font-semibold rounded-full", isActive ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200")}>
+          <span className={clsx("px-2 py-0.5 text-xs font-semibold rounded-xl", isActive ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200")}>
             {isActive ? 'Activa' : 'Inactiva'}
           </span>
-          <button onClick={onToggle} disabled={isToggling} className={clsx("p-2 text-sm font-medium text-white rounded-md shadow-sm flex items-center justify-center w-9 h-9 transition-colors", isActive ? "bg-red-600 hover:bg-red-700" : "bg-primary hover:bg-primary-600", "disabled:bg-gray-400 dark:disabled:bg-gray-600")}>
+          <button onClick={onToggle} disabled={isToggling} className={clsx("p-2 text-sm font-medium text-white rounded-xl shadow-sm flex items-center justify-center w-9 h-9 transition-colors", isActive ? "bg-red-600 hover:bg-red-700" : "bg-primary hover:bg-primary-600", "disabled:bg-gray-400 dark:disabled:bg-gray-600")}>
             {isToggling ? <Loader2 className="h-5 w-5 animate-spin" /> : isActive ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </button>
         </div>
@@ -305,7 +301,7 @@ const ManualEntryTabContent = ({ sensors, manualReadings, handleManualReadingCha
     <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">
       {/* @ts-ignore */}
       {sensors.map(sensor => (
-        <div key={sensor.id} className="grid grid-cols-3 items-center gap-3 p-3 border border-border rounded-lg hover:border-primary/50 transition-colors">
+        <div key={sensor.id} className="grid grid-cols-3 items-center gap-3 p-3 border border-border rounded-xl hover:border-primary/50 transition-colors">
           <div className="col-span-2 flex items-center gap-3">
             {getSensorIcon(sensor.type)}
             <div>
@@ -314,28 +310,28 @@ const ManualEntryTabContent = ({ sensors, manualReadings, handleManualReadingCha
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <input id={`sensor-${sensor.id}`} type="number" step="0.01" placeholder="Valor" value={manualReadings[sensor.id] || ''} onChange={(e) => handleManualReadingChange(sensor.id, e.target.value)} className="w-full p-2 border border-border rounded-md bg-background shadow-sm focus:ring-primary focus:border-primary" />
+            <input id={`sensor-${sensor.id}`} type="number" step="0.01" placeholder="Valor" value={manualReadings[sensor.id] || ''} onChange={(e) => handleManualReadingChange(sensor.id, e.target.value)} className="w-full p-2 border border-border rounded-xl bg-background shadow-sm focus:ring-primary focus:border-primary" />
             <span className="text-sm text-gray-500 dark:text-gray-400">{getUnitForSensorType(sensor.type)}</span>
           </div>
         </div>
       ))}
     </div>
-    <button type="submit" disabled={isSubmittingManual} className="w-full inline-flex justify-center py-2.5 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-700 disabled:bg-gray-400 dark:disabled:bg-gray-600">
+    <button type="submit" disabled={isSubmittingManual} className="w-full inline-flex justify-center py-2.5 px-4 border border-transparent shadow-sm text-sm font-medium rounded-xl text-white bg-primary hover:bg-primary-700 disabled:bg-gray-400 dark:disabled:bg-gray-600">
       {isSubmittingManual ? <Loader2 className="h-5 w-5 animate-spin" /> : "Guardar Lecturas"}
     </button>
   </form>
 );
 // @ts-ignore
 const BatchActions = ({ selectedCount, onStart, onStop, onClear }) => (
-    <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-100 dark:bg-gray-800/50 rounded-lg">
+    <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-100 dark:bg-gray-800/50 rounded-xl">
         <span className="text-sm font-medium text-foreground mr-4">{selectedCount} seleccionados</span>
-        <button onClick={onStart} disabled={selectedCount === 0} className="px-3 py-1.5 text-sm font-medium text-white bg-primary rounded-md shadow-sm hover:bg-primary-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 inline-flex items-center">
+        <button onClick={onStart} disabled={selectedCount === 0} className="px-3 py-1.5 text-sm font-medium text-white bg-primary rounded-xl shadow-sm hover:bg-primary-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 inline-flex items-center">
             <Play className="h-4 w-4 mr-1" /> Iniciar
         </button>
-        <button onClick={onStop} disabled={selectedCount === 0} className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 rounded-md shadow-sm hover:bg-red-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 inline-flex items-center">
+        <button onClick={onStop} disabled={selectedCount === 0} className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 rounded-xl shadow-sm hover:bg-red-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 inline-flex items-center">
             <Square className="h-4 w-4 mr-1" /> Detener
         </button>
-        <button onClick={onClear} disabled={selectedCount === 0} className="px-3 py-1.5 text-sm font-medium text-foreground bg-card border border-border rounded-md shadow-sm hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 ml-auto">
+        <button onClick={onClear} disabled={selectedCount === 0} className="px-3 py-1.5 text-sm font-medium text-foreground bg-card border border-border rounded-xl shadow-sm hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 ml-auto">
             Limpiar
         </button>
     </div>
@@ -350,6 +346,6 @@ const getSensorIcon = (type: SensorType | string) => ({
     OXYGEN: <Wind className="h-5 w-5 text-blue-500" />,
 })[type] || <Activity className="h-5 w-5 text-gray-500" />;
 
-const PageSkeleton = () => ( <div className="space-y-6"><div className="space-y-2"><Skeleton className="h-10 w-1/3" /><Skeleton className="h-6 w-1/2" /></div><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><div className="lg:col-span-1 space-y-6"><Skeleton className="h-48 w-full rounded-2xl" /></div><div className="lg:col-span-2 space-y-6"><Skeleton className="h-96 w-full rounded-2xl" /></div></div></div>);
+const PageSkeleton = () => ( <div className="space-y-6"><div className="space-y-2"><Skeleton className="h-10 w-1/3" /><Skeleton className="h-6 w-1/2" /></div><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><div className="lg:col-span-1 space-y-6"><Skeleton className="h-48 w-full rounded-xl" /></div><div className="lg:col-span-2 space-y-6"><Skeleton className="h-96 w-full rounded-xl" /></div></div></div>);
 
 export default withAuth(DataEntryPage, [Role.ADMIN]);

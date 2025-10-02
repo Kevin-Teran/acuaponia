@@ -107,3 +107,57 @@ export const deleteReport = async (reportId: string): Promise<void> => {
     throw error;
   }
 };
+
+/**
+ * @description Función para agregar al archivo reportService.ts existente
+ * @route frontend/src/services/reportService.ts
+ */
+
+/**
+ * @description Exporta un reporte completo de predicciones
+ * @param {object} params - Parámetros del reporte
+ * @returns {Promise<void>}
+ */
+ export const exportPredictionsReport = async (params: {
+  tankId: string;
+  results: Record<string, any>;
+  horizon: number;
+  weatherData?: any[];
+}): Promise<void> => {
+  try {
+    const { tankId, results, horizon, weatherData } = params;
+    
+    // Preparar datos para el backend
+    const reportData = {
+      reportName: `Predicciones_${new Date().toISOString().split('T')[0]}`,
+      tankId,
+      horizon,
+      predictions: Object.values(results),
+      weather: weatherData || [],
+      generatedAt: new Date().toISOString(),
+    };
+
+    // Llamar al endpoint de exportación
+    const response = await api.post('/reports/predictions/export', reportData, {
+      responseType: 'blob', // Para archivos descargables
+    });
+
+    // Crear y descargar el archivo
+    const blob = new Blob([response.data], { 
+      type: 'application/pdf' 
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Reporte_Predicciones_${new Date().getTime()}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    console.log('✅ Reporte exportado exitosamente');
+  } catch (error) {
+    console.error('❌ Error exportando reporte:', error);
+    throw error;
+  }
+};

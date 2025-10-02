@@ -3,7 +3,7 @@
  * @route frontend/src/components/auth
  * @description Componente de UI para el formulario de inicio de sesión con manejo de tema y autocompletado.
  * @author Kevin Mariano
- * @version 1.2.2
+ * @version 1.0.1
  * @since 1.0.0
  * @copyright SENA 2025
 */
@@ -33,11 +33,6 @@ export const LoginForm: React.FC = () => {
             router.replace('/dashboard');
         }
     }, [isAuthenticated, router]);
-
-    const demoAccounts = [
-        { email: 'admin@sena.edu.co', password: '123456', role: 'Administrador' },
-        { email: 'acuaponiasena@gmail.com', password: '123456', role: 'Usuario' },
-    ];
     
     const validateForm = useCallback((): boolean => {
         if (!email.trim() || !password.trim()) {
@@ -101,7 +96,7 @@ export const LoginForm: React.FC = () => {
                     <p className="text-sm text-gray-500 dark:text-gray-400">Servicio Nacional de Aprendizaje (SENA)</p>
                 </header>
 
-                <div className="rounded-2xl border border-gray-200 bg-white/80 p-8 shadow-xl backdrop-blur-sm dark:border-gray-700/50 dark:bg-gray-800/80">
+                <div className="rounded-xl border border-gray-200 bg-white/80 p-8 shadow-xl backdrop-blur-sm dark:border-gray-700/50 dark:bg-gray-800/80">
                     <form onSubmit={handleSubmit} className="space-y-6" noValidate>
                         <div>
                             <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300" htmlFor="email">
@@ -114,7 +109,7 @@ export const LoginForm: React.FC = () => {
                                     type="email" 
                                     value={email} 
                                     onChange={handleInputChange(setEmail)} 
-                                    className="w-full rounded-lg border border-gray-300 bg-white py-3 pl-10 pr-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-500"
+                                    className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-500"
                                     placeholder="acuaponiasena@gmail.com" 
                                     required 
                                 />
@@ -131,7 +126,7 @@ export const LoginForm: React.FC = () => {
                                     type={showPassword ? 'text' : 'password'} 
                                     value={password} 
                                     onChange={handleInputChange(setPassword)} 
-                                    className="w-full rounded-lg border border-gray-300 bg-white py-3 pl-10 pr-12 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-500"
+                                    className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-12 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-500"
                                     placeholder="Mínimo 6 caracteres" 
                                     required 
                                 />
@@ -145,7 +140,7 @@ export const LoginForm: React.FC = () => {
                             <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">Recordar sesión</label>
                         </div>
                         {error && (
-                            <div className="relative flex items-center justify-between rounded-lg border border-red-400/50 bg-red-100/80 px-4 py-3 text-red-700 dark:bg-red-900/50 dark:text-red-300" role="alert">
+                            <div className="relative flex items-center justify-between rounded-xl border border-red-400/50 bg-red-100/80 px-4 py-3 text-red-700 dark:bg-red-900/50 dark:text-red-300" role="alert">
                                 <div className="flex items-center">
                                     <AlertTriangle className="mr-3 h-5 w-5" />
                                     <span className="block text-sm sm:inline">{error}</span>
@@ -155,7 +150,7 @@ export const LoginForm: React.FC = () => {
                                 </button>
                             </div>
                         )}
-                        <button type="submit" disabled={loading} className="flex w-full items-center justify-center space-x-2 rounded-lg bg-gradient-to-r from-green-600 to-green-700 py-3 font-semibold text-white hover:from-green-700 hover:to-green-800 disabled:cursor-not-allowed disabled:opacity-60">
+                        <button type="submit" disabled={loading} className="flex w-full items-center justify-center space-x-2 rounded-xl bg-gradient-to-r from-green-600 to-green-700 py-3 font-semibold text-white hover:from-green-700 hover:to-green-800 disabled:cursor-not-allowed disabled:opacity-60">
                             <LogIn className="h-5 w-5" />
                             <span>{loading ? 'Ingresando...' : 'Iniciar Sesión'}</span>
                         </button>
@@ -164,20 +159,6 @@ export const LoginForm: React.FC = () => {
                         <a href="/forgot-password" className="text-sm text-gray-600 transition-colors hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400">
                             ¿Olvidaste tu contraseña?
                         </a>
-                    </div>
-                    <div className="mt-8 border-t border-gray-200 pt-6 dark:border-gray-700">
-                        <p className="mb-3 text-center text-sm text-gray-600 dark:text-gray-400">O ingresa con una cuenta demo:</p>
-                        <div className="space-y-2">
-                            {demoAccounts.map(account => (
-                                <button key={account.email} onClick={() => handleDemoLogin(account.email, account.password)} className="flex w-full items-center rounded-lg bg-gray-50 p-3 text-left transition-colors hover:bg-gray-100 dark:bg-gray-700/50 dark:hover:bg-gray-600/50">
-                                    <UserCheck className="mr-3 h-5 w-5 text-green-500" />
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-900 dark:text-white">{account.email}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">{account.role}</p>
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
                     </div>
                 </div>
                 <footer className="mt-8 text-center text-xs text-gray-500 dark:text-gray-400">

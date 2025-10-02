@@ -18,7 +18,7 @@
    <div
      ref={ref}
      className={clsx(
-       'rounded-lg border border-gray-200 bg-white text-gray-900 shadow-md dark:border-gray-800 dark:bg-gray-900 dark:text-gray-50',
+       'bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden transition-all duration-300 hover:shadow-lg border border-gray-200 dark:border-gray-700',
        className
      )}
      {...props}

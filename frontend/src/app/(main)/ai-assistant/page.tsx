@@ -111,15 +111,15 @@ const AsistenteIAPage: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-400 mt-1">Conversa con la IA para obtener análisis y recomendaciones.</p>
         </div>
         {messages.length > 0 && (
-          <button onClick={handleClearChat} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 transition-all">
+          <button onClick={handleClearChat} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 transition-all">
             <Trash2 size={16} /> Limpiar
           </button>
         )}
       </header>
       
-      <div className="flex flex-col flex-grow p-6 pt-2 overflow-hidden">
-        <Card className="flex flex-col flex-grow p-0 overflow-hidden w-full">
-          <div className="flex-grow overflow-y-auto p-4 sm:p-6 space-y-6">
+      <div className="flex flex-col flex-grow p-6 pt-2 overflow-hidden rounded-xl">
+        <Card className="flex flex-col flex-grow p-0 overflow-hidden w-full rounded-xl">
+          <div className="flex-grow overflow-y-auto p-4 sm:p-6 space-y-6 rounded-xl">
             {messages.length === 0 && (
               <div className="text-center text-gray-500 dark:text-gray-400 h-full flex flex-col justify-center items-center p-4">
                 <Bot size={48} className="mb-4 text-gray-400" />
@@ -135,7 +135,7 @@ const AsistenteIAPage: React.FC = () => {
                       <Bot size={20} className="text-gray-600 dark:text-gray-300"/>
                     </div>
                   )}
-                  <div className={clsx('relative max-w-xs md:max-w-md rounded-lg px-4 py-3 text-sm', {
+                  <div className={clsx('relative max-w-xs md:max-w-md rounded-xl px-4 py-3 text-sm', {
                     'bg-emerald-600 text-white': msg.sender === 'user',
                     'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200': msg.sender === 'ai',
                   })}>
@@ -153,7 +153,7 @@ const AsistenteIAPage: React.FC = () => {
             {cargando && (
               <div className="flex items-start gap-4 animate-in fade-in">
                 <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center"> <Bot size={24} /> </div>
-                <div className="bg-gray-100 dark:bg-gray-700 rounded-lg px-4 py-3 flex items-center">
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-xl px-4 py-3 flex items-center">
                   <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse-dot [animation-delay:0s]"></span>
                   <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse-dot [animation-delay:0.2s] mx-1"></span>
                   <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse-dot [animation-delay:0.4s]"></span>
@@ -178,13 +178,13 @@ const AsistenteIAPage: React.FC = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Escribe tu mensaje..."
-                className="flex-grow w-full h-12 px-4 rounded-lg border-gray-300 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-200 focus:border-emerald-500 focus:ring-emerald-500 text-base"
+                className="flex-grow w-full h-12 px-4 rounded-xl border-gray-300 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-200 focus:border-emerald-500 focus:ring-emerald-500 text-base"
                 disabled={cargando}
               />
               <button 
                 type="submit" 
                 disabled={!input.trim() || cargando} 
-                className="flex-shrink-0 flex items-center justify-center h-12 w-12 bg-emerald-600 text-white rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors"
+                className="flex-shrink-0 flex items-center justify-center h-12 w-12 bg-emerald-600 text-white rounded-xl disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors"
                 aria-label="Enviar mensaje"
               >
                 <Send size={20} />

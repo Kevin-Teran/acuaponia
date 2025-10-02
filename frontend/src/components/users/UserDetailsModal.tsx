@@ -35,12 +35,12 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ isOpen, user
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-500 bg-opacity-75">
       <div
-        className="inline-block w-full max-w-lg p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-2xl rounded-2xl"
+        className="inline-block w-full max-w-lg p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-2xl rounded-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
-                <div className="p-2 bg-[#39A900]/10 rounded-lg">
+                <div className="p-2 bg-[#39A900]/10 rounded-xl">
                     <User className="w-8 h-8 text-[#39A900]" />
                 </div>
                 <div>
@@ -52,7 +52,7 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ isOpen, user
                     </p>
                 </div>
             </div>
-          <button onClick={onClose} className="p-2 text-gray-400 rounded-lg transition-colors hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+          <button onClick={onClose} className="p-2 text-gray-400 rounded-xl transition-colors hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -77,7 +77,7 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ isOpen, user
              <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 font-medium text-gray-700 transition-colors bg-gray-100 rounded-lg dark:text-gray-300 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500"
+              className="px-6 py-3 font-medium text-gray-700 transition-colors bg-gray-100 rounded-xl dark:text-gray-300 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500"
             >
               Cerrar
             </button>
