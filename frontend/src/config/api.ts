@@ -17,7 +17,7 @@ import Swal from 'sweetalert2';
  * @description Instancia de Axios preconfigurada con la URL base de la API.
  */
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || '/api',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || '/api', 
 });
 
 /**
@@ -90,7 +90,7 @@ api.interceptors.request.use(
          confirmButtonText: 'Aceptar'
      }).then(() => {
           if (typeof window !== 'undefined') {
-             window.location.href = '/login';
+             window.location.href = '/acuaponia/login'; 
           }
      });
    } else if (status === 403) {

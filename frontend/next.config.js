@@ -1,24 +1,18 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Configurar basePath para que los assets se carguen desde /acuaponia
   basePath: '/acuaponia',
-
-  // Prefijo para assets estáticos
   assetPrefix: '/acuaponia',
-
-  // Configuración para producción
   trailingSlash: false,
-
-  // Configuración de imágenes
+  publicRuntimeConfig: {
+    basePath: '/acuaponia',
+  },
   images: {
-    unoptimized: true, // importante en VPS si no configuras image-optimizer
-    domains: ['tesorostpatl.com.co'], // habilita imágenes de tu dominio
+    unoptimized: true, 
+    domains: ['tesorostpatl.com.co'], 
   },
 
-  // Reescrituras (opcional)
   async rewrites() {
     return [
-      // ejemplo: /dashboard/* -> /acuaponia/dashboard/*
       {
         source: '/dashboard/:path*',
         destination: '/acuaponia/dashboard/:path*'
@@ -39,4 +33,4 @@ const nextConfig = {
   },
 }
 
-export default nextConfig
+module.exports = nextConfig 

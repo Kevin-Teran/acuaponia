@@ -3,7 +3,7 @@
  * @route frontend/src/components/auth
  * @description Componente de UI para el formulario de inicio de sesión con manejo de tema y autocompletado.
  * @author Kevin Mariano
- * @version 1.0.1
+ * @version 1.0.2
  * @since 1.0.0
  * @copyright SENA 2025
 */
@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import { User, Lock, Eye, EyeOff, LogIn, UserCheck, Sun, Moon, AlertTriangle, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
+import getConfig from 'next/config';
 
 export const LoginForm: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -28,6 +29,9 @@ export const LoginForm: React.FC = () => {
     const { theme, toggleTheme } = useTheme();
     const router = useRouter();
 
+    const config = getConfig() || {};
+    const basePath = config.publicRuntimeConfig?.basePath || ''; 
+    
     useEffect(() => {
         if (isAuthenticated) {
             router.replace('/dashboard');
@@ -85,7 +89,7 @@ export const LoginForm: React.FC = () => {
                 <header className="mb-6 text-center">
                     <div className="relative mx-auto mb-3 h-16 w-16">
                         <Image
-                            src="/logo-sena.png"
+                            src={`${basePath}/logo-sena.png`}
                             alt="Logo del SENA, Servicio Nacional de Aprendizaje de Colombia"
                             fill
                             className="object-contain"
