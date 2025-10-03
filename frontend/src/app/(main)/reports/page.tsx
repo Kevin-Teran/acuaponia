@@ -3,7 +3,7 @@
  * @route frontend/src/app/(main)/reports
  * @description Página de reportes completamente funcional con descarga corregida y diseño mejorado.
  * @author Kevin Mariano
- * @version 2.7.1
+ * @version 1.0.1
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -94,13 +94,15 @@ const getSensorIcon = (type: string) => {
  * @param {Sensor} props.sensor - Objeto sensor.
  * @param {boolean} props.isSelected - Indica si el sensor está seleccionado.
  * @param {() => void} props.onToggle - Función para alternar la selección.
+ * @param {string} [props.className] - Clases Tailwind CSS adicionales.
  * @returns {JSX.Element}
  */
 const SensorCard: React.FC<{ 
   sensor: Sensor; 
   isSelected: boolean; 
   onToggle: () => void;
-}> = ({ sensor, isSelected, onToggle }) => {
+  className?: string;
+}> = ({ sensor, isSelected, onToggle, className }) => {
   const isAllCard = sensor.id === 'all';
   const displayIcon = isAllCard ? CheckSquare : getSensorIcon(sensor.type || 'GENERIC');
 
@@ -117,29 +119,40 @@ const SensorCard: React.FC<{
       aria-checked={isSelected}
       tabIndex={0}
       className={cn(
-        'p-2.5 rounded-xl border-2 cursor-pointer transition-all duration-200 flex items-center space-x-3 text-left relative shadow-sm ',
+        'p-2.5 rounded-xl border-2 cursor-pointer transition-all duration-200 flex items-center space-x-3 relative shadow-sm ',
         isSelected
-          ? 'border-sena-green bg-sena-green/10 dark:bg-sena-green/20 shadow-lg ' 
+          ? 'bg-[#39A900]/30'
           : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800',
-        'hover:border-sena-green/70 hover:shadow-md',
+          
+        isSelected 
+          ? 'group-hover:bg-[#39A900]/30'
+          : 'hover:border-sena-green/70 hover:shadow-md',
+          
         'focus:outline-none focus:ring-2 focus:ring-sena-green/50 focus:ring-offset-2 dark:focus:ring-offset-gray-900',
-        'max-h-[100px] overflow-hidden'
+        'max-h-[100px] overflow-hidden',
+        className 
       )}
     >
       <div className={cn(
         "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0",
         isSelected 
-          ? 'bg-sena-green text-white' 
+          ? 'bg-[#39A900]/30' 
           : 'bg-gray-100 dark:bg-gray-700 text-sena-green dark:text-sena-green/80' 
       )}>
         {React.createElement(displayIcon, { className: "w-4 h-4" })}
       </div>
       <div>
-        <p className="font-semibold text-sm text-gray-900 dark:text-white leading-tight truncate">
+        <p className={cn(
+          "font-semibold text-sm leading-tight truncate",
+          isSelected ? 'textt-gray-900' : 'text-gray-900 dark:text-white'
+        )}>
           {sensor.name}
         </p>
         {!isAllCard && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 capitalize truncate leading-none">
+          <p className={cn(
+            "text-xs capitalize truncate leading-none",
+            isSelected ? 'text-gray-500' : 'text-gray-500 dark:text-gray-400' 
+          )}>
             {sensor.type}
           </p>
         )}
@@ -550,7 +563,7 @@ export default function Reports() {
                 </label>
                 {sensors.length > 0 ? (
                   <div className="p-3 border border-gray-200 dark:border-gray-700 rounded-xl mt-1 ">
-                    <div className="bg-[#39A900]/10 group-hover:bg-[#39A900]/20 transition-colors grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-2"> 
+                    <div className="transition-colors grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-2"> 
                       <SensorCard 
                         sensor={{ id: 'all', name: 'Todos los Parámetros' } as Sensor} 
                         isSelected={isAllSelected} 
@@ -629,6 +642,14 @@ export default function Reports() {
                   const params = JSON.parse(report.parameters as any);
                   const tankName = params.tankId ? tankMap[params.tankId] || 'Tanque Desconocido' : 'N/A';
                   
+                  // 💡 CORRECCIÓN: Usar parseISO para manejar correctamente los formatos de fecha ISO o YYYY-MM-DD.
+                  const parsedStartDate = parseISO(params.startDate);
+                  const parsedEndDate = parseISO(params.endDate);
+
+                  // Identificar reportes por lote para aplicar el formato con hora.
+                  const isBatchReport = params.isAutomatic && params.automaticType === 'batch';
+                  const displayFormat = isBatchReport ? 'dd/MM/yy HH:mm' : 'dd-MM-yy';
+
                   return (
                     <tr 
                       key={report.id} 
@@ -646,9 +667,10 @@ export default function Reports() {
                         <p><strong>Tanque:</strong> {tankName}</p>
                         <p>
                           <strong>Fechas:</strong>{' '}
-                          {format(new Date(params.startDate + 'T00:00:00'), 'dd-MM-yy', { locale: es })}{' '}
+                          {/* USO DE parseISO Y FORMATO CONDICIONAL */}
+                          {format(parsedStartDate, displayFormat, { locale: es })}{' '}
                           al{' '}
-                          {format(new Date(params.endDate + 'T00:00:00'), 'dd-MM-yy', { locale: es })}
+                          {format(parsedEndDate, displayFormat, { locale: es })}
                         </p>
                         <p>
                           <strong>Parámetros:</strong>{' '}

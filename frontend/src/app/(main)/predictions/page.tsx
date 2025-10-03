@@ -3,7 +3,7 @@
  * @route frontend/src/app/(main)/predictions
  * @description Página de predicciones integrada con datos REALES de la API.
  * @author Kevin Mariano
- * @version 2.5.0 // Versión final, corrigiendo el estilo del menú desplegable y la alineación.
+ * @version 1.0.1
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -232,15 +232,11 @@ export default function PredictionsPage() {
         </Button>
       </div>
       
-      {/* --- */}
-      
-      {/* Filtros - CORRECCIÓN DE ESTILO Y DESPLIEGUE */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 mb-2">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             
             {/* Selector de Tanque */}
             <div className="relative">
-                {/* Ícono MapPin para el tanque */}
                 <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
                 <Select 
                     placeholder={isLoading ? "Cargando Tanques..." : "Selecciona un tanque"}
@@ -250,20 +246,15 @@ export default function PredictionsPage() {
                     isDisabled={tanks.length === 0 || isLoading || isGenerating}
                     aria-label="Selector de Tanque"
                     classNames={{
-                        // Ajuste pl-8 para acercar el texto al ícono (causando el efecto de superposición)
                         trigger: "h-12 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus-within:ring-1 focus-within:ring-[#39A900] focus-within:border-[#39A900] transition-colors pl-10",
-                        // El valor del select (el texto visible)
-                        value: "text-default-700 dark:text-default-200 pl-2", // Ajuste de padding al valor
+                        value: "text-default-700 dark:text-default-200 pl-2", 
                         mainWrapper: "rounded-xl",
-                        // CORRECCIÓN CLAVE: Estilizar el Popover (menú desplegable)
-                        popoverContent: "rounded-xl bg-gray-800 border border-blue-600 shadow-xl p-0", // Fondo oscuro y borde azul
+                        popoverContent: "rounded-xl bg-gray-800 border border-blue-600 shadow-xl p-0",
                     }}
-                    // CORRECCIÓN DE LA FLECHA: Reemplazar el icono por defecto con ChevronDown
                     selectorIcon={<ChevronDown className="w-4 h-4 text-gray-400" />}
                 >
                     {(tank) => (
                         <SelectItem key={tank.id} value={tank.id} classNames={{
-                             // Estilo para el ítem seleccionado (fondo oscuro)
                             selectedIcon: "text-blue-400",
                             base: "text-white hover:bg-gray-700/50 data-[selected=true]:bg-gray-700 data-[selected=true]:text-white",
                         }}>
@@ -275,7 +266,6 @@ export default function PredictionsPage() {
 
             {/* Selector de Horizonte */}
             <div className="relative">
-                {/* Ícono Calendar para el horizonte */}
                 <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
                 <Select 
                     placeholder="Horizonte de Predicción"
@@ -284,19 +274,15 @@ export default function PredictionsPage() {
                     isDisabled={!selectedTankId || isGenerating || tanks.length === 0}
                     aria-label="Selector de Horizonte de Predicción"
                     classNames={{
-                         // Estilo del campo (trigger)
                         trigger: "h-12 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus-within:ring-1 focus-within:ring-[#39A900] focus-within:border-[#39A900] transition-colors pl-10",
                         value: "text-default-700 dark:text-default-200 pl-2",
                         mainWrapper: "rounded-xl",
-                        // CORRECCIÓN CLAVE: Estilizar el Popover (menú desplegable)
                         popoverContent: "rounded-xl bg-gray-800 border border-blue-600 shadow-xl p-0", // Fondo oscuro y borde azul
                     }}
-                    // CORRECCIÓN DE LA FLECHA: Reemplazar el icono por defecto con ChevronDown
                     selectorIcon={<ChevronDown className="w-4 h-4 text-gray-400" />}
                 >
                     {horizonOptions.map((option) => (
                         <SelectItem key={option.value} classNames={{
-                             // Estilo para el ítem seleccionado (fondo oscuro)
                             selectedIcon: "text-blue-400",
                             base: "text-white hover:bg-gray-700/50 data-[selected=true]:bg-gray-700 data-[selected=true]:text-white",
                         }}>

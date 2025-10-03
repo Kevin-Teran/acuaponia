@@ -3,8 +3,8 @@
  * @route /backend/src/reports
  * @description Servicio completo para generación de reportes con soporte para:
  * - Reportes manuales bajo demanda
- * - Reportes automáticos cada 200 datos
- * - Reportes diarios automáticos
+ * - Reportes automáticos cada 200 datos (SOLO el lote de 200)
+ * - Reportes diarios automáticos (TODO el día)
  * - Exportación a PDF y Excel con filtros
  * @author Kevin Mariano
  * @version 1.0.1
@@ -161,13 +161,14 @@ export class ReportService {
     }
 
     if (newCount % 200 === 0) {
-      this.logger.log(`🔔 Generando reporte automático para tanque ${tankId} (${newCount} datos)`);
+      this.logger.log(`🔔 Generando reporte automático por LOTE para tanque ${tankId} (${newCount} datos)`);
       await this.generateAutomaticBatchReport(tankId, userId);
     }
   }
 
   /**
-   * Genera un reporte automático cada 200 datos (Acumulativo)
+   * Genera un reporte automático cada 200 datos (LOTE/BATCH)
+   * 💡 MODIFICADO: Ahora solo considera los últimos 200 registros.
    */
   private async generateAutomaticBatchReport(tankId: string, userId: string) {
     try {
@@ -180,44 +181,39 @@ export class ReportService {
         this.logger.error(`Tanque ${tankId} no encontrado para reporte automático`);
         return;
       }
-
-      // Buscar el primer dato para establecer el inicio acumulativo
-      const firstData = await this.prisma.sensorData.findFirst({
-          where: { sensor: { tankId } },
-          orderBy: { timestamp: 'asc' },
-          select: { timestamp: true }
-      });
       
-      const startDateLimit = firstData ? firstData.timestamp : startOfDay(new Date());
-
-      // 💡 CORRECCIÓN: Obtener TODOS los datos desde el inicio de la operación
-      const allData = await this.prisma.sensorData.findMany({
-        where: {
-          sensor: { tankId },
-          timestamp: {
-            gte: startDateLimit, // Desde el primer dato
-            lte: new Date(), // Hasta ahora
-          },
-        },
-        orderBy: { timestamp: 'asc' },
-        include: { sensor: true }
+      // 💡 MODIFICACIÓN: Obtener SOLO los últimos 200 registros (el lote que disparó el evento)
+      const batchData = await this.prisma.sensorData.findMany({
+          where: { sensor: { tankId } },
+          orderBy: { timestamp: 'desc' }, // Orden descendente (más reciente primero)
+          select: { timestamp: true },
+          take: 200, // Tomar solo los últimos 200 registros
       });
 
-      if (allData.length === 0) {
-        this.logger.warn(`No hay datos para reporte acumulativo del tanque ${tankId}`);
+      if (batchData.length === 0) {
+        this.logger.warn(`No hay datos para reporte por lote del tanque ${tankId}`);
         return;
       }
 
-      const oldestData = allData[0];
-      const newestData = allData[allData.length - 1];
+      // El registro más reciente es el primero (índice 0)
+      const newestDataTimestamp = batchData[0].timestamp;
+      // El registro más antiguo (el inicio del lote) es el último
+      const oldestDataTimestamp = batchData[batchData.length - 1].timestamp;
+
+      const dataCount = batchData.length;
+
+      // Formatear las marcas de tiempo completas para el título
+      const startTitle = format(oldestDataTimestamp, 'dd/MM/yyyy HH:mm:ss');
+      const endTitle = format(newestDataTimestamp, 'dd/MM/yyyy HH:mm:ss');
 
       const reportDto: CreateReportDto = {
-        reportName: `Reporte Acumulativo - ${tank.name} (Acumulado: ${allData.length} datos)`,
+        reportName: `Reporte por Lote - ${tank.name} (${dataCount} datos del ${startTitle} al ${endTitle})`,
         userId,
         tankId,
         sensorIds: tank.sensors.map(s => s.id),
-        startDate: format(oldestData.timestamp, 'yyyy-MM-dd'),
-        endDate: format(newestData.timestamp, 'yyyy-MM-dd'),
+        // Pasar las marcas de tiempo completas (ISO String) para una delimitación precisa en processReport.
+        startDate: oldestDataTimestamp.toISOString(),
+        endDate: newestDataTimestamp.toISOString(),
         isAutomatic: true,
       };
 
@@ -229,6 +225,7 @@ export class ReportService {
 
   /**
    * Cron job: Genera reportes diarios a las 23:55
+   * 💡 COMPORTAMIENTO MANTENIDO: Incluye todos los datos del día.
    */
   @Cron('55 23 * * *', {
     name: 'daily-reports',
@@ -318,6 +315,16 @@ export class ReportService {
       throw new BadRequestException('No se encontraron sensores válidos');
     }
 
+    // Lógica para determinar el tipo automático para el filtro en processReport
+    let automaticType: ReportParameters['automaticType'] = undefined;
+    if (dto.isAutomatic) {
+        if (dto.reportName.includes('Lote')) {
+            automaticType = 'batch';
+        } else if (dto.reportName.includes('Diario')) {
+            automaticType = 'daily';
+        }
+    }
+    
     const parameters: ReportParameters = {
       tankId: dto.tankId,
       tankName: tank.name,
@@ -326,16 +333,15 @@ export class ReportService {
       startDate: dto.startDate,
       endDate: dto.endDate,
       isAutomatic: dto.isAutomatic || false,
-      automaticType: dto.isAutomatic ? (dto.reportName.includes('Acumulativo') ? 'batch' : 'daily') : undefined,
+      automaticType: automaticType,
     };
     
     // Lógica para determinar el ReportType (usando valores existentes: DAILY/CUSTOM)
     let reportType: ReportType;
-    if (parameters.isAutomatic) {
-        reportType = parameters.automaticType === 'daily' 
-            ? ReportType.DAILY 
-            : ReportType.CUSTOM;
+    if (parameters.isAutomatic && parameters.automaticType === 'daily') {
+        reportType = ReportType.DAILY;
     } else {
+        // Incluye reportes manuales (Custom) y reportes por Lote (Custom/Batch)
         reportType = ReportType.CUSTOM; 
     }
 
@@ -362,6 +368,7 @@ export class ReportService {
   
   /**
    * Procesa y genera los archivos del reporte
+   * 💡 MODIFICADO: Lógica de filtro de fechas para manejar reportes por lote (hora precisa)
    */
   private async processReport(reportId: string) {
     this.logger.log(`⚙️ Procesando reporte ${reportId}...`);
@@ -379,13 +386,33 @@ export class ReportService {
       }
 
       const params: ReportParameters = JSON.parse(report.parameters as string);
+      
+      // 💡 MODIFICACIÓN: Lógica para manejar fechas con o sin tiempo (lote vs día completo)
+      let gteDate: Date;
+      let lteDate: Date;
+
+      // Un reporte es 'batch' si es automático Y su tipo es 'batch'
+      const isBatchReport = params.isAutomatic && params.automaticType === 'batch';
+      
+      if (isBatchReport) {
+        // 1. Reporte por Lote (Batch): Usar marcas de tiempo exactas (incluye hora, minuto, segundo).
+        gteDate = new Date(params.startDate);
+        lteDate = new Date(params.endDate);
+        this.logger.log(`🔍 [Filtro] Usando filtro preciso para Lote/Batch: ${params.startDate} - ${params.endDate}`);
+      } else {
+        // 2. Reporte Diario y Reporte Manual/Custom: Usar el rango de día completo.
+        gteDate = new Date(params.startDate + 'T00:00:00Z');
+        lteDate = new Date(params.endDate + 'T23:59:59Z');
+        this.logger.log(`🔍 [Filtro] Usando filtro de día completo: ${params.startDate} - ${params.endDate}`);
+      }
+
 
       const sensorData = await this.prisma.sensorData.findMany({
         where: {
           sensorId: { in: params.sensorIds },
           timestamp: {
-            gte: new Date(params.startDate + 'T00:00:00Z'),
-            lte: new Date(params.endDate + 'T23:59:59Z'),
+            gte: gteDate,
+            lte: lteDate,
           },
         },
         orderBy: { timestamp: 'asc' },
@@ -477,8 +504,15 @@ export class ReportService {
   ): Promise<string> {
 
     const paramsObj: ReportParameters = JSON.parse(report.parameters as string);
-    const start = format(parseISO(paramsObj.startDate), 'dd_MM_yyyy');
-    const end = format(parseISO(paramsObj.endDate), 'dd_MM_yyyy');
+    // Usar solo la parte de la fecha para el nombre del archivo si es un reporte de día/rango
+    const isBatchReport = paramsObj.isAutomatic && paramsObj.automaticType === 'batch';
+    
+    // Solo usamos la fecha de la parte del string (si no es batch, ya está en formato YYYY-MM-DD)
+    const startDatePart = paramsObj.startDate.split('T')[0];
+    const endDatePart = paramsObj.endDate.split('T')[0];
+    
+    const start = format(parseISO(startDatePart), 'dd_MM_yyyy');
+    const end = format(parseISO(endDatePart), 'dd_MM_yyyy');
     const tankName = paramsObj.tankName.replace(/ /g, '_');
     const filename = `Reporte_Monitoreo_${tankName}_${start}_a_${end}.pdf`;
 
@@ -547,9 +581,16 @@ export class ReportService {
          .font('Helvetica-Bold')
          .text(report.title);
       
+      // Mostrar el período usando el título del reporte si es 'batch' para mostrar horas,
+      // sino usar las fechas formateadas.
+      const periodText = isBatchReport 
+        ? report.title.match(/\(([^)]+)\)/)?.[1] || 'Período no especificado'
+        : `${format(parseISO(startDatePart), 'dd/MM/yyyy', { locale: es })} al ${format(parseISO(endDatePart), 'dd/MM/yyyy', { locale: es })}`;
+
       doc.fontSize(12).text('Período: ', startX, doc.y, { continued: true })
          .font('Helvetica')
-         .text(`${format(parseISO(params.startDate), 'dd/MM/yyyy', { locale: es })} al ${format(parseISO(params.endDate), 'dd/MM/yyyy', { locale: es })}`);
+         .text(periodText);
+
       doc.moveDown(0.5);
       
       // -----------------------------------------------------
@@ -671,8 +712,12 @@ export class ReportService {
     
     // 💡 NOMBRE DE ARCHIVO LEGIBLE (y estable)
     const paramsObj: ReportParameters = JSON.parse(report.parameters as string);
-    const start = format(parseISO(paramsObj.startDate), 'dd_MM_yyyy');
-    const end = format(parseISO(paramsObj.endDate), 'dd_MM_yyyy');
+    
+    const startDatePart = paramsObj.startDate.split('T')[0];
+    const endDatePart = paramsObj.endDate.split('T')[0];
+    
+    const start = format(parseISO(startDatePart), 'dd_MM_yyyy');
+    const end = format(parseISO(endDatePart), 'dd_MM_yyyy');
     const tankName = paramsObj.tankName.replace(/ /g, '_');
     
     const filename = `Reporte_Monitoreo_${tankName}_${start}_a_${end}.xlsx`;
@@ -713,7 +758,7 @@ export class ReportService {
     statsSheet.getCell('A4').value = 'Título:';
     statsSheet.getCell('B4').value = report.title;
     statsSheet.getCell('A5').value = 'Período:';
-    statsSheet.getCell('B5').value = `${format(parseISO(params.startDate), 'dd/MM/yyyy')} al ${format(parseISO(params.endDate), 'dd/MM/yyyy')}`;
+    statsSheet.getCell('B5').value = `${format(parseISO(startDatePart), 'dd/MM/yyyy')} al ${format(parseISO(endDatePart), 'dd/MM/yyyy')}`;
     
     // FÓRMULA Y ESTILO PARA TOTALES
     statsSheet.getCell('A7').value = 'Total de Registros Monitoreados:'; 
@@ -925,9 +970,12 @@ export class ReportService {
     // --- Lógica para construir el nombre de archivo legible ---
     const paramsObj: ReportParameters = JSON.parse(report.parameters as string);
     
+    const startDatePart = paramsObj.startDate.split('T')[0];
+    const endDatePart = paramsObj.endDate.split('T')[0];
+    
     // Usamos la función format de date-fns
-    const start = format(parseISO(paramsObj.startDate), 'dd_MM_yyyy');
-    const end = format(parseISO(paramsObj.endDate), 'dd_MM/yyyy');
+    const start = format(parseISO(startDatePart), 'dd_MM_yyyy');
+    const end = format(parseISO(endDatePart), 'dd_MM_yyyy');
     const tankName = paramsObj.tankName.replace(/ /g, '_'); 
     
     // Construye el nombre del archivo legible
