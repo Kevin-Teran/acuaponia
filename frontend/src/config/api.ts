@@ -5,19 +5,24 @@
  * Esta es la configuración definitiva que intercepta cada petición para inyectar
  * el token de autenticación, con logging detallado para depuración.
  * @author Kevin Mariano
- * @version 1.0.0 
+ * @version 1.0.1 
  * @since 1.0.0
  */
 
 import axios, { AxiosError } from 'axios'; 
 import Swal from 'sweetalert2';
 
+
+const API_HOST_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'; 
+const API_PREFIX = process.env.NEXT_PUBLIC_API_BASE_URL || '/api'; 
+const FINAL_API_URL = `${API_HOST_URL}${API_PREFIX}`;
+
 /**
  * @constant api
  * @description Instancia de Axios preconfigurada con la URL base de la API.
  */
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || '/api', 
+  baseURL: FINAL_API_URL, 
 });
 
 /**
