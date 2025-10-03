@@ -65,7 +65,6 @@ export class AlertsService {
   }
 
   async checkThresholds(sensor: Sensor & { tank: { name: string } }, value: number) {
-    // CORRECCIÓN: Usar prisma.systemConfig para acceder al modelo correcto
     const systemConfigs = await this.prisma.systemConfig.findMany();
     if (systemConfigs.length === 0) {
       this.logger.warn('No se encontraron configuraciones (SystemConfig) en la base de datos. No se pueden verificar los umbrales.');

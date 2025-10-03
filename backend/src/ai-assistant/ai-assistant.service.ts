@@ -1,3 +1,13 @@
+/**
+ * @file ai-assistant.service.ts
+ * @route backend/src/ai-assistant
+ * @description 
+ * @author kevin mariano & Deiner
+ * @version 1.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
+ */
+
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { sensors_type } from '@prisma/client';
@@ -40,9 +50,6 @@ export class AiAssistantService {
   async getAIResponse(pregunta: string): Promise<string> {
     const context = await this.getSystemContext();
 
-    // =================================================================================
-    // == PROMPT FINAL: Dinámico, sin especies predefinidas ==
-    // =================================================================================
     const prompt = `
       == IDENTIDAD Y PERSONA ==
       Eres "ACUAGENIUS", un asistente de IA del SENA y un analista de datos experto en acuaponía y acuicultura. Tu conocimiento sobre las condiciones óptimas para cualquier especie acuática es vasto. Tu tono es profesional, preciso y servicial.

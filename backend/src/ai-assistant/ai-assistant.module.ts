@@ -1,11 +1,22 @@
+/**
+ * @file ai-assistant.module.ts
+ * @route backend/src/ai-assistant
+ * @description 
+ * @author kevin mariano & Deiner
+ * @version 1.0.0
+ * @since 1.0.0
+ * @copyright SENA 2025
+ */
+
 import { Module } from '@nestjs/common';
 import { AiAssistantController } from './ai-assistant.controller';
 import { AiAssistantService } from './ai-assistant.service';
-import { PrismaModule } from '../prisma/prisma.module'; // Importamos tu módulo de Prisma
+import { PrismaModule } from '../prisma/prisma.module'; 
 
 @Module({
-  imports: [PrismaModule], // Hacemos que Prisma esté disponible para este módulo
+  imports: [PrismaModule], 
   controllers: [AiAssistantController],
   providers: [AiAssistantService],
 })
+
 export class AiAssistantModule {}
