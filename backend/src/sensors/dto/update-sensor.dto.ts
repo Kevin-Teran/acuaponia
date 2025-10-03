@@ -57,7 +57,7 @@ export class UpdateSensorDto {
   })
   @IsDateString()
   @IsOptional()
-  calibrationDate?: Date;
+  calibrationDate?: string; 
 
   /**
    * @property tankId

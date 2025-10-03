@@ -2,7 +2,7 @@
  * @file SensorModal.tsx
  * @description Modal optimizado para crear/editar sensores con 3 tipos únicos por tanque.
  * @author Kevin Mariano
- * @version 6.0.1
+ * @version 6.0.2
  * @since 1.0.0
  */
 'use client';
@@ -104,7 +104,9 @@ export const SensorModal: React.FC<SensorModalProps> = ({
     hardwareId: '',
     type: '' as SensorType | '',
     tankId: '',
-    calibrationDate: format(new Date(), 'yyyy-MM-dd'),
+    calibrationDate: sensorData?.sensor?.calibrationDate 
+        ? format(new Date(sensorData.sensor.calibrationDate), 'yyyy-MM-dd')
+        : '', // Initialize date to empty string if not present/editing
   });
 
   const [loading, setLoading] = useState(false);
@@ -121,7 +123,7 @@ export const SensorModal: React.FC<SensorModalProps> = ({
           tankId: sensor.tankId,
           calibrationDate: sensor.calibrationDate 
             ? format(new Date(sensor.calibrationDate), 'yyyy-MM-dd')
-            : format(new Date(), 'yyyy-MM-dd'),
+            : '', // Use empty string if no date
         });
       } else {
         const suggestedName = sensorData?.preselectedType 
@@ -133,7 +135,7 @@ export const SensorModal: React.FC<SensorModalProps> = ({
           hardwareId: '',
           type: sensorData?.preselectedType || '',
           tankId: sensorData?.tankId || '',
-          calibrationDate: format(new Date(), 'yyyy-MM-dd'),
+          calibrationDate: '', // Use empty string for new sensors
         });
       }
       setErrors({});
@@ -179,9 +181,9 @@ export const SensorModal: React.FC<SensorModalProps> = ({
       newErrors.tankId = 'Debe seleccionar un tanque válido';
     }
 
-    if (!formData.calibrationDate) {
-      newErrors.calibrationDate = 'La fecha de calibración es obligatoria';
-    }
+    // if (!formData.calibrationDate) { // <-- REMOVIDO: Fecha de calibración ya no es obligatoria en el DTO
+    //   newErrors.calibrationDate = 'La fecha de calibración es obligatoria';
+    // }
 
     if (formData.tankId && formData.tankId.trim() !== '' && !availableTanks.some(tank => tank.id === formData.tankId)) {
       newErrors.tankId = 'El tanque seleccionado no está disponible para este tipo de sensor';
@@ -190,6 +192,8 @@ export const SensorModal: React.FC<SensorModalProps> = ({
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
+  const selectedTank = useMemo(() => tanks.find(tank => tank.id === formData.tankId), [tanks, formData.tankId]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -216,8 +220,12 @@ export const SensorModal: React.FC<SensorModalProps> = ({
       if (isEditing && sensorData?.sensor) {
         const updatePayload: any = {
           name: formData.name,
-          calibrationDate: new Date(formData.calibrationDate).toISOString(),
         };
+        
+        // CORRECCIÓN 1: Enviar calibrationDate solo si tiene un valor
+        if (formData.calibrationDate && formData.calibrationDate.trim()) {
+            updatePayload.calibrationDate = new Date(formData.calibrationDate).toISOString();
+        }
 
         const tankChanged = formData.tankId !== sensorData.sensor.tankId;
         const tankIsValid = formData.tankId && formData.tankId.trim() !== '' && formData.tankId !== 'undefined' && formData.tankId !== 'null';
@@ -243,15 +251,19 @@ export const SensorModal: React.FC<SensorModalProps> = ({
           color: '#39A900'
         });
       } else {
-        const createPayload = {
+        const createPayload: any = {
           name: formData.name,
           hardwareId: formData.hardwareId,
           type: formData.type as SensorType,
           tankId: formData.tankId,
-          calibrationDate: new Date(formData.calibrationDate).toISOString(),
-          location: selectedTank?.location || '',
+          // REMOVIDO: location: selectedTank?.location || '', <-- CAUSABA ERROR 400
         };
         
+        // CORRECCIÓN 2: Enviar calibrationDate solo si tiene un valor
+        if (formData.calibrationDate && formData.calibrationDate.trim()) {
+            createPayload.calibrationDate = new Date(formData.calibrationDate).toISOString();
+        }
+
         await createSensor(createPayload);
         await Swal.fire({
           title: '¡Sensor creado!',
@@ -301,7 +313,7 @@ export const SensorModal: React.FC<SensorModalProps> = ({
   if (!isOpen) return null;
 
   const selectedSensorInfo = formData.type ? getSensorInfo(formData.type as SensorType) : null;
-  const selectedTank = tanks.find(tank => tank.id === formData.tankId);
+  // const selectedTank = tanks.find(tank => tank.id === formData.tankId); // Replaced with useMemo above
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -497,7 +509,7 @@ export const SensorModal: React.FC<SensorModalProps> = ({
             {/* Fecha de Calibración */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Fecha de Calibración *
+                Fecha de Calibración
               </label>
               <div className="relative">
                 <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
@@ -518,6 +530,9 @@ export const SensorModal: React.FC<SensorModalProps> = ({
                   {errors.calibrationDate}
                 </p>
               )}
+               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Campo opcional. Se recomienda llenarlo al calibrar el sensor.
+                </p>
             </div>
 
             {/* Botones de Acción */}

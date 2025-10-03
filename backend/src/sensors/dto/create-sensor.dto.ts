@@ -8,14 +8,13 @@
  * @copyright SENA 2025
  */
 
-import { IsString, IsNotEmpty, IsEnum, IsDateString } from 'class-validator';
+import { IsString, IsNotEmpty, IsEnum, IsDateString, IsOptional } from 'class-validator';
 import { sensors_type } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
  * @class CreateSensorDto
  * @description Define la estructura y validaciones para crear un nuevo sensor.
- * La ubicación se hereda del tanque asociado y no es una propiedad directa del sensor.
  */
 export class CreateSensorDto {
   /**
@@ -58,7 +57,8 @@ export class CreateSensorDto {
    * @property {string} calibrationDate - Fecha de la última calibración en formato ISO 8601.
    * @example "2025-08-25T10:00:00.000Z"
    */
-  @ApiProperty({ description: 'Fecha de la última calibración.', example: '2025-08-25T10:00:00.000Z' })
+  @ApiProperty({ description: 'Fecha de la última calibración.', example: '2025-08-25T10:00:00.000Z', required: false })
   @IsDateString({}, { message: 'La fecha de calibración debe ser una fecha válida.' })
+  @IsOptional() 
   calibrationDate: string;
 }

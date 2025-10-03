@@ -8,7 +8,7 @@
  * @copyright SENA 2025
  */
 
- import { 
+import { 
   Controller, 
   Get, 
   Post, 
@@ -134,12 +134,16 @@ export class SensorsController {
    * @param {UpdateSensorDto} updateSensorDto - Los datos para actualizar.
    * @returns {Promise<Sensor>} El sensor actualizado.
    */
-  @Patch(':id') 
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN)
-  update(@Param('id') id: string, @Body() updateSensorDto: UpdateSensorDto) {
-    return this.sensorsService.update(id, updateSensorDto);
-  }
+   @Patch(':id') 
+   @UseGuards(RolesGuard)
+   @Roles(Role.ADMIN, Role.USER) 
+   update(
+     @Param('id') id: string, 
+     @Body() updateSensorDto: UpdateSensorDto,
+     @Req() req: { user: User } 
+   ) {
+     return this.sensorsService.update(id, updateSensorDto, req.user.id, req.user.role);
+   }
 
   /**
    * @method remove
@@ -149,8 +153,11 @@ export class SensorsController {
    */
   @Delete(':id')
   @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN)
-  remove(@Param('id') id: string) {
-    return this.sensorsService.remove(id);
+  @Roles(Role.ADMIN, Role.USER)
+  remove(
+    @Param('id') id: string,
+    @Req() req: { user: User } 
+  ) {
+    return this.sensorsService.remove(id, req.user.id, req.user.role);
   }
 }

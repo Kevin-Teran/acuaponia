@@ -1,19 +1,20 @@
 /**
  * @file sensors.service.ts
  * @route backend/src/sensors
- * @description Lógica de negocio para la gestión de sensores, con validación de límite por tipo de sensor por tanque.
+ * @description Lógica de negocio para la gestión de sensores, con validación de límite por tipo de sensor por tanque y control de autorización.
  * @author Kevin Mariano 
- * @version 2.1.0
+ * @version 2.2.1
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSensorDto } from './dto/create-sensor.dto';
 import { UpdateSensorDto } from './dto/update-sensor.dto';
 import { FindSensorsDto } from './dto/find-sensors.dto';
-import { Sensor, sensors_type as sensors_type, Prisma } from '@prisma/client';
+import { Sensor, sensors_type as sensors_type, Prisma, Role } from '@prisma/client';
+
 
 const MAX_SENSORS_PER_TYPE_PER_TANK = 1;
 
@@ -21,9 +22,46 @@ const MAX_SENSORS_PER_TYPE_PER_TANK = 1;
 export class SensorsService {
   constructor(private prisma: PrismaService) {}
 
+  // -------------------------------------------------------------------------
+  // MÉTODO AUXILIAR DE AUTORIZACIÓN
+  // -------------------------------------------------------------------------
+  private async checkSensorOwnership(sensorId: string, userId: string, userRole: Role) {
+    const sensor = await this.prisma.sensor.findUnique({
+      where: { id: sensorId },
+      include: { 
+        tank: { 
+          select: { 
+            userId: true
+          } 
+        } 
+      }, 
+    });
+
+    if (!sensor) {
+      throw new NotFoundException(`Sensor con ID "${sensorId}" no encontrado.`);
+    }
+
+    if (userRole === Role.USER) {
+      if (!sensor.tank || sensor.tank.userId !== userId) {
+        throw new ForbiddenException(
+          'No tiene permiso para modificar o eliminar este sensor. Solo el propietario del tanque puede hacerlo.',
+        );
+      }
+    }
+    return sensor;
+  }
+  // -------------------------------------------------------------------------
+
   async create(createSensorDto: CreateSensorDto): Promise<Sensor> {
-    const { tankId, type, hardwareId, ...sensorData } = createSensorDto;
+    // CORRECCIÓN: Desestructuramos todos los campos necesarios.
+    const { tankId, type, hardwareId, calibrationDate, name } = createSensorDto;
   
+    // CORRECCIÓN: Asegurar que calibrationDate siempre tenga un valor para Prisma.
+    // Si no se proporciona o es una cadena vacía (porque es opcional en el DTO), usamos la fecha actual.
+    const dateForPrisma = (calibrationDate && calibrationDate.trim() !== '') 
+        ? new Date(calibrationDate).toISOString() 
+        : new Date().toISOString(); 
+
     const tank = await this.prisma.tank.findUnique({
       where: { id: tankId },
       include: {
@@ -59,9 +97,10 @@ export class SensorsService {
   
     return this.prisma.sensor.create({
       data: {
-        ...sensorData,
+        name,
         hardwareId,
         type,
+        calibrationDate: dateForPrisma, // <-- CORRECCIÓN: Campo requerido asegurado
         location: tankWithSensors.location,
         tank: {
           connect: { id: tankId },
@@ -156,7 +195,11 @@ export class SensorsService {
     return sensor;
   }
 
-  async update(id: string, updateSensorDto: UpdateSensorDto): Promise<Sensor> {
+  async update(id: string, updateSensorDto: UpdateSensorDto, userId: string, userRole: Role): Promise<Sensor> {
+    
+    // 1. Verificar propiedad (Autorización USER)
+    await this.checkSensorOwnership(id, userId, userRole);
+    
     const sensorToUpdate = await this.findOne(id);
 
     if (updateSensorDto.tankId && updateSensorDto.tankId !== sensorToUpdate.tankId) {
@@ -187,8 +230,10 @@ export class SensorsService {
     });
   }
 
-  async remove(id: string): Promise<Sensor> {
-    await this.findOne(id);
+  async remove(id: string, userId: string, userRole: Role): Promise<Sensor> {
+    
+    // 1. Verificar propiedad (Autorización USER)
+    await this.checkSensorOwnership(id, userId, userRole);
     
     return this.prisma.sensor.delete({
       where: { id },
