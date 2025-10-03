@@ -3,7 +3,7 @@
  * @route frontend/src/components/dashboard
  * @description Componente de medidores con aguja CORREGIDA y umbrales desde settings
  * @author Kevin Mariano 
- * @version 2.1.0
+ * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -44,17 +44,13 @@ const sensorInfo: Record<string, { icon: React.ElementType; name: string }> = {
  * @returns { min: number, max: number }
  */
 const getSafeThreshold = (minUser: any, maxUser: any, defaultValues: { min: number, max: number }) => {
-    // 1. Verificar si ambos valores del usuario son números.
     const isMinValid = typeof minUser === 'number';
     const isMaxValid = typeof maxUser === 'number';
     
-    // 2. Si son válidos Y max es mayor que min, se usan los valores del usuario.
-    // Esto evita rangos de cero o negativos que rompen el cálculo del porcentaje.
     if (isMinValid && isMaxValid && maxUser > minUser) {
         return { min: minUser, max: maxUser };
     }
 
-    // 3. Si no cumplen la condición, se usan los valores por defecto.
     return defaultValues;
 };
 
@@ -77,12 +73,10 @@ const getSafeThreshold = (minUser: any, maxUser: any, defaultValues: { min: numb
         high: '#ef4444',
     };
 
-    // Prioridad: 1. Umbrales del sensor, 2. Settings del usuario, 3. Defaults
     switch (type) {
         case SensorType.TEMPERATURE:
             thresholds = sensorThresholds || 
                 getSafeThreshold(
-                    // ✅ CORREGIDO: Acceso anidado a la data real
                     settings?.thresholds?.temperature?.min, 
                     settings?.thresholds?.temperature?.max, 
                     defaultThresholds.temperature
@@ -92,7 +86,6 @@ const getSafeThreshold = (minUser: any, maxUser: any, defaultValues: { min: numb
         case SensorType.PH:
             thresholds = sensorThresholds || 
                 getSafeThreshold(
-                    // ✅ CORREGIDO
                     settings?.thresholds?.ph?.min,
                     settings?.thresholds?.ph?.max,
                     defaultThresholds.ph
@@ -102,7 +95,6 @@ const getSafeThreshold = (minUser: any, maxUser: any, defaultValues: { min: numb
         case SensorType.OXYGEN:
             thresholds = sensorThresholds || 
                 getSafeThreshold(
-                    // ✅ CORREGIDO
                     settings?.thresholds?.oxygen?.min,
                     settings?.thresholds?.oxygen?.max,
                     defaultThresholds.oxygen
@@ -143,7 +135,6 @@ const SemiCircularGauge = ({
     const strokeWidth = 8;
     const needleBaseWidth = 6; 
     
-    // CORRECCIÓN: Longitud ajustada
     const needleLength = radius - 12; 
 
     const svgWidth = 100;
@@ -159,7 +150,6 @@ const SemiCircularGauge = ({
 
     const transition = { duration: 1.5, ease: circOut };
 
-    // CORRECCIÓN: Limitar el percentage al rango 0-100 para un ángulo seguro
     const clampedPercentage = Math.max(0, Math.min(100, percentage));
     const needleAngleRad = (clampedPercentage / 100) * Math.PI;
 
@@ -177,7 +167,6 @@ const SemiCircularGauge = ({
 
     const needlePathD = `M ${needleTipX} ${needleTipY} L ${base1X} ${base1Y} L ${base2X} ${base2Y} Z`;
     
-    // Path inicial (0% - izquierda)
     const initialNeedlePathD = `M ${
         centerX - needleLength
     } ${centerY} L ${centerX} ${centerY - needleBaseWidth / 2} L ${centerX} ${
@@ -270,17 +259,13 @@ const GaugeItem = ({
     };
 
     const status = getStatus(data.value);
-    
-    // CORRECCIÓN CRÍTICA: Evitar división por cero
     const range = config.max - config.min;
 
     let rawPercent = 0;
-    // Si el rango es mayor que cero, podemos calcular el porcentaje de forma segura.
     if (range > 0) { 
         rawPercent = ((data.value - config.min) / range) * 100;
     }
     
-    // Aseguramos que el porcentaje esté entre 0 y 100
     const valuePercent = Math.max(0, Math.min(100, rawPercent));
 
     const formattedTimestamp = useMemo(() => {
@@ -376,7 +361,6 @@ export const GaugeChart = ({ data, settings, loading }: GaugeChartProps) => {
         ];
         return Object.entries(data)
             .flatMap(([type, values]) => {
-                // Ignorar la key 'thresholds' si existe
                 if (type === 'thresholds') return [];
                 
                 const normalizedType = type.toUpperCase() as SensorType; 

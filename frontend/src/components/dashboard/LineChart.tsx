@@ -1,5 +1,3 @@
-// frontend/src/components/dashboard/LineChart.tsx
-
 /**
  * @file LineChart.tsx
  * @route frontend/src/components/dashboard
@@ -398,8 +396,6 @@ export const LineChart: React.FC<LineChartProps> = ({
 
     const thresholds = useMemo(() => {
         if (!settings || !settings.thresholds) return null;
-        
-        // CORRECCIÓN DE UMBRALES: Acceso anidado (asumiendo que index.ts tiene MinMaxThreshold)
         switch (sensorType) {
             case SensorType.PH:
                 return { min: settings.thresholds.ph.min, max: settings.thresholds.ph.max };
@@ -616,7 +612,6 @@ export const LineChart: React.FC<LineChartProps> = ({
                                 className: 'fill-gray-600 dark:fill-gray-400 font-medium',
                             }}
                             allowDataOverflow={true}
-                            // ✅ CORRECCIÓN: Formatear ticks del Eje Y a entero
                             tickFormatter={(value) => Math.round(value).toString()} 
                         />
                         <Tooltip

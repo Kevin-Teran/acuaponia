@@ -26,7 +26,6 @@ const nextConfig = {
     ]
   },
 
-  // Headers para seguridad
   async headers() {
     return [
       {
