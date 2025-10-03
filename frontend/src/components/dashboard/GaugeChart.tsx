@@ -3,7 +3,7 @@
  * @route frontend/src/components/dashboard
  * @description Componente de medidores con aguja CORREGIDA y umbrales desde settings
  * @author Kevin Mariano 
- * @version 2.0.0
+ * @version 2.1.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -36,17 +36,40 @@ const sensorInfo: Record<string, { icon: React.ElementType; name: string }> = {
 };
 
 /**
+ * @function getSafeThreshold
+ * @description Valida los umbrales del usuario contra valores por defecto.
+ * @param minUser Valor mínimo del usuario.
+ * @param maxUser Valor máximo del usuario.
+ * @param defaultValues Valores por defecto si los del usuario no son válidos.
+ * @returns { min: number, max: number }
+ */
+const getSafeThreshold = (minUser: any, maxUser: any, defaultValues: { min: number, max: number }) => {
+    // 1. Verificar si ambos valores del usuario son números.
+    const isMinValid = typeof minUser === 'number';
+    const isMaxValid = typeof maxUser === 'number';
+    
+    // 2. Si son válidos Y max es mayor que min, se usan los valores del usuario.
+    // Esto evita rangos de cero o negativos que rompen el cálculo del porcentaje.
+    if (isMinValid && isMaxValid && maxUser > minUser) {
+        return { min: minUser, max: maxUser };
+    }
+
+    // 3. Si no cumplen la condición, se usan los valores por defecto.
+    return defaultValues;
+};
+
+/**
  * @function getSensorConfig
  * @description Obtiene configuración del sensor con umbrales desde settings
  */
-const getSensorConfig = (type: SensorType, settings: UserSettings | null, sensorThresholds?: any) => {
+ const getSensorConfig = (type: SensorType, settings: UserSettings | null, sensorThresholds?: any) => {
     const defaultThresholds = {
         temperature: { min: 22, max: 28 },
         ph: { min: 6.8, max: 7.6 },
         oxygen: { min: 6, max: 10 },
     };
 
-    let config;
+    let thresholds;
     let unit = '';
     const colors = {
         low: '#3b82f6',
@@ -55,31 +78,35 @@ const getSensorConfig = (type: SensorType, settings: UserSettings | null, sensor
     };
 
     // Prioridad: 1. Umbrales del sensor, 2. Settings del usuario, 3. Defaults
-    let thresholds;
-
     switch (type) {
         case SensorType.TEMPERATURE:
             thresholds = sensorThresholds || 
-                (settings?.thresholds ? {
-                    min: settings.thresholds.temperatureMin,
-                    max: settings.thresholds.temperatureMax
-                } : defaultThresholds.temperature);
+                getSafeThreshold(
+                    // ✅ CORREGIDO: Acceso anidado a la data real
+                    settings?.thresholds?.temperature?.min, 
+                    settings?.thresholds?.temperature?.max, 
+                    defaultThresholds.temperature
+                );
             unit = '°C';
             break;
         case SensorType.PH:
             thresholds = sensorThresholds || 
-                (settings?.thresholds ? {
-                    min: settings.thresholds.phMin,
-                    max: settings.thresholds.phMax
-                } : defaultThresholds.ph);
+                getSafeThreshold(
+                    // ✅ CORREGIDO
+                    settings?.thresholds?.ph?.min,
+                    settings?.thresholds?.ph?.max,
+                    defaultThresholds.ph
+                );
             unit = 'pH';
             break;
         case SensorType.OXYGEN:
             thresholds = sensorThresholds || 
-                (settings?.thresholds ? {
-                    min: settings.thresholds.oxygenMin,
-                    max: settings.thresholds.oxygenMax
-                } : defaultThresholds.oxygen);
+                getSafeThreshold(
+                    // ✅ CORREGIDO
+                    settings?.thresholds?.oxygen?.min,
+                    settings?.thresholds?.oxygen?.max,
+                    defaultThresholds.oxygen
+                );
             unit = 'mg/L';
             break;
         default:
@@ -90,7 +117,7 @@ const getSensorConfig = (type: SensorType, settings: UserSettings | null, sensor
 
     const { min, max } = thresholds;
     const range = max - min;
-    const buffer = range > 0 ? range * 0.4 : 2; // Reducido de 0.6 a 0.4
+    const buffer = range > 0 ? range * 0.4 : 2; 
 
     return {
         unit,
@@ -114,10 +141,10 @@ const SemiCircularGauge = ({
 }) => {
     const radius = 35;
     const strokeWidth = 8;
-    const needleBaseWidth = 6; // Reducido de 8 a 6
+    const needleBaseWidth = 6; 
     
-    // CORRECCIÓN CRÍTICA: Reducir longitud de la aguja para que no se salga
-    const needleLength = radius - 12; // Cambiado de radius - 5 a radius - 12
+    // CORRECCIÓN: Longitud ajustada
+    const needleLength = radius - 12; 
 
     const svgWidth = 100;
     const svgHeight = 60;
@@ -132,20 +159,25 @@ const SemiCircularGauge = ({
 
     const transition = { duration: 1.5, ease: circOut };
 
-    // CORRECCIÓN: Limitar el percentage al rango 0-100
+    // CORRECCIÓN: Limitar el percentage al rango 0-100 para un ángulo seguro
     const clampedPercentage = Math.max(0, Math.min(100, percentage));
     const needleAngleRad = (clampedPercentage / 100) * Math.PI;
 
     const needleTipX = centerX - Math.cos(needleAngleRad) * needleLength;
     const needleTipY = centerY - Math.sin(needleAngleRad) * needleLength;
-    const baseOffsetX = (needleBaseWidth / 2) * Math.sin(needleAngleRad);
-    const baseOffsetY = (needleBaseWidth / 2) * -Math.cos(needleAngleRad);
-    const base1X = centerX + baseOffsetX;
-    const base1Y = centerY + baseOffsetY;
-    const base2X = centerX - baseOffsetX;
-    const base2Y = centerY - baseOffsetY;
+    
+    const r = needleBaseWidth / 2;
+    const sinA = Math.sin(needleAngleRad);
+    const cosA = Math.cos(needleAngleRad);
+
+    const base1X = centerX + r * sinA;
+    const base1Y = centerY - r * cosA;
+    const base2X = centerX - r * sinA;
+    const base2Y = centerY + r * cosA;
 
     const needlePathD = `M ${needleTipX} ${needleTipY} L ${base1X} ${base1Y} L ${base2X} ${base2Y} Z`;
+    
+    // Path inicial (0% - izquierda)
     const initialNeedlePathD = `M ${
         centerX - needleLength
     } ${centerY} L ${centerX} ${centerY - needleBaseWidth / 2} L ${centerX} ${
@@ -214,7 +246,6 @@ const GaugeItem = ({
     type: SensorType;
     settings: UserSettings | null;
 }) => {
-    // Usar umbrales del sensor si están disponibles, sino usar settings
     const config = getSensorConfig(type, settings, data.thresholds);
     const { icon: Icon, name } = sensorInfo[type];
 
@@ -240,8 +271,16 @@ const GaugeItem = ({
 
     const status = getStatus(data.value);
     
-    // CORRECCIÓN: Calcular percentage con clamp para evitar que se salga
-    const rawPercent = ((data.value - config.min) / (config.max - config.min)) * 100;
+    // CORRECCIÓN CRÍTICA: Evitar división por cero
+    const range = config.max - config.min;
+
+    let rawPercent = 0;
+    // Si el rango es mayor que cero, podemos calcular el porcentaje de forma segura.
+    if (range > 0) { 
+        rawPercent = ((data.value - config.min) / range) * 100;
+    }
+    
+    // Aseguramos que el porcentaje esté entre 0 y 100
     const valuePercent = Math.max(0, Math.min(100, rawPercent));
 
     const formattedTimestamp = useMemo(() => {
@@ -294,7 +333,8 @@ const GaugeItem = ({
             </div>
 
             <div className='flex justify-between items-center text-xs text-gray-500 dark:text-gray-400 -mt-4'>
-                <span>{config.min.toFixed(1)}</span>
+                {/* Ahora config.min y config.max son valores seguros y se muestran correctamente */}
+                <span>{config.min.toFixed(1)}</span> 
                 <div className='flex flex-col items-center'>
                     <span className={`text-3xl font-bold ${status.textColorClass}`}>
                         {data.value.toFixed(1)}

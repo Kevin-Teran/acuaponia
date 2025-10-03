@@ -449,6 +449,17 @@ export interface PaginatedResponse<T = any> {
 }
 
 /**
+ * @typedef {object} MinMaxThreshold
+ * @description Define el rango de valores óptimos o aceptables para un solo parámetro (min y max).
+ * @property {number} min - Valor mínimo aceptable.
+ * @property {number} max - Valor máximo aceptable.
+ */
+ export interface MinMaxThreshold {
+  min: number;
+  max: number;
+}
+
+/**
  * @typedef {object} ThresholdSettings
  * @description Configuraciones de umbrales para alertas y notificaciones.
  * @property {number} temperatureMin - Temperatura mínima aceptable
@@ -459,12 +470,9 @@ export interface PaginatedResponse<T = any> {
  * @property {number} oxygenMax - Oxígeno máximo aceptable
  */
 export interface ThresholdSettings {
-  temperatureMin: number;
-  temperatureMax: number;
-  phMin: number;
-  phMax: number;
-  oxygenMin: number;
-  oxygenMax: number;
+  temperature: MinMaxThreshold;
+  ph: MinMaxThreshold;
+  oxygen: MinMaxThreshold;
 }
 
 /**

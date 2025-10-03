@@ -1,3 +1,5 @@
+// frontend/src/components/dashboard/LineChart.tsx
+
 /**
  * @file LineChart.tsx
  * @route frontend/src/components/dashboard
@@ -318,7 +320,8 @@ const CustomTooltip = ({ active, payload, label, themeColor, rangeType }: any) =
                     className='flex items-center text-base font-bold'
                     style={{ color: themeColor }}
                 >
-                    {`${payload[0].name}: ${payload[0].value.toFixed(2)}`}
+                    {/* El Tooltip mantiene dos decimales para la precisión de la lectura */}
+                    {`${payload[0].name}: ${payload[0].value.toFixed(2)}`} 
                 </p>
             </motion.div>
         );
@@ -395,13 +398,15 @@ export const LineChart: React.FC<LineChartProps> = ({
 
     const thresholds = useMemo(() => {
         if (!settings || !settings.thresholds) return null;
+        
+        // CORRECCIÓN DE UMBRALES: Acceso anidado (asumiendo que index.ts tiene MinMaxThreshold)
         switch (sensorType) {
             case SensorType.PH:
-                return { min: settings.thresholds.phMin, max: settings.thresholds.phMax };
+                return { min: settings.thresholds.ph.min, max: settings.thresholds.ph.max };
             case SensorType.TEMPERATURE:
-                return { min: settings.thresholds.temperatureMin, max: settings.thresholds.temperatureMax };
+                return { min: settings.thresholds.temperature.min, max: settings.thresholds.temperature.max };
             case SensorType.OXYGEN:
-                return { min: settings.thresholds.oxygenMin, max: settings.thresholds.oxygenMax };
+                return { min: settings.thresholds.oxygen.min, max: settings.thresholds.oxygen.max };
             default:
                 return null;
         }
@@ -611,6 +616,8 @@ export const LineChart: React.FC<LineChartProps> = ({
                                 className: 'fill-gray-600 dark:fill-gray-400 font-medium',
                             }}
                             allowDataOverflow={true}
+                            // ✅ CORRECCIÓN: Formatear ticks del Eje Y a entero
+                            tickFormatter={(value) => Math.round(value).toString()} 
                         />
                         <Tooltip
                             content={<CustomTooltip themeColor={dominantColor} rangeType={rangeType} />}
@@ -701,7 +708,7 @@ export const LineChart: React.FC<LineChartProps> = ({
 
             <div className='mt-8 px-4'>
                 <div className='grid grid-cols-1 divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white shadow-sm dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-800/50 sm:grid-cols-3 sm:divide-x sm:divide-y-0'>
-                    {/* Mínimo */}
+                    {/* Mínimo (Entero) */}
                     <div className='flex items-center justify-between p-6'>
                         <div className='flex items-center gap-3'>
                             <div 
@@ -716,10 +723,10 @@ export const LineChart: React.FC<LineChartProps> = ({
                             className='text-3xl font-bold tracking-tight'
                             style={{ color: minColor }}
                         >
-                            {stats.min.toFixed(2)}
+                            {stats.min.toFixed(0)} 
                         </p>
                     </div>
-                    {/* Promedio */}
+                    {/* Promedio (Entero) */}
                     <div className='flex items-center justify-between p-6'>
                         <div className='flex items-center gap-3'>
                             <div 
@@ -734,10 +741,10 @@ export const LineChart: React.FC<LineChartProps> = ({
                             className='text-3xl font-bold tracking-tight'
                             style={{ color: avgColor }}
                         >
-                            {stats.avg.toFixed(2)}
+                            {stats.avg.toFixed(0)}
                         </p>
                     </div>
-                    {/* Máximo */}
+                    {/* Máximo (Entero) */}
                     <div className='flex items-center justify-between p-6'>
                         <div className='flex items-center gap-3'>
                             <div 
@@ -752,7 +759,7 @@ export const LineChart: React.FC<LineChartProps> = ({
                             className='text-3xl font-bold tracking-tight'
                             style={{ color: maxColor }}
                         >
-                            {stats.max.toFixed(2)}
+                            {stats.max.toFixed(0)}
                         </p>
                     </div>
                 </div>

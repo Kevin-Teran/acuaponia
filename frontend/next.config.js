@@ -1,28 +1,43 @@
 /** @type {import('next').NextConfig} */
-const path = require('path');
-const repoName = 'acuaponia';
-const isProd = process.env.NODE_ENV === 'production';
-
 const nextConfig = {
-  async rewrites() {
-    const apiProtocol = process.env.NEXT_PUBLIC_API_PROTOCOL || 'http';
-    const apiHost = process.env.NEXT_PUBLIC_API_HOST || 'localhost';
-    const apiPort = process.env.NEXT_PUBLIC_API_PORT || '5001'; 
-    const backendBaseUrl = `${apiProtocol}://${apiHost}:${apiPort}/api`;
+  // Configurar basePath para que los assets se carguen desde /acuaponia
+  basePath: '/acuaponia',
 
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${backendBaseUrl}/:path*`,
-      },
-    ];
+  // Prefijo para assets estáticos
+  assetPrefix: '/acuaponia',
+
+  // Configuración para producción
+  trailingSlash: false,
+
+  // Configuración de imágenes
+  images: {
+    unoptimized: true, // importante en VPS si no configuras image-optimizer
+    domains: ['tesorostpatl.com.co'], // habilita imágenes de tu dominio
   },
 
-  assetPrefix: isProd ? `/${repoName}/` : undefined,
-  basePath: isProd ? `/${repoName}` : undefined,
-  images: { unoptimized: true },
-  outputFileTracingRoot: path.join(__dirname, '../'),
-  transpilePackages: ['date-fns-tz']
-};
+  // Reescrituras (opcional)
+  async rewrites() {
+    return [
+      // ejemplo: /dashboard/* -> /acuaponia/dashboard/*
+      {
+        source: '/dashboard/:path*',
+        destination: '/acuaponia/dashboard/:path*'
+      }
+    ]
+  },
 
-module.exports = nextConfig;
+  // Headers para seguridad
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+        ],
+      },
+    ]
+  },
+}
+
+export default nextConfig
