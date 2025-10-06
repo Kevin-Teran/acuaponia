@@ -3,7 +3,7 @@
  * @route frontend/src/components/auth
  * @description Componente de UI para el formulario de inicio de sesión con manejo de tema y autocompletado.
  * @author Kevin Mariano
- * @version 1.0.2
+ * @version 1.0.1
  * @since 1.0.0
  * @copyright SENA 2025
 */
@@ -11,13 +11,19 @@
 'use client';
 
 import React, { useState, FormEvent, useCallback, useEffect } from 'react';
-import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { User, Lock, Eye, EyeOff, LogIn, UserCheck, Sun, Moon, AlertTriangle, X } from 'lucide-react';
+import Link from 'next/link'; 
+import getConfig from 'next/config';
+import { useRouter } from 'next/navigation'; 
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
-import getConfig from 'next/config';
+import { User, Lock, Eye, EyeOff, LogIn, Sun, Moon, AlertTriangle, X } from 'lucide-react';
 
+/**
+ * @component LoginForm
+ * @description Presenta el formulario de inicio de sesión. 
+ * Asegura que las rutas estáticas y de navegación respeten el basePath configurado.
+ * @returns {React.ReactElement} El formulario de login renderizado.
+ */
 export const LoginForm: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -28,16 +34,27 @@ export const LoginForm: React.FC = () => {
     const { login, loading, isAuthenticated } = useAuth();
     const { theme, toggleTheme } = useTheme();
     const router = useRouter();
-
-    const config = getConfig() || {};
-    const basePath = config.publicRuntimeConfig?.basePath || ''; 
+    
+    const [basePath, setBasePath] = useState(''); 
     
     useEffect(() => {
+        try {
+            const config = getConfig() || {};
+            const path = config.publicRuntimeConfig?.basePath || '';
+            setBasePath((path === '' || path === '/') ? '/acuaponia' : path);
+        } catch (e) {
+            setBasePath('/acuaponia');
+        }
+
         if (isAuthenticated) {
             router.replace('/dashboard');
         }
     }, [isAuthenticated, router]);
     
+    /**
+     * @description Valida que los campos de correo y contraseña no estén vacíos y que el correo sea válido.
+     * @returns {boolean} True si el formulario es válido.
+     */
     const validateForm = useCallback((): boolean => {
         if (!email.trim() || !password.trim()) {
             setError('Por favor, ingrese su correo y contraseña.');
@@ -51,6 +68,10 @@ export const LoginForm: React.FC = () => {
         return true;
     }, [email, password]);
 
+    /**
+     * @description Maneja el envío del formulario.
+     * @param {FormEvent<HTMLFormElement>} e - Evento de formulario.
+     */
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (loading || !validateForm()) return;
@@ -61,13 +82,11 @@ export const LoginForm: React.FC = () => {
         }
     };
     
-    const handleDemoLogin = (demoEmail: string, demoPassword: string) => {
-        setEmail(demoEmail);
-        setPassword(demoPassword);
-        setRememberMe(true);
-        setError(null);
-    };
-
+    /**
+     * @description Creador de handlers para limpiar errores al escribir en un input.
+     * @param {React.Dispatch<React.SetStateAction<string>>} setter - Función setter del estado.
+     * @returns {React.ChangeEventHandler<HTMLInputElement>} Handler del evento onChange.
+     */
     const handleInputChange = (setter: React.Dispatch<React.SetStateAction<string>>) => (e: React.ChangeEvent<HTMLInputElement>) => {
         setter(e.target.value);
         if (error) setError(null);
@@ -88,12 +107,11 @@ export const LoginForm: React.FC = () => {
             <main className="w-full max-w-sm animate-in fade-in slide-in-from-bottom-5 duration-500 sm:max-w-md sm:px-0">
                 <header className="mb-6 text-center">
                     <div className="relative mx-auto mb-3 h-16 w-16">
-                        <Image
+                        <img
                             src={`${basePath}/logo-sena.png`}
                             alt="Logo del SENA, Servicio Nacional de Aprendizaje de Colombia"
-                            fill
-                            className="object-contain"
-                            priority
+                            loading="eager"
+                            className="object-contain w-full h-full" 
                         />
                     </div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Sistema de Monitoreo de Acuaponía</h1>
@@ -160,9 +178,12 @@ export const LoginForm: React.FC = () => {
                         </button>
                     </form>
                     <div className="mt-4 text-center">
-                        <a href="/forgot-password" className="text-sm text-gray-600 transition-colors hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400">
+                        <Link 
+                            href="/forgot-password"
+                            className="text-sm text-gray-600 transition-colors hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400"
+                        >
                             ¿Olvidaste tu contraseña?
-                        </a>
+                        </Link>
                     </div>
                 </div>
                 <footer className="mt-8 text-center text-xs text-gray-500 dark:text-gray-400">

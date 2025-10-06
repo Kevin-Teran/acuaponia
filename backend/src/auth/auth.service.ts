@@ -1,15 +1,15 @@
 /**
  * @file auth.service.ts
  * @route backend/src/auth/
- * @description Lógica de negocio para la autenticación.
- * Versión final y definitiva que garantiza la correcta estructura de la respuesta del login.
+ * @description Lógica de negocio para la autenticación, con seguridad mejorada para restablecimiento de contraseña.
+ * Implementa un límite de frecuencia (rate limit) de 5 minutos usando el Cache Manager.
  * @author kevin mariano
- * @version 1.0.0 
+ * @version 1.0.3 
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
-import { Injectable, UnauthorizedException, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, Logger, NotFoundException, Inject } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -18,6 +18,8 @@ import { LoginDto } from './dto/login.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Role, User } from '@prisma/client';
 import { EmailService } from '../email/email.service';
+import { CACHE_MANAGER } from '@nestjs/cache-manager'; 
+import { Cache } from 'cache-manager'; 
 
 @Injectable()
 export class AuthService {
@@ -29,6 +31,7 @@ export class AuthService {
     private configService: ConfigService,
     private prisma: PrismaService,
     private emailService: EmailService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache, // Inyección del gestor de caché
   ) {}
 
   /**
@@ -56,6 +59,7 @@ export class AuthService {
     this.logger.log(`Usuario ${email} verificado. Generando tokens...`);
     const tokens = await this.getTokens(user.id, user.email, user.role);
 
+    // Actualizar última fecha de login
     // @ts-ignore
     await this.prisma.user.update({
       where: { id: user.id },
@@ -94,11 +98,24 @@ export class AuthService {
   }
 
   /**
-   * Genera un token JWT para restablecer la contraseña y envía el correo.
-   * No requiere cambios en la base de datos.
+   * Genera un token JWT (válido por 1 hora) para restablecer la contraseña y envía el correo.
+   * Implementa un límite de frecuencia de 5 minutos usando el Cache Manager (memoria o Redis).
    */
   async forgotPassword(email: string) {
     const user = await this.usersService.findByEmail(email);
+    
+    const cacheKey = `reset_limit_${email}`;
+    const RATE_LIMIT_DURATION_SECONDS = 5 * 60; // 5 minutos en segundos
+
+    // **LÓGICA DE SEGURIDAD 1: LÍMITE DE FRECUENCIA CON CACHÉ**
+    const isLimited = await this.cacheManager.get(cacheKey);
+
+    if (isLimited) {
+        this.logger.warn(`Solicitud de reseteo denegada para ${email}: Límite de frecuencia activo.`);
+        // Respuesta ambigua por seguridad
+        return { message: 'Si tu correo electrónico está en nuestros registros, recibirás un enlace para restablecer tu contraseña.' };
+    }
+
     if (!user) {
       this.logger.warn(`Intento de restablecimiento de contraseña para correo no registrado: ${email}`);
       return { message: 'Si tu correo electrónico está en nuestros registros, recibirás un enlace para restablecer tu contraseña.' };
@@ -113,9 +130,20 @@ export class AuthService {
       },
     );
   
-    const resetUrl = `${this.configService.get<string>('FRONTEND_URL')}/recover-password/${resetToken}`;
+    // Obtener la URL base y garantizar la ruta de la aplicación.
+    let clientUrl = this.configService.get<string>('FRONTEND_URL');
+    // Limpiar la URL base (eliminar la barra diagonal al final)
+    clientUrl = clientUrl.replace(/\/$/, ''); 
+
+    // Añadir el subdirectorio /acuaponia y el token
+    const resetUrl = `${clientUrl}/acuaponia/recover-password/${resetToken}`;
+    
     await this.emailService.sendResetPasswordEmail(user.email, resetUrl);
-  
+    
+    // **LÍMITE DE FRECUENCIA 2:** Establecer el límite en la caché
+    // CORRECCIÓN: Pasar el TTL (número) directamente como el tercer argumento.
+    await this.cacheManager.set(cacheKey, true, RATE_LIMIT_DURATION_SECONDS);
+
     this.logger.log(`URL de reseteo (enviada al correo): ${resetUrl}`);
   
     return { message: 'Si tu correo electrónico está en nuestros registros, recibirás un enlace para restablecer tu contraseña.' };
@@ -123,10 +151,11 @@ export class AuthService {
 
   /**
    * Valida el JWT y actualiza la contraseña del usuario.
-   * No requiere consultar la base de datos para la validez del token.
+   * Este método confía únicamente en la expiración de 1 hora del JWT.
    */
   async resetPassword(token: string, newPassword: string) {
     try {
+      // 1. Verificar y decodificar el token JWT
       const payload = await this.jwtService.verifyAsync(token, {
         secret: this.configService.get<string>('JWT_RESET_SECRET') || this.configService.get<string>('JWT_SECRET'),
       });
@@ -135,16 +164,26 @@ export class AuthService {
         throw new BadRequestException('Token inválido.');
       }
       
+      // 2. Obtener usuario (usando sub del payload)
+      const targetUser = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+      });
+
+      if (!targetUser) {
+        throw new BadRequestException('Usuario asociado al token no encontrado.');
+      }
+
       const hashedPassword = await bcrypt.hash(newPassword, 10);
       
-      // @ts-ignore
+      // 3. Actualizar contraseña
       await this.prisma.user.update({
-        where: { id: payload.sub },
+        where: { id: targetUser.id },
         data: { password: hashedPassword },
       });
       
       return { message: 'Contraseña actualizada correctamente.' };
     } catch (error) {
+      // Este error captura tokens expirados, inválidos o malformados.
       throw new BadRequestException('El token es inválido o ha expirado.');
     }
   }

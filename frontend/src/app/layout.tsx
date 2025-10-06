@@ -9,19 +9,22 @@
  * @copyright SENA 2025
  */
 
+import '../globals.css';
+import getConfig from 'next/config'; 
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { AuthProvider } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
-import '../globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
+const config = getConfig() || {};
+const basePath = config.publicRuntimeConfig?.basePath || ''; 
 
 export const metadata: Metadata = {
   title: 'SENA-Acuaponía',
   description: 'Plataforma de monitoreo de sistemas acuapónicos.',
   icons: {
-    icon: '/logo-sena.png',
+    icon: `${basePath}/logo-sena.png`,
   },
 };
 

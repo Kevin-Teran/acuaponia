@@ -9,6 +9,7 @@
  * @since 1.0.0
  * @copyright SENA 2025
  */
+
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 
 /**

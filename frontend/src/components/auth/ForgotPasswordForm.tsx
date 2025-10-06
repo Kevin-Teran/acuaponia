@@ -3,6 +3,7 @@
  * @route frontend/src/components/auth
  * @description
  * Componente de UI para el formulario de solicitud de restablecimiento de contraseña.
+ * Asegura la ruta correcta de activos estáticos, redirige a usuarios autenticados, y maneja mensajes específicos de éxito/error.
  * @author Kevin Mariano
  * @version 1.0.1
  * @since 1.0.0
@@ -11,19 +12,53 @@
 
 'use client';
 
-import React, { useState, FormEvent } from 'react';
-import Image from 'next/image';
+import React, { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
-import { Mail, Send, Sun, Moon, AlertTriangle, X, CheckCircle } from 'lucide-react';
-import { authService } from '@/services/authService';
+import getConfig from 'next/config'; 
+import { useRouter } from 'next/navigation'; 
 import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext'; 
+import { authService } from '@/services/authService';
+import { Mail, Send, Sun, Moon, AlertTriangle, X, CheckCircle } from 'lucide-react';
 
+/**
+ * @component ForgotPasswordForm
+ * @description Presenta el formulario para solicitar el restablecimiento de contraseña. 
+ * Redirige al dashboard si el usuario ya está autenticado y asegura la ruta base de la imagen.
+ * @returns {React.ReactElement} El formulario de recuperación de contraseña renderizado.
+ */
 export const ForgotPasswordForm: React.FC = () => {
     const [email, setEmail] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    
     const { theme, toggleTheme } = useTheme();
+    const router = useRouter(); 
+    const { isAuthenticated } = useAuth(); 
+
+    const [basePath, setBasePath] = useState(''); 
+    
+    useEffect(() => {
+        if (isAuthenticated) {
+            router.replace('/dashboard');
+            return;
+        }
+
+        try {
+            const config = getConfig() || {};
+            const path = config.publicRuntimeConfig?.basePath || '';
+            setBasePath((path === '' || path === '/') ? '/acuaponia' : path);
+        } catch (e) {
+            setBasePath('/acuaponia');
+        }
+    }, [isAuthenticated, router]); 
+
+    /**
+     * @description Maneja el envío del formulario, realizando la llamada al servicio para solicitar el enlace de restablecimiento.
+     * Implementa mensajes específicos de éxito y error.
+     * @param {FormEvent<HTMLFormElement>} e - Evento de formulario.
+     */
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!email.trim()) {
@@ -40,12 +75,18 @@ export const ForgotPasswordForm: React.FC = () => {
         setSuccessMessage(null);
 
         try {
-            const response = await authService.forgotPassword(email);
-            // @ts-ignore
-            setSuccessMessage(response.message);
-        } catch (err: any)
-{
-            setError(err.message || 'Ocurrió un error. Por favor, intente de nuevo.');
+            await authService.forgotPassword(email);
+            setSuccessMessage('El enlace de restablecimiento de contraseña ha sido enviado a su correo.');
+        } catch (err: any) {
+            const errorMessage = err.message || '';
+            
+            if (errorMessage.includes('not found') || errorMessage.includes('no está asociado')) {
+                setError('El correo electrónico no está asociado a ninguna cuenta.');
+            } else if (errorMessage.includes('failed to send') || errorMessage.includes('falló el envío')) {
+                setError('Ocurrió un error al enviar el correo. Por favor, intente de nuevo.');
+            } else {
+                setError('Ocurrió un error inesperado. Por favor, intente de nuevo.');
+            }
         } finally {
             setLoading(false);
         }
@@ -66,12 +107,11 @@ export const ForgotPasswordForm: React.FC = () => {
             <main className="w-full max-w-sm animate-in fade-in slide-in-from-bottom-5 duration-500 sm:max-w-md sm:px-0">
                 <header className="mb-6 text-center">
                     <div className="relative mx-auto mb-3 h-16 w-16">
-                        <Image
-                            src="/logo-sena.png"
+                        <img
+                            src={`${basePath}/logo-sena.png`}
                             alt="Logo del SENA"
-                            fill
-                            className="object-contain"
-                            priority
+                            className="object-contain w-full h-full" 
+                            loading="eager"
                         />
                     </div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Recuperar Contraseña</h1>
@@ -92,11 +132,12 @@ export const ForgotPasswordForm: React.FC = () => {
                                     value={email} 
                                     onChange={(e) => setEmail(e.target.value)} 
                                     className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:placeholder-gray-500" 
-                                    placeholder="usuario@sena.edu.co" 
+                                    placeholder="usuario@gmail.com" 
                                     required 
                                 />
                             </div>
                         </div>
+                        {/* Renderizado de Mensajes de Error */}
                         {error && (
                             <div className="relative flex items-center justify-between rounded-xl border border-red-400/50 bg-red-100/80 px-4 py-3 text-red-700 dark:bg-red-900/50 dark:text-red-300" role="alert">
                                 <div className="flex items-center">
@@ -109,6 +150,7 @@ export const ForgotPasswordForm: React.FC = () => {
                             </div>
                         )}
 
+                        {/* Renderizado de Mensaje de Éxito */}
                         {successMessage && (
                              <div className="relative flex items-center rounded-xl border border-green-400/50 bg-green-100/80 px-4 py-3 text-green-700 dark:bg-green-900/50 dark:text-green-300" role="alert">
                                 <CheckCircle className="mr-3 h-5 w-5" />
@@ -122,7 +164,10 @@ export const ForgotPasswordForm: React.FC = () => {
                         </button>
                     </form>
                     <div className="mt-4 text-center">
-                        <Link href="/login" className="text-sm text-gray-600 transition-colors hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400">
+                        <Link 
+                            href="/login" 
+                            className="text-sm text-gray-600 transition-colors hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400"
+                        >
                             Volver a Inicio de Sesión
                         </Link>
                     </div>

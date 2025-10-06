@@ -4,14 +4,16 @@
  * @description Componente de carga altamente reutilizable y personalizable con una animación visual del logo del SENA.
  * Optimizado para ofrecer una experiencia de usuario fluida con animaciones de entrada.
  * @author Kevin Mariano
- * @version 1.0.0
+ * @version 1.0.1
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
+'use client';
+
 import React from 'react';
-import Image from 'next/image';
 import { clsx } from 'clsx';
+import getConfig from 'next/config'; 
 
 /**
  * @interface LoadingSpinnerProps
@@ -39,7 +41,7 @@ interface LoadingSpinnerProps {
 /**
  * @component LoadingSpinner
  * @description Un componente que muestra una animación de carga con el logo del SENA.
- * Puede ser mostrado en línea o como una superposición a pantalla completa.
+ * Asegura la ruta de la imagen estática usando un fallback de basePath.
  * @param {LoadingSpinnerProps} props - Las propiedades del componente.
  * @returns {React.ReactElement} El componente de carga.
  */
@@ -49,6 +51,12 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   fullScreen = false,
   className = '',
 }) => {
+  const config = getConfig() || {};
+  const basePath = config.publicRuntimeConfig?.basePath || ''; 
+  
+  const finalBasePath = basePath || '/acuaponia'; 
+  const imageSrc = `${finalBasePath}/logo-sena.png`;
+
   const sizeClasses = {
     sm: { container: 'w-20 h-20', text: 'text-sm' },
     md: { container: 'w-24 h-24', text: 'text-base' },
@@ -62,24 +70,18 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
       className={clsx('flex flex-col items-center justify-center p-8', className)}
     >
       <div className={clsx('relative mb-6', sizeClasses[size].container)}>
-        {/* Logo de fondo en gris para dar contexto de la forma */}
-        <Image
-          src="/logo-sena.png"
+        <img
+          src={imageSrc}
           alt="Logo SENA de fondo"
-          fill
-          sizes="120px"
-          className="object-contain filter grayscale opacity-25"
-          priority
+          className="object-contain filter grayscale opacity-25 w-full h-full"
+          loading="eager" 
         />
-        {/* Logo principal con la animación de "llenado" */}
         <div className="absolute inset-0 animate-fill-up">
-          <Image
-            src="/logo-sena.png"
+          <img
+            src={imageSrc}
             alt="Logo SENA en carga"
-            fill
-            sizes="120px"
-            className="object-contain"
-            priority
+            className="object-contain w-full h-full"
+            loading="eager"
           />
         </div>
       </div>
@@ -111,7 +113,6 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   if (fullScreen) {
     return (
       <div className="fixed inset-0 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        {/* Contenedor con animación de entrada para una aparición suave */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50">
           {spinnerContent}
         </div>

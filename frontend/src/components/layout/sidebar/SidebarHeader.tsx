@@ -28,7 +28,6 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = React.memo(({ collaps
     <div className="flex items-center p-4 h-16 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
       {!collapsed && (
         <div className={clsx("flex items-center space-x-3")}>
-          {/* Contenedor con position: relative - ES NECESARIO para fill */}
           <div className="relative w-9 h-9"> 
             <Image
               src={`${basePath}/logo-sena.png`}

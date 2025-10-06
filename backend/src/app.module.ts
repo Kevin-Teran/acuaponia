@@ -18,6 +18,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { EmailModule } from './email/email.module';
 import { TanksModule } from './tanks/tanks.module';
 import { UsersModule } from './users/users.module';
+import { CacheModule } from '@nestjs/cache-manager';
 import { AlertsModule } from './alerts/alerts.module';
 import { EventsModule } from './events/events.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -31,9 +32,13 @@ import { PredictionsModule } from './predictions/predictions.module';
 import { AiAssistantModule } from './ai-assistant/ai-assistant.module';
 
 
+
 @Module({
   imports: [
     ConfigModule.forRoot({
+      isGlobal: true,
+    }), 
+    CacheModule.register({
       isGlobal: true,
     }),
     AuthModule,

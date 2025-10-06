@@ -1,9 +1,9 @@
 /**
- * @file dashboard-filters.dto.ts
+ * @file auth.module.ts
  * @route backend/src/auth/
- * @description Módulo para la gestión del auth.
+ * @description Módulo para la gestión de autenticación, incluyendo JWT, roles y límite de frecuencia (Cache).
  * @author Kevin Mariano
- * @version 1.0.0
+ * @version 1.0.2
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -19,6 +19,7 @@ import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { UsersModule } from '../users/users.module';
 import { EmailModule } from '../email/email.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { CacheModule } from '@nestjs/cache-manager'; 
 
 @Module({
   imports: [
@@ -26,6 +27,8 @@ import { PrismaModule } from '../prisma/prisma.module';
     UsersModule,
     PassportModule,
     ConfigModule,
+    CacheModule.register({
+    }), 
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
