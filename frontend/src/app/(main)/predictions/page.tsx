@@ -23,8 +23,6 @@ import { Sensor, Tank, SensorType } from '@/types';
 import { PredictionCard } from '@/components/predictions/PredictionCard';
 import { PredictionSummary } from '@/components/predictions/PredictionSummary';
 
-// ... (Resto de interfaces, constantes y lógica de la página se mantienen iguales) ...
-
 // 1. FIX DE TIPO: Extensión local de la interfaz Tank para incluir sensores
 interface TankWithSensors extends Tank {
   sensors?: Sensor[];
@@ -81,7 +79,6 @@ export default function PredictionsPage() {
   }, [user]);
 
   const generatePredictions = useCallback(async () => {
-    // ... (Lógica de generatePredictions se mantiene igual)
     if (!selectedTankId || !horizon) return;
     
     setIsGenerating(true);
@@ -95,7 +92,13 @@ export default function PredictionsPage() {
       let weather: WeatherDataPoint[] = []; 
       if (tankDetailsWithSensors.location) {
         try {
-          weather = await getWeatherForecast(tankDetailsWithSensors.location, parseInt(horizon));
+          // **CORRECCIÓN FINAL DE UBICACIÓN:** Usando coordenadas de Barranquilla (10.9685,-74.7813).
+          const locationToUse = 
+            tankDetailsWithSensors.location.toUpperCase().trim() === 'SENA TIC' 
+              ? "10.9685,-74.7813" // Coordenadas de Barranquilla
+              : tankDetailsWithSensors.location;
+
+          weather = await getWeatherForecast(locationToUse, parseInt(horizon));
           setWeatherData(weather);
         } catch (error) {
           console.warn('No se pudo obtener el pronóstico del clima:', error);
@@ -177,7 +180,6 @@ export default function PredictionsPage() {
   );
   
   const renderContent = () => {
-    // ... (Lógica de renderContent se mantiene igual)
     if (isGenerating) {
       return Array.from({ length: 3 }).map((_, i) => (
         <Skeleton key={i} className='w-full h-[600px] rounded-xl' />

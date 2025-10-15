@@ -16,11 +16,13 @@ import { useAuth } from '@/context/AuthContext';
 import { Bot, Sparkles, Clipboard, Trash2, Send } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/config/api'; 
+import { toast } from 'react-hot-toast';
 
 type Message = {
   id: number;
   text: string;
   sender: 'user' | 'ai';
+  command?: any; 
 };
 
 const PREGUNTAS_SUGERIDAS: string[] = [
@@ -66,6 +68,65 @@ const AsistenteIAPage: React.FC = () => {
     inputRef.current?.focus();
   }, []);
 
+  /**
+   * FUNCIÓN DE EXTRACCIÓN DE JSON: 
+   * Limpia completamente cualquier rastro de JSON o código de la respuesta.
+   */
+  const processAIResponse = (rawText: string) => {
+    let cleanText = rawText;
+    let command = null;
+
+    // 1. Remover comentarios HTML con comandos
+    const commandBlockRegex = /<!--\s*COMMAND_START\s*-->[\s\S]*?<!--\s*COMMAND_END\s*-->/g;
+    cleanText = cleanText.replace(commandBlockRegex, '').trim();
+
+    // 2. Remover bloques de código markdown completos
+    cleanText = cleanText.replace(/```[\s\S]*?```/g, '').trim();
+    cleanText = cleanText.replace(/'''[\s\S]*?'''/g, '').trim();
+
+    // 3. Remover cualquier estructura JSON completa { ... }
+    cleanText = cleanText.replace(/\{[\s\S]*?\}/g, '').trim();
+
+    // 4. Remover comillas con etiquetas de código
+    cleanText = cleanText.replace(/`{1,3}[^`]*`{1,3}/g, '').trim();
+
+    // 5. Remover líneas que contienen palabras clave de código
+    cleanText = cleanText.replace(/^\s*(json|type|message|id|respuesta)\s*$/gmi, '').trim();
+
+    // 6. Remover puntos suspensivos solos
+    cleanText = cleanText.replace(/^\s*\.{2,}\s*$/gm, '').trim();
+
+    // 7. Remover comillas dobles o simples sueltas al inicio/fin
+    cleanText = cleanText.replace(/^["']+|["']+$/g, '').trim();
+
+    // 8. Remover cualquier fragmento que parezca JSON (contiene ":", "{", "}")
+    const lines = cleanText.split('\n');
+    const filteredLines = lines.filter(line => {
+      const trimmedLine = line.trim();
+      // Si la línea contiene caracteres típicos de JSON, la eliminamos
+      if (trimmedLine.includes('":') || trimmedLine.includes('{"') || trimmedLine.includes('"}')) {
+        return false;
+      }
+      // Si la línea solo tiene símbolos raros, la eliminamos
+      if (/^[\{\}\[\]:,"]*$/.test(trimmedLine)) {
+        return false;
+      }
+      return trimmedLine.length > 0;
+    });
+    cleanText = filteredLines.join('\n').trim();
+
+    // 9. Limpiar espacios múltiples y saltos de línea excesivos
+    cleanText = cleanText.replace(/\n{3,}/g, '\n\n').trim();
+    cleanText = cleanText.replace(/\s{2,}/g, ' ').trim();
+
+    // 10. Si después de todo esto queda vacío o muy corto, devolver mensaje por defecto
+    if (cleanText.length < 10) {
+      cleanText = 'Lo siento, no pude procesar tu consulta correctamente. Por favor, intenta reformular tu pregunta.';
+    }
+
+    return { cleanText, command };
+  };
+
   const sendMessage = useCallback(async (pregunta: string) => {
     if (!pregunta.trim() || cargando) return;
 
@@ -87,8 +148,14 @@ const AsistenteIAPage: React.FC = () => {
     try {
       const response = await api.post('/asistente', { pregunta });
 
-      const aiResponseText = response.data.respuesta;
-      setMessages(prev => [...prev, { id: Date.now() + 1, text: aiResponseText, sender: 'ai' }]);
+      const rawAiResponseText = response.data.respuesta;
+      const { cleanText, command } = processAIResponse(rawAiResponseText);
+
+      if (command) {
+          console.log("Comando de IA detectado y extraído:", command);
+      }
+
+      setMessages(prev => [...prev, { id: Date.now() + 1, text: cleanText, sender: 'ai', command }]);
       
     } catch (error: any) {
       const errorMsg = error.response?.data?.message || 'Error al contactar al servidor.';
@@ -140,6 +207,7 @@ const AsistenteIAPage: React.FC = () => {
                     'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200': msg.sender === 'ai',
                   })}>
                     <p className="whitespace-pre-wrap">{msg.text}</p>
+                    
                     {msg.sender === 'ai' && (
                       <button onClick={() => handleCopy(msg.text, msg.id)} className="absolute -top-2 -right-2 p-1.5 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-full text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
                         {copiedId === msg.id ? <span className="text-emerald-500 text-xs">¡Ok!</span> : <Clipboard size={14} />}

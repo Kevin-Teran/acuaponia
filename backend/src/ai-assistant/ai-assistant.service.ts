@@ -1,10 +1,9 @@
 /**
  * @file ai-assistant.service.ts
  * @route backend/src/ai-assistant
- * @description Lógica de negocio para el asistente de IA (ACUAGENIUS), 
- * con filtrado por rol, contexto climático (priorizando settings), configuración de usuario y detección de comandos.
+ * @description Lógica de negocio para el asistente de IA (ACUAGENIUS) - Respuestas solo en texto natural
  * @author kevin mariano & Deiner
- * @version 1.1.2 // Versión Estabilizada Final: No JSON Visible al Usuario
+ * @version 1.2.0 - Sin comandos JSON visibles
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -16,7 +15,6 @@ import axios from 'axios';
 
 type CurrentUser = Pick<User, 'id' | 'role'>;
 
-// Interfaces para tipado de configuraciones
 interface ThresholdSettings {
   temperatureMin: number;
   temperatureMax: number;
@@ -34,7 +32,6 @@ interface UserSettingsData {
   location?: LocationSettings;
 }
 
-
 @Injectable()
 export class AiAssistantService {
   private readonly groqApiKey: string;
@@ -51,11 +48,7 @@ export class AiAssistantService {
     }
   }
 
-  /**
-   * Obtiene el clima actual de una ubicación específica.
-   */
   private async getWeatherData(lat: string | number, lon: string | number) {
-    // Coordenadas de respaldo (SENA Centro de la Tecnología del Diseño)
     const DEFAULT_LAT = 4.711; 
     const DEFAULT_LON = -74.0721;
     
@@ -87,15 +80,11 @@ export class AiAssistantService {
     }
   }
 
-  /**
-   * Obtiene el contexto del sistema y la CONFIGURACIÓN DEL USUARIO (incluyendo Umbrales y Coordenadas).
-   */
   private async getSystemContext(user: CurrentUser) {
-    // Filtros de ámbito
-    const baseTankWhere: Prisma.TankWhereInput = user.role === Role.USER ? { userId: user.id } : {};
-    const activeTankWhere: Prisma.TankWhereInput = { ...baseTankWhere, status: 'ACTIVE' };
+    // IMPORTANTE: SIEMPRE filtrar por usuario actual, incluso si es ADMIN
+    // Cada usuario solo ve SUS propios datos
+    const userTankWhere: Prisma.TankWhereInput = { userId: user.id, status: 'ACTIVE' };
 
-    // 1. Obtener la configuración del usuario (Settings)
     const userSettingsResult = await this.prisma.user.findUnique({
         where: { id: user.id },
         select: { settings: true },
@@ -114,24 +103,46 @@ export class AiAssistantService {
         }
     }
     
-    // 2. Conteo de tanques activos, sensores y alertas
-    const activeTanksCount = await this.prisma.tank.count({ where: activeTankWhere });
-    const activeSensorsCount = await this.prisma.sensor.count({ where: { tank: activeTankWhere, status: 'ACTIVE' } });
-    const alertWhere: Prisma.AlertWhereInput = user.role === Role.USER 
-      ? { resolved: false, sensor: { tank: activeTankWhere } } 
-      : { resolved: false };
+    // Contar SOLO los tanques del usuario actual
+    const activeTanksCount = await this.prisma.tank.count({ where: userTankWhere });
+    
+    // Contar sensores activos por tipo
+    const temperatureSensorsCount = await this.prisma.sensor.count({ 
+      where: { tank: userTankWhere, status: 'ACTIVE', type: sensors_type.TEMPERATURE } 
+    });
+    const phSensorsCount = await this.prisma.sensor.count({ 
+      where: { tank: userTankWhere, status: 'ACTIVE', type: sensors_type.PH } 
+    });
+    const oxygenSensorsCount = await this.prisma.sensor.count({ 
+      where: { tank: userTankWhere, status: 'ACTIVE', type: sensors_type.OXYGEN } 
+    });
+    
+    const totalActiveSensorsCount = temperatureSensorsCount + phSensorsCount + oxygenSensorsCount;
+    
+    const alertWhere: Prisma.AlertWhereInput = { 
+      resolved: false, 
+      sensor: { tank: userTankWhere } 
+    };
     const unresolvedAlertsCount = await this.prisma.alert.count({ where: alertWhere });
     
-    // 3. Función para obtener el historial de sensores
+    // Obtener SOLO los datos de sensores de los tanques del usuario
     const getSensorHistory = async (type: sensors_type) => {
       const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
       const readings = await this.prisma.sensorData.findMany({
-        where: { type, timestamp: { gte: twelveHoursAgo }, tank: activeTankWhere },
+        where: { 
+          type, 
+          timestamp: { gte: twelveHoursAgo }, 
+          tank: userTankWhere 
+        },
         orderBy: { timestamp: 'desc' },
       });
       
       if (readings.length === 0) return { latest: null, avg: null, min: null, max: null };
-      const values = readings.map(r => r.value);
+      
+      const values = readings.map(r => 
+          typeof r.value === 'number' ? r.value : (r.value as any).toNumber()
+      );
+      
       return { 
           latest: values[0], 
           avg: values.reduce((acc, val) => acc + val, 0) / values.length, 
@@ -145,27 +156,27 @@ export class AiAssistantService {
         getSensorHistory(sensors_type.PH),
         getSensorHistory(sensors_type.OXYGEN)
     ]);
-
-    const isGlobalContext = user.role === Role.ADMIN;
     
     return { 
         role: user.role,
-        userThresholds: userSettings.thresholds || null, // Se extraen solo los umbrales
-        userCoords, // Coordenadas del usuario
-        activeTanksCount: isGlobalContext ? await this.prisma.tank.count({ where: { status: 'ACTIVE' } }) : activeTanksCount, 
-        activeSensorsCount: isGlobalContext ? await this.prisma.sensor.count({ where: { status: 'ACTIVE' } }) : activeSensorsCount,
-        unresolvedAlertsCount: isGlobalContext ? await this.prisma.alert.count({ where: { resolved: false } }) : unresolvedAlertsCount, 
-        temperature, ph, oxygen, 
+        userThresholds: userSettings.thresholds || null,
+        userCoords,
+        activeTanksCount,
+        activeSensorsCount: totalActiveSensorsCount,
+        temperatureSensorsCount,
+        phSensorsCount,
+        oxygenSensorsCount,
+        unresolvedAlertsCount,
+        temperature, 
+        ph, 
+        oxygen, 
     };
   }
 
   async getAIResponse(pregunta: string, user: CurrentUser): Promise<string> {
-    
-    // Ejecución secuencial para resolver dependencia
     const context = await this.getSystemContext(user);
     const weather = await this.getWeatherData(context.userCoords.latitude, context.userCoords.longitude);
 
-    // Formatear umbrales del usuario para el prompt
     const userThresholds = context.userThresholds;
     const thresholdsPrompt = userThresholds
         ? `
@@ -176,53 +187,69 @@ export class AiAssistantService {
       `
         : '\n- Umbrales de Usuario: No configurados. Usa rangos estándar acuapónicos.';
 
-    // Construcción dinámica del contexto y reglas de rol en el prompt
     const isUserAdmin = context.role === Role.ADMIN;
     const roleLabel = isUserAdmin ? 'ADMINISTRADOR' : 'USUARIO REGULAR';
-    const scope = isUserAdmin ? 'Sistema Global' : 'Su Cuenta';
 
     const contextDetails = `
       - ROL DEL USUARIO: ${roleLabel}
-      - Tanques Activos (${scope}): ${context.activeTanksCount}
-      - Sensores Activos (${scope}): ${context.activeSensorsCount}
-      - Alertas sin Resolver (${scope}): ${context.unresolvedAlertsCount}
+      - Tanques Activos en tu cuenta: ${context.activeTanksCount}
+      - Total de Sensores Activos en tus tanques: ${context.activeSensorsCount}
+        * Sensores de Temperatura: ${context.temperatureSensorsCount}
+        * Sensores de pH: ${context.phSensorsCount}
+        * Sensores de Oxígeno: ${context.oxygenSensorsCount}
+      - Alertas sin Resolver en tus tanques: ${context.unresolvedAlertsCount}
       `;
     
     const prompt = `
       == IDENTIDAD Y PERSONA ==
-      Eres "ACUAGENIUS", un asistente de IA del SENA y un analista de datos experto. Tu tono es profesional, preciso y servicial. TUS RESPUESTAS DEBEN SER SIEMPRE CLARAS, CONCISAS Y DIRECTAS.
+      Eres "ACUAGENIUS", un asistente de IA del SENA especializado en sistemas acuapónicos. Tu tono es profesional, preciso y servicial.
       
-      == CONOCIMIENTO ARQUITECTÓNICO ==
-      El sistema usa NestJS, Next.js, MySQL/Prisma y MQTT.
-
-      == INSTRUCCIÓN DE ACCIÓN (COMANDO O RESPUESTA) ==
-      1. Si la pregunta del usuario es una SOLICITUD CLARA para **crear un Reporte o una Predicción**, DEBES RESPONDER PRIMERO CON LA INFORMACIÓN VERBAL SOLICITADA (Ej. "Se espera que el pH suba ligeramente...") y luego, como ÚLTIMA LÍNEA, DEBES INCLUIR EL COMANDO JSON DENTRO DE UN COMENTARIO HTML PARA QUE EL SISTEMA LO INTERCEPTE.
-      2. En CUALQUIER otro caso (saludo, consulta de estado, umbrales, sistema, etc.), DEBES RESPONDER **SOLO** CON TEXTO INFORMATIVO.
-
-      **FORMATO DE COMANDO REQUERIDO (COMENTARIO HTML, ÚLTIMA LÍNEA):**
-      **Instrucción de Lenguaje (Corrección Silenciosa):** Corrige cualquier error de ortografía o gramática internamente. NUNCA MENCIONES LA CORRECCIÓN.
+      == INSTRUCCIONES CRÍTICAS DE FORMATO ==
+      IMPORTANTE: NUNCA incluyas código, JSON, bloques de código, o cualquier formato técnico en tus respuestas.
+      SOLO responde con TEXTO NATURAL en español, como si hablaras con una persona.
+      PROHIBIDO usar: {}, [], "", '', \`\`\`, comentarios HTML, o cualquier símbolo de programación.
+      
+      == ÁMBITO DE INFORMACIÓN ==
+      CRÍTICO: Toda la información que te proporciono es EXCLUSIVAMENTE de la cuenta del usuario que está preguntando.
+      - Los tanques, sensores y alertas son SOLO los que pertenecen a ESTE usuario específico.
+      - NO tienes acceso a información de otros usuarios del sistema.
+      - Cuando respondas, habla sobre "tus tanques", "tu sistema", "tu cuenta".
+      - NUNCA menciones información global o de otros usuarios.
+      
+      Si el usuario te pide crear un reporte o predicción, describe verbalmente lo que encontraste EN SUS DATOS.
+      Ejemplo CORRECTO: "En tu sistema, el pH ha mostrado una tendencia estable..."
+      Ejemplo INCORRECTO: "En el sistema global..." o "Todos los usuarios..."
+      
+      == CORRECCIÓN DE LENGUAJE ==
+      Si detectas errores ortográficos en la pregunta del usuario, entiende su intención y responde normalmente. NUNCA menciones los errores.
 
       == CONFIGURACIÓN DE UMBRALES DEL USUARIO ==
       ${thresholdsPrompt}
 
       == CONTEXTO AMBIENTAL Y HORA ACTUAL ==
       - Fecha y Hora Actual: ${new Date().toLocaleString('es-ES', { timeZone: 'America/Bogota' })}
-      - T° Ambiente: ${weather.temperature}
-      - Clima: ${weather.description} (Basado en la configuración de la cuenta)
+      - T° Ambiente en tu ubicación: ${weather.temperature}
+      - Clima en tu ubicación: ${weather.description}
+      - Viento: ${weather.windSpeed}
 
-      == CONTEXTO Y DATOS DEL AGUA (ÚLTIMAS 12 HORAS) ==
+      == CONTEXTO Y DATOS DE TU SISTEMA (ÚLTIMAS 12 HORAS) ==
       ${contextDetails}
-      - T° Agua: Actual: ${context.temperature.latest?.toFixed(2) ?? 'N/D'} °C, Promedio: ${context.temperature.avg?.toFixed(2) ?? 'N/D'} °C
-      - pH: Actual: ${context.ph.latest?.toFixed(2) ?? 'N/D'}, Promedio: ${context.ph.avg?.toFixed(2) ?? 'N/D'}
-      - Oxígeno: Actual: ${context.oxygen.latest?.toFixed(2) ?? 'N/D'} mg/L, Promedio: ${context.oxygen.avg?.toFixed(2) ?? 'N/D'} mg/L
+      - T° Agua en tus tanques: Actual: ${context.temperature.latest?.toFixed(2) ?? 'N/D'} °C, Promedio: ${context.temperature.avg?.toFixed(2) ?? 'N/D'} °C, Mín: ${context.temperature.min?.toFixed(2) ?? 'N/D'} °C, Máx: ${context.temperature.max?.toFixed(2) ?? 'N/D'} °C
+      - pH en tus tanques: Actual: ${context.ph.latest?.toFixed(2) ?? 'N/D'}, Promedio: ${context.ph.avg?.toFixed(2) ?? 'N/D'}, Mín: ${context.ph.min?.toFixed(2) ?? 'N/D'}, Máx: ${context.ph.max?.toFixed(2) ?? 'N/D'}
+      - Oxígeno en tus tanques: Actual: ${context.oxygen.latest?.toFixed(2) ?? 'N/D'} mg/L, Promedio: ${context.oxygen.avg?.toFixed(2) ?? 'N/D'} mg/L, Mín: ${context.oxygen.min?.toFixed(2) ?? 'N/D'} mg/L, Máx: ${context.oxygen.max?.toFixed(2) ?? 'N/D'} mg/L
       
       == REGLAS DE INTERACCIÓN ==
-      1.  **RESPUESTA DE SALUDO:** Si la pregunta es solo un saludo ("hola", etc.), responde presentándote y preguntando cómo puedes ayudar.
-      2.  **PREDICCIÓN/REPORTE:** La respuesta verbal debe ser útil (descripción de la predicción, resumen del reporte) y DEBE IR ANTES del comando.
-      3.  **CONCISIÓN:** No uses frases introductorias ni redundancia. Ve al grano.
+      1. Si es un saludo, preséntate brevemente y pregunta cómo puedes ayudar.
+      2. Para consultas sobre el sistema, proporciona la información relevante de SU cuenta específicamente.
+      3. Para análisis o predicciones, describe los patrones observados en SUS datos.
+      4. Sé conciso pero completo. No uses listas numeradas a menos que sea absolutamente necesario.
+      5. NUNCA incluyas formatos técnicos, solo texto conversacional.
+      6. Siempre habla en segunda persona: "tu sistema", "tus tanques", "tus sensores".
 
       == PREGUNTA DEL USUARIO ==
       "${pregunta}"
+      
+      Responde de forma natural y conversacional, enfocándote SOLO en los datos de este usuario:
     `;
 
     try {
@@ -231,14 +258,13 @@ export class AiAssistantService {
         {
           messages: [{ role: 'user', content: prompt }],
           model: 'llama-3.1-8b-instant',
+          temperature: 0.7,
         },
         { headers: { 'Authorization': `Bearer ${this.groqApiKey}`, 'Content-Type': 'application/json' } },
       );
       
       const content = response.data.choices[0]?.message?.content?.trim();
       if (content) {
-          // Si el content contiene el comando HTML (), se devuelve.
-          // El frontend debe detectar y remover este comentario antes de mostrar al usuario.
           return content;
       }
       return 'No se pudo obtener una respuesta.';

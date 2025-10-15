@@ -14,7 +14,7 @@ import {
   TrendingDown, Activity, CheckCircle, Cloud, Download 
 } from 'lucide-react';
 import { PredictionChart } from './PredictionChart';
-import { ThresholdGauge } from './ThresholdGauge'; // <--- CORRECCIÓN: Importación agregada
+import { ThresholdGauge } from './ThresholdGauge';
 import { cn } from '@/utils/cn';
 import { SensorType } from '@/types';
 
@@ -159,14 +159,34 @@ export const PredictionCard: React.FC<PredictionCardProps> = ({ result, tankName
 
   const risk = getRiskLevel();
 
-  // Preparar datos para el gráfico
-  const chartData = predicted.map((d, i) => ({
-    time: i === 0 ? 'Hoy' : new Date(d.timestamp).toLocaleDateString('es-CO', { 
-      day: '2-digit', 
-      month: 'short' 
-    }),
-    value: d.value,
-  }));
+  // Preparar datos para el gráfico - CORRECCIÓN DE FECHA
+  const chartData = predicted.map((d, i) => {
+    const timestamp = d.timestamp;
+    let timeLabel;
+    
+    if (i === 0) {
+      timeLabel = 'Hoy';
+    } else if (timestamp) {
+      const date = new Date(timestamp);
+      // Validar si la fecha es válida
+      if (!isNaN(date.getTime())) {
+        timeLabel = date.toLocaleDateString('es-CO', { 
+          day: '2-digit', 
+          month: 'short' 
+        });
+      } else {
+        // Fallback si la fecha es inválida (previene "Invalid Date")
+        timeLabel = `Día ${i}`; 
+      }
+    } else {
+      timeLabel = `Día ${i}`;
+    }
+
+    return {
+      time: timeLabel,
+      value: d.value,
+    };
+  });
 
   return (
     <Card className={cn("w-full rounded-xl shadow-xl border border-default-200 dark:border-default-800 bg-white dark:bg-gray-900", info.borderColor)}>
@@ -240,6 +260,7 @@ export const PredictionCard: React.FC<PredictionCardProps> = ({ result, tankName
               value={initialValue} 
               thresholds={thresholds} 
               unit={info.unit} 
+              aria-label={`Indicador de umbral para ${result.sensorName}`}
             />
           </div>
         )}
@@ -253,7 +274,11 @@ export const PredictionCard: React.FC<PredictionCardProps> = ({ result, tankName
             </Chip>
           </div>
           <div className="h-64 w-full">
-            <PredictionChart data={chartData} thresholds={thresholds!} />
+            <PredictionChart 
+              data={chartData} 
+              thresholds={thresholds!} 
+              aria-label={`Gráfico de predicción de ${result.sensorName} para los próximos días`}
+            />
           </div>
         </div>
 
@@ -303,6 +328,7 @@ export const PredictionCard: React.FC<PredictionCardProps> = ({ result, tankName
                   value={confidence * 100} 
                   color={confidence >= 0.8 ? 'success' : confidence >= 0.6 ? 'warning' : 'danger'}
                   size="sm"
+                  aria-label="Confianza de Predicción"
                 />
               </div>
 
