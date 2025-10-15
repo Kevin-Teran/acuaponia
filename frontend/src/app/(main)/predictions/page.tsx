@@ -221,15 +221,6 @@ export default function PredictionsPage() {
             Proyecciones inteligentes basadas en datos históricos y condiciones climáticas
           </p>
         </div>
-        <Button
-          color="success"
-          variant="flat"
-          startContent={<Download className="w-4 h-4" />}
-          onPress={handleExportAll}
-          isDisabled={Object.keys(resultsBySensor).length === 0}
-        >
-          Exportar Todo
-        </Button>
       </div>
       
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 mb-2">

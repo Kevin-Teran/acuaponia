@@ -121,7 +121,7 @@ export const getAlertsSummary = async (filters: AnalyticsFilters) => {
  */
 export const getCorrelations = async (filters: CorrelationFilters) => {
   try {
-    console.log('🔗 [Analytics] Iniciando getCorrelations con filtros:', filters);
+    //console.log('🔗 [Analytics] Iniciando getCorrelations con filtros:', filters);
 
     const filtersWithDefaults = {
       ...filters,
@@ -136,10 +136,10 @@ export const getCorrelations = async (filters: CorrelationFilters) => {
 
     const cleanedFilters = cleanFilters(filtersWithDefaults);
     
-    console.log('🧹 [Analytics] Filtros de correlación FINALES enviados a la API:', cleanedFilters);
+    //console.log('🧹 [Analytics] Filtros de correlación FINALES enviados a la API:', cleanedFilters);
 
     const { data } = await api.get('/analytics/correlations', { params: cleanedFilters });
-    console.log(`✅ [Analytics] Correlaciones obtenidas: ${data.length} puntos`);
+    //console.log(`✅ [Analytics] Correlaciones obtenidas: ${data.length} puntos`);
     return data;
   } catch (error: any) {
     console.error('❌ [Analytics] Error obteniendo correlaciones:', error.response?.data || error.message);

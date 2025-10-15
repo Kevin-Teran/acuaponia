@@ -1,17 +1,27 @@
 /**
  * @file SidebarHeader.tsx
  * @route frontend/src/components/layout/sidebar
- * @description 
+ * @description Componente del encabezado de la barra lateral, corrigiendo la carga del logo con basePath.
  * @author Kevin Mariano
- * @version 1.0.1
+ * @version 1.0.0
  * @since 1.0.0
  * @copyright SENA 2025
 */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 import getConfig from 'next/config'; 
+
+const getInitialBasePath = (): string => {
+    try {
+        const config = getConfig() || {};
+        const path = config.publicRuntimeConfig?.basePath || '';
+        return (path === '' || path === '/') ? '/acuaponia' : path;
+    } catch (e) {
+        return '/acuaponia';
+    }
+};
 
 interface SidebarHeaderProps {
   collapsed: boolean;
@@ -20,27 +30,19 @@ interface SidebarHeaderProps {
 
 export const SidebarHeader: React.FC<SidebarHeaderProps> = React.memo(({ collapsed, onToggleCollapse }) => {
   
-  const [basePath, setBasePath] = useState('');
-  useEffect(() => {
-      try {
-          const config = getConfig() || {};
-          const path = config.publicRuntimeConfig?.basePath || '';
-          setBasePath((path === '' || path === '/') ? '/acuaponia' : path);
-      } catch (e) {
-          setBasePath('/acuaponia');
-      }
-  }, []);
+  const [basePath] = useState(getInitialBasePath);
   const logoPath = `${basePath}/logo-sena.png`; 
   
   return (
     <div className="flex items-center p-4 h-16 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
       {!collapsed && (
         <div className={clsx("flex items-center space-x-3")}>
-          <div className="relative w-9 h-9"> 
+          <div className="relative w-9 h-9 flex-shrink-0"> 
             <img
               src={logoPath} 
               alt="Logo del SENA, Servicio Nacional de Aprendizaje de Colombia"
               className="object-contain w-full h-full" 
+              loading="eager" 
             />
           </div>
           <h1 className="text-lg font-bold text-gray-900 dark:text-white whitespace-nowrap">Acuaponía</h1>
@@ -61,4 +63,5 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = React.memo(({ collaps
     </div>
   );
 });
+
 SidebarHeader.displayName = 'SidebarHeader';

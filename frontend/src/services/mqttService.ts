@@ -161,7 +161,7 @@ class MqttService {
           return reject(new Error(error));
         }
 
-        console.log(`🔄 [MQTT] Conectando a: ${brokerUrl}`);
+        //console.log(`🔄 [MQTT] Conectando a: ${brokerUrl}`);
         this.updateStatus({ connecting: true, error: null });
 
         const options: IClientOptions = {
@@ -211,7 +211,7 @@ class MqttService {
     if (!this.client) return;
 
     this.client.on('connect', () => {
-      console.log('✅ [MQTT] Conectado exitosamente al broker');
+      //console.log('✅ [MQTT] Conectado exitosamente al broker');
       this.updateStatus({
         connected: true,
         connecting: false,
@@ -243,7 +243,7 @@ class MqttService {
     });
 
     this.client.on('close', () => {
-      console.log('🔌 [MQTT] Desconectado del broker');
+      //console.log('🔌 [MQTT] Desconectado del broker');
       this.updateStatus({ 
         connected: false, 
         connecting: false 
@@ -261,7 +261,7 @@ class MqttService {
       const message = payload.toString();
       
       if (this.status.messagesReceived % 50 === 0) {
-        console.log(`📨 [MQTT] Mensajes recibidos: ${this.status.messagesReceived}`);
+        //console.log(`📨 [MQTT] Mensajes recibidos: ${this.status.messagesReceived}`);
       }
 
       this.messageListeners.forEach(listener => {
@@ -274,7 +274,7 @@ class MqttService {
     });
 
     this.client.on('reconnect', () => {
-      console.log(`🔄 [MQTT] Reconectando... (Intento ${this.status.reconnectAttempts + 1})`);
+      //console.log(`🔄 [MQTT] Reconectando... (Intento ${this.status.reconnectAttempts + 1})`);
       this.updateStatus({ 
         connecting: true,
         reconnectAttempts: this.status.reconnectAttempts + 1
@@ -314,7 +314,7 @@ class MqttService {
     const jitter = Math.random() * 1000;
     const delay = Math.min(baseDelay * backoffMultiplier + jitter, 30000);
 
-    console.log(`⏰ [MQTT] Reconexión programada en ${Math.round(delay)}ms`);
+    //console.log(`⏰ [MQTT] Reconexión programada en ${Math.round(delay)}ms`);
     
     this.reconnectTimer = setTimeout(async () => {
       try {

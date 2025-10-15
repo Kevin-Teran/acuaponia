@@ -66,7 +66,7 @@ export const useAnalytics = () => {
   }, []);
 
   const fetchData = useCallback(async (filters: AnalyticsFilters) => {
-    console.log('🚀 [useAnalytics] Iniciando fetchData con filtros:', filters);
+    //console.log('🚀 [useAnalytics] Iniciando fetchData con filtros:', filters);
     setError(null);
     setLoading({ kpis: true, timeSeries: true, alerts: true, correlation: true });
 
@@ -81,7 +81,7 @@ export const useAnalytics = () => {
         sensorTypeY: SensorType.PH,
       };
 
-      console.log('📡 [useAnalytics] Ejecutando peticiones en paralelo con filtros:', { cleanFilters, correlationFilters });
+      //console.log('📡 [useAnalytics] Ejecutando peticiones en paralelo con filtros:', { cleanFilters, correlationFilters });
 
       const [kpisResult, tsResult, summaryResult, corrResult] = await Promise.allSettled([
         analyticsService.getKpis(cleanFilters),
@@ -107,12 +107,12 @@ export const useAnalytics = () => {
       setError(err.response?.data?.message || 'No se pudieron cargar todos los datos de analíticas.');
     } finally {
       setLoading({ kpis: false, timeSeries: false, alerts: false, correlation: false });
-      console.log('🏁 [useAnalytics] fetchData completado');
+      //console.log('🏁 [useAnalytics] fetchData completado');
     }
   }, [validateFilters]);
 
   const resetState = useCallback(() => {
-    console.log('🔄 [useAnalytics] Reseteando estado');
+    //console.log('🔄 [useAnalytics] Reseteando estado');
     setKpis(null);
     setTimeSeriesData([]);
     setAlertsSummary(null);

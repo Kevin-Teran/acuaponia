@@ -24,10 +24,10 @@ export interface CreateReportDto {
  */
 export const getReports = async (userId?: string): Promise<Report[]> => {
   try {
-    console.log('📊 [ReportService] Obteniendo reportes...');
+    //console.log('📊 [ReportService] Obteniendo reportes...');
     const params = userId ? { userId } : {};
     const response = await api.get('/reports', { params });
-    console.log('✅ [ReportService] Reportes obtenidos:', response.data.length);
+    //console.log('✅ [ReportService] Reportes obtenidos:', response.data.length);
     return response.data;
   } catch (error: any) {
     console.error('❌ [ReportService] Error obteniendo reportes:', error);
@@ -40,9 +40,9 @@ export const getReports = async (userId?: string): Promise<Report[]> => {
  */
 export const createReport = async (reportData: CreateReportDto): Promise<Report> => {
   try {
-    console.log('🆕 [ReportService] Creando reporte:', reportData.reportName);
+    //console.log('🆕 [ReportService] Creando reporte:', reportData.reportName);
     const response = await api.post('/reports', reportData);
-    console.log('✅ [ReportService] Reporte creado:', response.data);
+    //console.log('✅ [ReportService] Reporte creado:', response.data);
     return response.data;
   } catch (error: any) {
     console.error('❌ [ReportService] Error creando reporte:', error);
@@ -58,31 +58,27 @@ export const downloadReport = async (
   format: 'pdf' | 'xlsx'
 ): Promise<void> => {
   try {
-    console.log(`📥 [ReportService] Descargando reporte ${reportId} en formato ${format.toUpperCase()}...`);
+    //console.log(`📥 [ReportService] Descargando reporte ${reportId} en formato ${format.toUpperCase()}...`);
     
     const response = await api.get(`/reports/${reportId}/download`, {
       params: { format },
-      responseType: 'blob', // IMPORTANTE: debe ser blob para archivos binarios
+      responseType: 'blob', 
     });
 
-    // Crear un enlace temporal para descargar el archivo
     const url = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement('a');
     link.href = url;
     
-    // Determinar el nombre del archivo
     const extension = format === 'pdf' ? 'pdf' : 'xlsx';
     link.setAttribute('download', `reporte_${reportId}.${extension}`);
     
-    // Agregar al DOM, hacer clic y remover
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     
-    // Liberar el objeto URL
     window.URL.revokeObjectURL(url);
     
-    console.log(`✅ [ReportService] Reporte ${reportId} descargado exitosamente`);
+    //console.log(`✅ [ReportService] Reporte ${reportId} descargado exitosamente`);
   } catch (error: any) {
     console.error(`❌ [ReportService] Error descargando reporte:`, error);
     console.error('Detalles del error:', {
@@ -99,9 +95,9 @@ export const downloadReport = async (
  */
 export const deleteReport = async (reportId: string): Promise<void> => {
   try {
-    console.log(`🗑️ [ReportService] Eliminando reporte ${reportId}...`);
+    //console.log(`🗑️ [ReportService] Eliminando reporte ${reportId}...`);
     await api.delete(`/reports/${reportId}`);
-    console.log(`✅ [ReportService] Reporte ${reportId} eliminado exitosamente`);
+    //console.log(`✅ [ReportService] Reporte ${reportId} eliminado exitosamente`);
   } catch (error: any) {
     console.error(`❌ [ReportService] Error eliminando reporte:`, error);
     throw error;
@@ -155,7 +151,7 @@ export const deleteReport = async (reportId: string): Promise<void> => {
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
     
-    console.log('✅ Reporte exportado exitosamente');
+    //console.log('✅ Reporte exportado exitosamente');
   } catch (error) {
     console.error('❌ Error exportando reporte:', error);
     throw error;

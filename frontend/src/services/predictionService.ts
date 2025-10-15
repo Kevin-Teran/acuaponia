@@ -46,16 +46,17 @@ export const generatePrediction = async (
   payload: GeneratePredictionPayload
 ): Promise<PredictionResponse> => {
   try {
-    console.log('🔮 Generando predicción:', payload);
+    //console.log('🔮 Generando predicción:', payload);
     
     const { data } = await api.post('/predictions/generate', payload);
     
-    console.log('✅ Predicción recibida:', {
-      historicalPoints: data.historical?.length || 0,
-      predictedPoints: data.predicted?.length || 0,
-      hasThresholds: !!data.thresholds
-    });
-    
+    /**
+     * console.log('✅ Predicción recibida:', {
+     *   historicalPoints: data.historical?.length || 0,
+     *   predictedPoints: data.predicted?.length || 0,
+     *   hasThresholds: !!data.thresholds
+     * });
+    */
     return data;
   } catch (error: any) {
     console.error('❌ Error generando predicción:', error);

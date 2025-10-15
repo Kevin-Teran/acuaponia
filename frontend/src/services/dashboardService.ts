@@ -38,16 +38,16 @@ export const getSummary = async (
     filters: DashboardFilters,
 ): Promise<DashboardSummary> => {
     try {
-        console.log('📊 [dashboardService] Obteniendo resumen con filtros:', filters);
+        //console.log('📊 [dashboardService] Obteniendo resumen con filtros:', filters);
         
         const cleanedFilters = cleanFilters(filters);
-        console.log('🧹 [dashboardService] Filtros limpios:', cleanedFilters);
+        //console.log('🧹 [dashboardService] Filtros limpios:', cleanedFilters);
         
         const { data } = await api.get('/dashboard/summary', { 
             params: cleanedFilters 
         });
         
-        console.log('✅ [dashboardService] Resumen recibido:', data);
+        //console.log('✅ [dashboardService] Resumen recibido:', data);
 
         const summary: DashboardSummary = {
             tanksCount: data.tanksCount || 0,
@@ -76,7 +76,7 @@ export const getRealtimeData = async (
     filters: DashboardFilters,
 ): Promise<RealtimeData> => {
     try {
-        console.log('⚡ [dashboardService] Obteniendo datos en tiempo real:', filters);
+        //console.log('⚡ [dashboardService] Obteniendo datos en tiempo real:', filters);
 
         if (!filters.tankId) {
             console.warn('⚠️ [dashboardService] No se proporcionó tankId');
@@ -88,7 +88,7 @@ export const getRealtimeData = async (
             params: cleanedFilters 
         });
 
-        console.log('✅ [dashboardService] Datos en tiempo real recibidos:', data);
+        //console.log('✅ [dashboardService] Datos en tiempo real recibidos:', data);
 
         const realtimeData: RealtimeData = {
             TEMPERATURE: data.TEMPERATURE || [],
@@ -96,11 +96,13 @@ export const getRealtimeData = async (
             OXYGEN: data.OXYGEN || [],
         };
 
-        console.log('📊 [dashboardService] Datos procesados:', {
-            TEMPERATURE: realtimeData.TEMPERATURE.length,
-            PH: realtimeData.PH.length,
-            OXYGEN: realtimeData.OXYGEN.length,
-        });
+        /* 
+         * console.log('📊 [dashboardService] Datos procesados:', {
+         *   TEMPERATURE: realtimeData.TEMPERATURE.length,
+         *   PH: realtimeData.PH.length,
+         *   OXYGEN: realtimeData.OXYGEN.length,
+         * });
+        */
 
         return realtimeData;
     } catch (error: any) {
@@ -119,7 +121,7 @@ export const getHistoricalData = async (
     filters: DashboardFilters,
 ): Promise<HistoricalData> => {
     try {
-        console.log('📈 [dashboardService] Obteniendo datos históricos:', filters);
+        //console.log('📈 [dashboardService] Obteniendo datos históricos:', filters);
 
         if (!filters.tankId) {
             console.warn('⚠️ [dashboardService] No se proporcionó tankId');
@@ -133,13 +135,13 @@ export const getHistoricalData = async (
         };
 
         const cleanedFilters = cleanFilters(effectiveFilters);
-        console.log('🧹 [dashboardService] Filtros históricos limpios:', cleanedFilters);
+        //console.log('🧹 [dashboardService] Filtros históricos limpios:', cleanedFilters);
 
         const { data } = await api.get('/dashboard/historical', {
             params: cleanedFilters,
         });
 
-        console.log('✅ [dashboardService] Datos históricos recibidos:', data);
+        //console.log('✅ [dashboardService] Datos históricos recibidos:', data);
 
         const historicalData: HistoricalData = {
             TEMPERATURE: data.TEMPERATURE || [],
@@ -147,12 +149,13 @@ export const getHistoricalData = async (
             OXYGEN: data.OXYGEN || [],
         };
 
-        console.log('📊 [dashboardService] Datos históricos procesados:', {
-            TEMPERATURE: historicalData.TEMPERATURE.length,
-            PH: historicalData.PH.length,
-            OXYGEN: historicalData.OXYGEN.length,
-        });
-
+        /**
+         * console.log('📊 [dashboardService] Datos históricos procesados:', {
+         *   TEMPERATURE: historicalData.TEMPERATURE.length,
+         *   PH: historicalData.PH.length,
+         *   OXYGEN: historicalData.OXYGEN.length,
+         * });
+        */
         return historicalData;
     } catch (error: any) {
         console.error('❌ [dashboardService] Error obteniendo datos históricos:', error);
@@ -168,11 +171,11 @@ export const getHistoricalData = async (
  */
 export const getUsersListForAdmin = async (): Promise<UserFromApi[]> => {
     try {
-        console.log('👥 [dashboardService] Obteniendo lista de usuarios');
+        //console.log('👥 [dashboardService] Obteniendo lista de usuarios');
         
         const { data } = await api.get('/dashboard/users');
         
-        console.log('✅ [dashboardService] Usuarios recibidos:', data.length);
+        //console.log('✅ [dashboardService] Usuarios recibidos:', data.length);
         
         return data;
     } catch (error: any) {

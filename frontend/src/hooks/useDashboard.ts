@@ -154,7 +154,7 @@ export const useDashboard = (): UseDashboardReturn => {
      * @description Maneja las actualizaciones de reportes
      */
     const handleReportUpdate = useCallback((reportData: any) => {
-        console.log('📋 [useDashboard] Actualización de reporte recibida:', reportData);
+        //console.log('📋 [useDashboard] Actualización de reporte recibida:', reportData);
     }, []);
 
     /**
@@ -162,7 +162,7 @@ export const useDashboard = (): UseDashboardReturn => {
      * @description Maneja las nuevas alertas
      */
     const handleNewAlert = useCallback((alertData: any) => {
-        console.log('🚨 [useDashboard] Nueva alerta recibida:', alertData);
+        //console.log('🚨 [useDashboard] Nueva alerta recibida:', alertData);
         setSummaryData(prev => {
             if (prev) {
                 return {
@@ -180,7 +180,7 @@ export const useDashboard = (): UseDashboardReturn => {
     useEffect(() => {
         const token = localStorage.getItem('accessToken');
         if (socketManager && token) {
-            console.log('🔌 [useDashboard] Configurando conexión de socket');
+            //console.log('🔌 [useDashboard] Configurando conexión de socket');
             socketManager.connect(token);
         }
 
@@ -195,11 +195,11 @@ export const useDashboard = (): UseDashboardReturn => {
             socket.on('report_status_update', handleReportUpdate);
             socket.on('new-alert', handleNewAlert);
 
-            console.log('✅ [useDashboard] Eventos de socket suscritos');
+            //console.log('✅ [useDashboard] Eventos de socket suscritos');
         };
 
         const handleConnect = () => {
-            console.log('🔌 [useDashboard] Socket conectado, suscribiendo eventos');
+            //console.log('🔌 [useDashboard] Socket conectado, suscribiendo eventos');
             subscribeToEvents();
         };
 
@@ -228,14 +228,14 @@ export const useDashboard = (): UseDashboardReturn => {
      */
     const fetchSummary = useCallback(async (filters: DashboardFilters) => {
         try {
-            console.log('📊 [useDashboard] Obteniendo resumen...');
+            //console.log('📊 [useDashboard] Obteniendo resumen...');
             setLoading(prev => ({ ...prev, summary: true }));
             setError(null);
 
             const data = await getSummary(filters);
             setSummaryData(data);
 
-            console.log('✅ [useDashboard] Resumen obtenido:', data);
+            //console.log('✅ [useDashboard] Resumen obtenido:', data);
         } catch (err: any) {
             const errorMsg = err.message || 'Error al cargar el resumen de datos';
             setError(errorMsg);
@@ -251,18 +251,20 @@ export const useDashboard = (): UseDashboardReturn => {
      */
     const fetchRealtimeData = useCallback(async (filters: DashboardFilters) => {
         try {
-            console.log('⚡ [useDashboard] Obteniendo datos en tiempo real...');
+            //console.log('⚡ [useDashboard] Obteniendo datos en tiempo real...');
             setLoading(prev => ({ ...prev, realtime: true }));
             setError(null);
 
             const data = await getRealtimeData(filters);
             setRealtimeData(data);
 
-            console.log('✅ [useDashboard] Datos en tiempo real obtenidos:', {
-                TEMPERATURE: data.TEMPERATURE?.length || 0,
-                PH: data.PH?.length || 0,
-                OXYGEN: data.OXYGEN?.length || 0,
-            });
+            /**
+             * console.log('✅ [useDashboard] Datos en tiempo real obtenidos:', {
+             *    TEMPERATURE: data.TEMPERATURE?.length || 0,
+             *    PH: data.PH?.length || 0,
+             *    OXYGEN: data.OXYGEN?.length || 0,
+             * });
+            */
         } catch (err: any) {
             const errorMsg = err.message || 'Error al cargar los datos en tiempo real';
             setError(errorMsg);
@@ -285,18 +287,20 @@ export const useDashboard = (): UseDashboardReturn => {
         }
 
         try {
-            console.log('📈 [useDashboard] Obteniendo datos históricos...');
+            //console.log('📈 [useDashboard] Obteniendo datos históricos...');
             setLoading(prev => ({ ...prev, historical: true }));
             setError(null);
 
             const data = await getHistoricalData(filters);
             setHistoricalData(data);
 
-            console.log('✅ [useDashboard] Datos históricos obtenidos:', {
-                TEMPERATURE: data.TEMPERATURE?.length || 0,
-                PH: data.PH?.length || 0,
-                OXYGEN: data.OXYGEN?.length || 0,
-            });
+            /**
+             * console.log('✅ [useDashboard] Datos históricos obtenidos:', {
+             *     TEMPERATURE: data.TEMPERATURE?.length || 0,
+             *     PH: data.PH?.length || 0,
+             *     OXYGEN: data.OXYGEN?.length || 0,
+             * });
+            */
         } catch (err: any) {
             const errorMsg = err.message || 'Error al cargar los datos históricos';
             setError(errorMsg);
@@ -314,14 +318,14 @@ export const useDashboard = (): UseDashboardReturn => {
      */
     const fetchUsersList = useCallback(async () => {
         try {
-            console.log('👥 [useDashboard] Obteniendo lista de usuarios...');
+            //console.log('👥 [useDashboard] Obteniendo lista de usuarios...');
             setLoading(prev => ({ ...prev, users: true }));
             setError(null);
 
             const data = await getUsersListForAdmin();
             setUsersList(data);
 
-            console.log('✅ [useDashboard] Usuarios obtenidos:', data.length);
+            //console.log('✅ [useDashboard] Usuarios obtenidos:', data.length);
         } catch (err: any) {
             const errorMsg = err.message || 'Error al cargar la lista de usuarios';
             setError(errorMsg);

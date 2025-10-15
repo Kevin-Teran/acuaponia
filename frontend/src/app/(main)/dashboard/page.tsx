@@ -94,17 +94,17 @@ const DashboardPage: React.FC = () => {
 	 */
 	useEffect(() => {
 		if (user) {
-			console.log('👤 [Dashboard] Usuario autenticado:', user.email);
+			//console.log('👤 [Dashboard] Usuario autenticado:', user.email);
 			
 			getSettings()
 				.then(userSettings => {
-					console.log('⚙️ [Dashboard] Configuraciones cargadas:', userSettings);
+					//console.log('⚙️ [Dashboard] Configuraciones cargadas:', userSettings);
 					setSettings(userSettings);
 				})
 				.catch(err => console.error('❌ [Dashboard] Error cargando configuraciones:', err));
 			
 			if (user.role === Role.ADMIN) {
-				console.log('👑 [Dashboard] Usuario admin, cargando lista de usuarios');
+				//console.log('👑 [Dashboard] Usuario admin, cargando lista de usuarios');
 				fetchUsersList();
 			}
 			
@@ -119,7 +119,7 @@ const DashboardPage: React.FC = () => {
 	 */
 	useEffect(() => {
 		if (filters.userId) {
-			console.log('🏗️ [Dashboard] Cargando infraestructura para usuario:', filters.userId);
+			//console.log('🏗️ [Dashboard] Cargando infraestructura para usuario:', filters.userId);
 			fetchDataForUser(filters.userId);
 		}
 	}, [filters.userId, fetchDataForUser]);
@@ -145,11 +145,11 @@ const DashboardPage: React.FC = () => {
 	 */
 	const memoizedFetchData = useCallback(() => {
 		if (!filters.userId || !filters.tankId || !filters.startDate || !filters.endDate) {
-			console.log('⏳ [Dashboard] Filtros incompletos, esperando...', filters);
+			//console.log('⏳ [Dashboard] Filtros incompletos, esperando...', filters);
 			return;
 		}
 
-		console.log('🔄 [Dashboard] Cargando datos con filtros:', filters);
+		//console.log('🔄 [Dashboard] Cargando datos con filtros:', filters);
 		
 		fetchSummary(filters);
 		fetchRealtimeData(filters);
@@ -164,13 +164,13 @@ const DashboardPage: React.FC = () => {
 	 * Manejar cambios en los filtros
 	 */
 	const handleFiltersChange = (newFilters: Partial<typeof filters>) => {
-		console.log('🔧 [Dashboard] Actualizando filtros:', newFilters);
+		//console.log('🔧 [Dashboard] Actualizando filtros:', newFilters);
 		
 		setFilters((prev) => {
 			const updated = { ...prev, ...newFilters };
 			
 			if (newFilters.userId && newFilters.userId !== prev.userId) {
-				console.log('👤 [Dashboard] Usuario cambiado, reseteando tankId');
+				//console.log('👤 [Dashboard] Usuario cambiado, reseteando tankId');
 				updated.tankId = undefined;
 				updated.sensorType = undefined;
 			}
