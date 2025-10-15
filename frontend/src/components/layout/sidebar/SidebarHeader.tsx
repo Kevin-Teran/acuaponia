@@ -8,8 +8,7 @@
  * @copyright SENA 2025
 */
 
-import React from 'react';
-import Image from 'next/image';
+import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 import getConfig from 'next/config'; 
@@ -21,20 +20,27 @@ interface SidebarHeaderProps {
 
 export const SidebarHeader: React.FC<SidebarHeaderProps> = React.memo(({ collapsed, onToggleCollapse }) => {
   
-  const config = getConfig() || {};
-  const basePath = config.publicRuntimeConfig?.basePath || ''; 
+  const [basePath, setBasePath] = useState('');
+  useEffect(() => {
+      try {
+          const config = getConfig() || {};
+          const path = config.publicRuntimeConfig?.basePath || '';
+          setBasePath((path === '' || path === '/') ? '/acuaponia' : path);
+      } catch (e) {
+          setBasePath('/acuaponia');
+      }
+  }, []);
+  const logoPath = `${basePath}/logo-sena.png`; 
   
   return (
     <div className="flex items-center p-4 h-16 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
       {!collapsed && (
         <div className={clsx("flex items-center space-x-3")}>
           <div className="relative w-9 h-9"> 
-            <Image
-              src={`${basePath}/logo-sena.png`}
+            <img
+              src={logoPath} 
               alt="Logo del SENA, Servicio Nacional de Aprendizaje de Colombia"
-              fill
-              className="object-contain"
-              priority
+              className="object-contain w-full h-full" 
             />
           </div>
           <h1 className="text-lg font-bold text-gray-900 dark:text-white whitespace-nowrap">Acuaponía</h1>
