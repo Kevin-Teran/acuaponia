@@ -52,6 +52,7 @@ class SocketManager {
             apiBaseUrl.replace(/^http/, 'ws');
         
         const options: Partial<ManagerOptions & SocketOptions> = {
+            path: '/acuaponiaapi/socket.io/',
             extraHeaders: { Authorization: `Bearer ${token}` },
             reconnectionAttempts: this.MAX_ATTEMPTS,
             reconnectionDelay: 1000,

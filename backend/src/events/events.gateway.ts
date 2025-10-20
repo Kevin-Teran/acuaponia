@@ -45,6 +45,7 @@ interface ReportWithUser extends Report {
 }
 
 @WebSocketGateway({
+  path: '/acuaponiaapi/socket.io', 
   cors: {
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     credentials: true,
