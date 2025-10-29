@@ -7,12 +7,14 @@
  * @since 1.0.0
  * @copyright SENA 2025
  */
+
 import { Module, forwardRef } from '@nestjs/common';
 import { DataService } from './data.service';
+import { MqttModule } from '../mqtt/mqtt.module';
 import { DataController } from './data.controller';
+import { AlertsModule } from '../alerts/alerts.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { EventsModule } from '../events/events.module';
-import { MqttModule } from '../mqtt/mqtt.module';
 import { ReportModule } from '../reports/reports.module'; 
 
 @Module({
@@ -21,6 +23,7 @@ import { ReportModule } from '../reports/reports.module';
     EventsModule,
     forwardRef(() => MqttModule),
     forwardRef(() => ReportModule), 
+    AlertsModule,
   ],
   controllers: [DataController],
   providers: [DataService],

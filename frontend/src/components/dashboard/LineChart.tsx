@@ -5,7 +5,7 @@
  * automático del eje X con formato de 12 horas, márgenes optimizados y línea dinámica 
  * con colores basados en umbrales de sensores.
  * @author Kevin Mariano
- * @version 1.0.0 
+ * @version 1.0.1 (Modificaciones para límites y redondeo de eje Y)
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -50,7 +50,7 @@ import { formatInTimeZone } from 'date-fns-tz';
 
 interface ChartDataPoint {
     time: string;
-    value: number;
+    value: number; // En el input, es el valor original. Después de la transformación, es el valor truncado/limitado para el plot.
 }
 
 interface LineChartProps {
@@ -68,9 +68,12 @@ interface SampledDataPoint extends ChartDataPoint {
     originalIndex: number;
 }
 
+// Tipo de dato utilizado por el gráfico después del preprocesamiento.
+// Se añade 'originalValue' para la etiqueta/tooltip.
 interface ProcessedDataPoint extends ChartDataPoint {
     status: 'optimal' | 'low' | 'high';
     color: string;
+    originalValue: number; // Valor real del sensor para mostrar en el tooltip
 }
 
 const TIME_ZONE = 'America/Bogota';
@@ -161,6 +164,12 @@ const getTickFormatter = (rangeType: TimeRangeType, startDate?: Date, endDate?: 
     return formatters[rangeType];
 };
 
+/**
+ * Determina el estado del valor de la lectura, usando el valor original sin truncar.
+ * @param value Valor original de la lectura.
+ * @param thresholds Umbrales min/max.
+ * @returns Estado de la lectura ('optimal' | 'low' | 'high').
+ */
 const getValueStatus = (value: number, thresholds: any): 'optimal' | 'low' | 'high' => {
     if (!thresholds) return 'optimal';
     
@@ -266,6 +275,9 @@ const generateDateRangeLabel = (from: Date, to: Date, rangeType: TimeRangeType):
     }
 };
 
+/**
+ * Tooltip personalizado para mostrar el valor original de la lectura.
+ */
 const CustomTooltip = ({ active, payload, label, themeColor, rangeType }: any) => {
     if (active && payload && payload.length) {
         let formattedLabel: string;
@@ -304,6 +316,14 @@ const CustomTooltip = ({ active, payload, label, themeColor, rangeType }: any) =
                     { locale: es }
                 );
         }
+
+        // Accede al objeto de datos completo, que ahora incluye 'originalValue'
+        const dataPoint = payload[0].payload;
+        
+        // Muestra el valor original con dos decimales, si existe
+        const displayValue = dataPoint.originalValue 
+            ? dataPoint.originalValue.toFixed(2) 
+            : dataPoint.value.toFixed(2);
         
         return (
             <motion.div
@@ -318,8 +338,8 @@ const CustomTooltip = ({ active, payload, label, themeColor, rangeType }: any) =
                     className='flex items-center text-base font-bold'
                     style={{ color: themeColor }}
                 >
-                    {/* El Tooltip mantiene dos decimales para la precisión de la lectura */}
-                    {`${payload[0].name}: ${payload[0].value.toFixed(2)}`} 
+                    {/* El Tooltip muestra el valor ORIGINAL */}
+                    {`${payload[0].name}: ${displayValue}`} 
                 </p>
             </motion.div>
         );
@@ -330,7 +350,8 @@ const CustomTooltip = ({ active, payload, label, themeColor, rangeType }: any) =
 const TrendIndicator = ({ data }: { data: ChartDataPoint[] }) => {
     const trend = useMemo(() => {
         if (data.length < 2) return null;
-        const first = data[0].value;
+        // Se usa el valor para el cálculo de tendencia (que es el valor truncado/limitado)
+        const first = data[0].value; 
         const last = data[data.length - 1].value;
         const diff = last - first;
         if (Math.abs(diff) < 0.1)
@@ -412,7 +433,7 @@ export const LineChart: React.FC<LineChartProps> = ({
         if (!data || data.length === 0) {
             return {
                 processedData: [],
-                stats: { min: 0, max: 0, avg: 0, yDomain: [0, 10] },
+                stats: { min: 0, max: 0, avg: 0, yDomain: ['auto', 'auto'] },
                 xAxisConfig: { 
                     tickFormatter: () => '', 
                     interval: 0, 
@@ -440,14 +461,41 @@ export const LineChart: React.FC<LineChartProps> = ({
             ? intelligentSampling(data, MAX_VISIBLE_POINTS)
             : data;
 
-        const processedDataWithStatus: ProcessedDataPoint[] = sampledData.map(point => {
-            const status = getValueStatus(point.value, thresholds);
+        // --- INICIO DE LA LÓGICA REQUERIDA ---
+
+        // 1. Preprocesamiento para truncar/limitar y preservar valor original
+        const dataWithOriginalValue = sampledData.map(point => {
+            const originalValue = point.value;
+            let plotValue = originalValue;
+            
+            if (sensorType === SensorType.TEMPERATURE) {
+                // Límite (Clamping): 0 a 50 para la línea
+                plotValue = Math.max(0, Math.min(50, originalValue));
+            } 
+            // Para pH y Oxígeno, no se aplica límite, solo el truncamiento.
+            
+            // Truncamiento a entero (Floor) para la posición en el eje Y
+            const finalPlotValue = Math.floor(plotValue);
+            
+            return {
+                ...point, // Contiene 'time'
+                value: finalPlotValue, // Valor truncado/limitado para trazar la línea
+                originalValue: originalValue, // Valor exacto para el Tooltip
+            };
+        });
+
+        // 2. Cálculo de estado y color (usando el valor ORIGINAL para los umbrales)
+        const processedDataWithStatus: ProcessedDataPoint[] = dataWithOriginalValue.map(point => {
+            const status = getValueStatus(point.originalValue, thresholds); 
             return {
                 ...point,
                 status,
-                color: STATUS_COLORS[status]
-            };
+                color: STATUS_COLORS[status],
+            } as ProcessedDataPoint; 
         });
+
+        // --- FIN DE LA LÓGICA REQUERIDA ---
+
 
         const statusCounts = processedDataWithStatus.reduce((acc, point) => {
             acc[point.status] = (acc[point.status] || 0) + 1;
@@ -461,21 +509,39 @@ export const LineChart: React.FC<LineChartProps> = ({
         
         const calculatedDominantColor = STATUS_COLORS[dominantStatus] || theme.color;
 
+        // Estadísticas se calculan sobre los valores originales (datos brutos)
         const values = data.map((d) => d.value);
         const min = Math.min(...values);
         const max = Math.max(...values);
         const avg = values.reduce((a, b) => a + b, 0) / values.length;
-        const range = max - min;
-        const padding = range > 0 ? range * 0.15 : 2;
-        const yDomain: [string, string] = [
-            `dataMin - ${padding}`,
-            `dataMax + ${padding}`
-        ];
+        
+        // --- LÓGICA DE DOMINIO DEL EJE Y ---
+        let yDomain: [string | number, string | number] = ['auto', 'auto'];
+
+        if (sensorType === SensorType.TEMPERATURE) {
+            // Dominio fijo 0-50 para Temperatura
+            yDomain = [0, 50]; 
+        } else if (sensorType === SensorType.PH || sensorType === SensorType.OXYGEN) {
+            // Dominio fijo 0-14 para pH y Oxígeno
+            yDomain = [0, 14];
+        } else {
+            // Lógica de dominio dinámico si el sensor no está cubierto por límites fijos
+            const range = max - min;
+            const padding = range > 0 ? range * 0.15 : 2;
+            yDomain = [
+                `dataMin - ${padding}`,
+                `dataMax + ${padding}`
+            ];
+        }
+        
+        // La YAxis de Recharts necesita string | number para el dominio.
+        const finalYDomain = yDomain as [string, string];
+        // --- FIN LÓGICA DE DOMINIO DEL EJE Y ---
 
         const tickFormatter = getTickFormatter(detectedRangeType, firstDate, lastDate);
-        const tickInterval = getTickInterval(sampledData.length, detectedRangeType);
+        const tickInterval = getTickInterval(processedDataWithStatus.length, detectedRangeType);
 
-        const samplingRatio = data.length > 0 ? (sampledData.length / data.length) * 100 : 0;
+        const samplingRatio = data.length > 0 ? (processedDataWithStatus.length / data.length) * 100 : 0;
         const timeSpanLabels = {
             [TimeRangeType.MINUTES]: 'Minutos',
             [TimeRangeType.HOURS]: 'Horas', 
@@ -487,7 +553,7 @@ export const LineChart: React.FC<LineChartProps> = ({
 
         return {
             processedData: processedDataWithStatus,
-            stats: { min, max, avg, yDomain },
+            stats: { min, max, avg, yDomain: finalYDomain },
             xAxisConfig: { 
                 tickFormatter, 
                 interval: tickInterval, 
@@ -496,13 +562,13 @@ export const LineChart: React.FC<LineChartProps> = ({
             rangeType: detectedRangeType,
             dataInfo: {
                 original: data.length,
-                displayed: sampledData.length,
+                displayed: processedDataWithStatus.length,
                 samplingRatio: Math.round(samplingRatio),
                 timeSpan: timeSpanLabels[detectedRangeType]
             },
             dominantColor: calculatedDominantColor
         };
-    }, [data, dateRange, thresholds, theme.color]);
+    }, [data, dateRange, thresholds, theme.color, sensorType]); // Se añade sensorType a las dependencias
 
     const chartTitle = useMemo(() => {
         if (isLive) {
@@ -603,7 +669,7 @@ export const LineChart: React.FC<LineChartProps> = ({
                         <YAxis
                             type='number'
                             className='text-xs text-gray-600 dark:text-gray-400'
-                            domain={stats.yDomain as [string, string]}
+                            domain={stats.yDomain as [string, string]} // Se usa el dominio fijo (0-50 o 0-14)
                             label={{
                                 value: yAxisLabel,
                                 angle: -90,
@@ -612,7 +678,8 @@ export const LineChart: React.FC<LineChartProps> = ({
                                 className: 'fill-gray-600 dark:fill-gray-400 font-medium',
                             }}
                             allowDataOverflow={true}
-                            tickFormatter={(value) => Math.round(value).toString()} 
+                            // Formateador para asegurar que las etiquetas del eje Y sean ENTEROS (truncados/floor)
+                            tickFormatter={(value) => Math.floor(value).toString()} 
                         />
                         <Tooltip
                             content={<CustomTooltip themeColor={dominantColor} rangeType={rangeType} />}
@@ -622,6 +689,32 @@ export const LineChart: React.FC<LineChartProps> = ({
                                 strokeDasharray: '4 4',
                             }}
                         />
+                        {/* Se añaden ReferenceLines para mostrar los límites de trazado si es temperatura */}
+                        {sensorType === SensorType.TEMPERATURE && (
+                            <>
+                                <ReferenceLine 
+                                    y={50} 
+                                    stroke="#ef4444" 
+                                    strokeDasharray="3 3" 
+                                    label={{ 
+                                        value: 'Máx. Trazado (50)', 
+                                        position: 'right', 
+                                        className: 'fill-red-500 text-xs font-semibold' 
+                                    }} 
+                                />
+                                <ReferenceLine 
+                                    y={0} 
+                                    stroke="#3b82f6" 
+                                    strokeDasharray="3 3" 
+                                    label={{ 
+                                        value: 'Mín. Trazado (0)', 
+                                        position: 'right', 
+                                        className: 'fill-blue-500 text-xs font-semibold' 
+                                    }} 
+                                />
+                            </>
+                        )}
+                        
                         {thresholds && (
                             <>
                                 <ReferenceLine
@@ -659,7 +752,7 @@ export const LineChart: React.FC<LineChartProps> = ({
                         />
                         <Line
                             type='monotone'
-                            dataKey='value'
+                            dataKey='value' // Usa el valor truncado/limitado
                             name={title}
                             stroke={dominantColor}
                             strokeWidth={3}

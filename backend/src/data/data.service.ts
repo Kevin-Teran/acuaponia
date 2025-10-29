@@ -3,17 +3,18 @@
  * @route /backend/src/data
  * @description Servicio de datos con integración de reportes automáticos
  * @author Kevin Mariano 
- * @version 1.2.0
+ * @version 1.0.2
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
 import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, OnModuleInit, OnModuleDestroy, Inject, forwardRef } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { EventsGateway } from '../events/events.gateway';
 import { MqttService } from '../mqtt/mqtt.service';
-import { ReportService } from '../reports/reports.service';
 import { ManualEntryDto } from './dto/manual-entry.dto';
+import { EventsGateway } from '../events/events.gateway';
+import { AlertsService } from '../alerts/alerts.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { ReportService } from '../reports/reports.service';
 import { GetLatestDataDto } from './dto/get-latest-data.dto';
 import { SensorData, sensors_type as SensorTypePrisma, User, Role, Prisma } from '@prisma/client';
 import * as fs from 'fs/promises';
@@ -62,8 +63,9 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
     private eventsGateway: EventsGateway,
     @Inject(forwardRef(() => MqttService))
     private mqttService: MqttService,
-    @Inject(forwardRef(() => ReportService)) // NUEVA INYECCIÓN
+    @Inject(forwardRef(() => ReportService))
     private reportService: ReportService,
+    private readonly alertsService: AlertsService,
   ) {}
 
   async onModuleInit() {
@@ -112,10 +114,8 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
       where: { hardwareId },
       include: { 
         tank: { 
-          select: { 
-            id: true,
-            name: true,
-            userId: true 
+          include: { 
+            user: true 
           } 
         } 
       },
@@ -131,6 +131,11 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
       
       throw new NotFoundException(`Sensor con hardwareId "${hardwareId}" no fue encontrado.`);
     }
+    try {
+      await this.alertsService.checkThresholds(sensor, data.value);
+    } catch (alertError) {
+      this.logger.error('Error al procesar checkThresholds:', alertError);
+    }
   
     this.logger.log(`✅ [DataService] Sensor encontrado: ${sensor.name} (${sensor.type}) del tanque ${sensor.tank.name}`);
   
@@ -140,12 +145,10 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
       activeEmitter.messagesCount++;
     }
 
-    // **NUEVA FUNCIONALIDAD**: Incrementar contador de reportes automáticos
     try {
       await this.reportService.incrementDataCounter(sensor.tankId, sensor.tank.userId);
     } catch (error) {
       this.logger.error('Error incrementando contador de reportes:', error);
-      // No lanzamos el error para no interrumpir el guardado de datos
     }
   
     return this.createAndBroadcastEntry({
@@ -176,17 +179,19 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
         where: { id: entry.sensorId },
         include: { 
           tank: { 
-            select: { 
-              id: true,
-              name: true,
-              userId: true 
+            include: { 
+              user: true 
             } 
           } 
         },
       });
       
       if (sensor) {
-        // **NUEVA FUNCIONALIDAD**: Incrementar contador para entradas manuales también
+        try {
+          await this.alertsService.checkThresholds(sensor, entry.value);
+        } catch (alertError) {
+          this.logger.error('Error al procesar checkThresholds (manual):', alertError);
+        }
         try {
           await this.reportService.incrementDataCounter(sensor.tankId, sensor.tank.userId);
         } catch (error) {
@@ -231,12 +236,23 @@ export class DataService implements OnModuleInit, OnModuleDestroy {
           results.errors.push(`Sensor ${sensorId} no encontrado o sin permisos.`);
           continue;
         }
-        const userSettings = (sensor.tank.user.settings as any)?.thresholds || {};
+        
+        let userSettingsJson: any = {};
+        if (sensor.tank.user.settings) {
+          try {
+            userSettingsJson = JSON.parse(sensor.tank.user.settings); 
+          } catch (e) {
+            this.logger.warn(`Error parseando settings (sim) del usuario ${sensor.tank.user.id}`);
+          }
+        }
+        const userSettings = userSettingsJson.thresholds || {}; 
         const sensorTypeKey = sensor.type as keyof typeof DEFAULT_THRESHOLDS;
+        const sensorTypeKeyLower = sensor.type.toLowerCase() as keyof typeof userSettings; 
         const thresholds = { 
-          min: userSettings[sensorTypeKey]?.min ?? DEFAULT_THRESHOLDS[sensorTypeKey]?.min ?? 0, 
-          max: userSettings[sensorTypeKey]?.max ?? DEFAULT_THRESHOLDS[sensorTypeKey]?.max ?? 100,
+          min: userSettings[sensorTypeKeyLower]?.min ?? DEFAULT_THRESHOLDS[sensorTypeKey]?.min ?? 0, 
+          max: userSettings[sensorTypeKeyLower]?.max ?? DEFAULT_THRESHOLDS[sensorTypeKey]?.max ?? 100,
         };
+
         const emitterState: ActiveEmitter = { 
           intervalId: setInterval(() => {
             const emitter = this.activeEmitters.get(sensorId);

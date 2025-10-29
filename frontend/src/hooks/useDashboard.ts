@@ -76,7 +76,7 @@ export const useDashboard = (): UseDashboardReturn => {
      * @description Maneja los datos de sensores que llegan por WebSocket
      */
     const handleNewSensorData = useCallback((newSensorData: any) => {
-        console.log('⚡️ [useDashboard] Nuevo dato de sensor recibido:', newSensorData);
+        //console.log('⚡️ [useDashboard] Nuevo dato de sensor recibido:', newSensorData);
 
         if (!newSensorData || !newSensorData.sensor) {
             console.warn('⚠️ [useDashboard] Datos de sensor inválidos:', newSensorData);
