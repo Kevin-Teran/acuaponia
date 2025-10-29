@@ -5,7 +5,7 @@
  * automático del eje X con formato de 12 horas, márgenes optimizados y línea dinámica 
  * con colores basados en umbrales de sensores.
  * @author Kevin Mariano
- * @version 1.0.1 (Modificaciones para límites y redondeo de eje Y)
+ * @version 1.0.1 
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -50,7 +50,7 @@ import { formatInTimeZone } from 'date-fns-tz';
 
 interface ChartDataPoint {
     time: string;
-    value: number; // En el input, es el valor original. Después de la transformación, es el valor truncado/limitado para el plot.
+    value: number; 
 }
 
 interface LineChartProps {
@@ -68,12 +68,10 @@ interface SampledDataPoint extends ChartDataPoint {
     originalIndex: number;
 }
 
-// Tipo de dato utilizado por el gráfico después del preprocesamiento.
-// Se añade 'originalValue' para la etiqueta/tooltip.
 interface ProcessedDataPoint extends ChartDataPoint {
     status: 'optimal' | 'low' | 'high';
     color: string;
-    originalValue: number; // Valor real del sensor para mostrar en el tooltip
+    originalValue: number; 
 }
 
 const TIME_ZONE = 'America/Bogota';
@@ -317,10 +315,7 @@ const CustomTooltip = ({ active, payload, label, themeColor, rangeType }: any) =
                 );
         }
 
-        // Accede al objeto de datos completo, que ahora incluye 'originalValue'
         const dataPoint = payload[0].payload;
-        
-        // Muestra el valor original con dos decimales, si existe
         const displayValue = dataPoint.originalValue 
             ? dataPoint.originalValue.toFixed(2) 
             : dataPoint.value.toFixed(2);
@@ -350,7 +345,6 @@ const CustomTooltip = ({ active, payload, label, themeColor, rangeType }: any) =
 const TrendIndicator = ({ data }: { data: ChartDataPoint[] }) => {
     const trend = useMemo(() => {
         if (data.length < 2) return null;
-        // Se usa el valor para el cálculo de tendencia (que es el valor truncado/limitado)
         const first = data[0].value; 
         const last = data[data.length - 1].value;
         const diff = last - first;
@@ -461,30 +455,22 @@ export const LineChart: React.FC<LineChartProps> = ({
             ? intelligentSampling(data, MAX_VISIBLE_POINTS)
             : data;
 
-        // --- INICIO DE LA LÓGICA REQUERIDA ---
-
-        // 1. Preprocesamiento para truncar/limitar y preservar valor original
         const dataWithOriginalValue = sampledData.map(point => {
             const originalValue = point.value;
             let plotValue = originalValue;
             
             if (sensorType === SensorType.TEMPERATURE) {
-                // Límite (Clamping): 0 a 50 para la línea
                 plotValue = Math.max(0, Math.min(50, originalValue));
             } 
-            // Para pH y Oxígeno, no se aplica límite, solo el truncamiento.
-            
-            // Truncamiento a entero (Floor) para la posición en el eje Y
             const finalPlotValue = Math.floor(plotValue);
             
             return {
-                ...point, // Contiene 'time'
-                value: finalPlotValue, // Valor truncado/limitado para trazar la línea
-                originalValue: originalValue, // Valor exacto para el Tooltip
+                ...point, 
+                value: finalPlotValue, 
+                originalValue: originalValue, 
             };
         });
 
-        // 2. Cálculo de estado y color (usando el valor ORIGINAL para los umbrales)
         const processedDataWithStatus: ProcessedDataPoint[] = dataWithOriginalValue.map(point => {
             const status = getValueStatus(point.originalValue, thresholds); 
             return {
@@ -493,9 +479,6 @@ export const LineChart: React.FC<LineChartProps> = ({
                 color: STATUS_COLORS[status],
             } as ProcessedDataPoint; 
         });
-
-        // --- FIN DE LA LÓGICA REQUERIDA ---
-
 
         const statusCounts = processedDataWithStatus.reduce((acc, point) => {
             acc[point.status] = (acc[point.status] || 0) + 1;
@@ -509,23 +492,18 @@ export const LineChart: React.FC<LineChartProps> = ({
         
         const calculatedDominantColor = STATUS_COLORS[dominantStatus] || theme.color;
 
-        // Estadísticas se calculan sobre los valores originales (datos brutos)
         const values = data.map((d) => d.value);
         const min = Math.min(...values);
         const max = Math.max(...values);
         const avg = values.reduce((a, b) => a + b, 0) / values.length;
         
-        // --- LÓGICA DE DOMINIO DEL EJE Y ---
         let yDomain: [string | number, string | number] = ['auto', 'auto'];
 
         if (sensorType === SensorType.TEMPERATURE) {
-            // Dominio fijo 0-50 para Temperatura
             yDomain = [0, 50]; 
         } else if (sensorType === SensorType.PH || sensorType === SensorType.OXYGEN) {
-            // Dominio fijo 0-14 para pH y Oxígeno
             yDomain = [0, 14];
         } else {
-            // Lógica de dominio dinámico si el sensor no está cubierto por límites fijos
             const range = max - min;
             const padding = range > 0 ? range * 0.15 : 2;
             yDomain = [
@@ -534,10 +512,7 @@ export const LineChart: React.FC<LineChartProps> = ({
             ];
         }
         
-        // La YAxis de Recharts necesita string | number para el dominio.
         const finalYDomain = yDomain as [string, string];
-        // --- FIN LÓGICA DE DOMINIO DEL EJE Y ---
-
         const tickFormatter = getTickFormatter(detectedRangeType, firstDate, lastDate);
         const tickInterval = getTickInterval(processedDataWithStatus.length, detectedRangeType);
 
@@ -568,7 +543,7 @@ export const LineChart: React.FC<LineChartProps> = ({
             },
             dominantColor: calculatedDominantColor
         };
-    }, [data, dateRange, thresholds, theme.color, sensorType]); // Se añade sensorType a las dependencias
+    }, [data, dateRange, thresholds, theme.color, sensorType]);
 
     const chartTitle = useMemo(() => {
         if (isLive) {
@@ -688,33 +663,8 @@ export const LineChart: React.FC<LineChartProps> = ({
                                 strokeWidth: 1,
                                 strokeDasharray: '4 4',
                             }}
-                        />
-                        {/* Se añaden ReferenceLines para mostrar los límites de trazado si es temperatura */}
-                        {sensorType === SensorType.TEMPERATURE && (
-                            <>
-                                <ReferenceLine 
-                                    y={50} 
-                                    stroke="#ef4444" 
-                                    strokeDasharray="3 3" 
-                                    label={{ 
-                                        value: 'Máx. Trazado (50)', 
-                                        position: 'right', 
-                                        className: 'fill-red-500 text-xs font-semibold' 
-                                    }} 
-                                />
-                                <ReferenceLine 
-                                    y={0} 
-                                    stroke="#3b82f6" 
-                                    strokeDasharray="3 3" 
-                                    label={{ 
-                                        value: 'Mín. Trazado (0)', 
-                                        position: 'right', 
-                                        className: 'fill-blue-500 text-xs font-semibold' 
-                                    }} 
-                                />
-                            </>
-                        )}
-                        
+                        />                        
+
                         {thresholds && (
                             <>
                                 <ReferenceLine
@@ -752,7 +702,7 @@ export const LineChart: React.FC<LineChartProps> = ({
                         />
                         <Line
                             type='monotone'
-                            dataKey='value' // Usa el valor truncado/limitado
+                            dataKey='value' 
                             name={title}
                             stroke={dominantColor}
                             strokeWidth={3}
