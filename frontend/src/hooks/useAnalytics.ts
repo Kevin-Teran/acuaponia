@@ -3,7 +3,7 @@
  * @route frontend/src/hooks/
  * @description Hook personalizado para manejar la lógica de la página de analíticas - VERSIÓN FINAL CORREGIDA.
  * @author kevin mariano
- * @version 1.0.3
+ * @version 1.0.4 (Corrección de error de tipado en Promise.allSettled)
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -141,13 +141,20 @@ export const useAnalytics = () => {
 
       // Consolidación y Muestreo de Series de Tiempo
       let mergedTimeSeriesData: MultiTimeSeriesData[] = [];
-      const fulfilledTSResults = timeSeriesResults
-        .map((r, index) => ({
-            result: r,
-            type: sensorTypesToFetch[index]
-        }))
-        .filter(r => r.result.status === 'fulfilled' && r.result.value.length > 0)
-        .map(r => ({ data: r.result.value as SingleTimeSeriesData[], type: r.type }));
+      
+      // Mapeamos los resultados con sus tipos antes de filtrar, para mantener el índice
+      const resultsWithTypes = timeSeriesResults.map((result, index) => ({
+          result,
+          type: sensorTypesToFetch[index] as SensorType, 
+      }));
+
+      // APLICAR PREDICADO DE TIPO: Solo procesamos los resultados que fueron cumplidos (fulfilled) 
+      // y cuyo valor (value) es un arreglo con al menos un elemento.
+      const fulfilledTSResults = resultsWithTypes
+        .filter((r): r is { result: PromiseFulfilledResult<SingleTimeSeriesData[]>, type: SensorType } => 
+            r.result.status === 'fulfilled' && (r.result.value as SingleTimeSeriesData[]).length > 0
+        )
+        .map(r => ({ data: r.result.value, type: r.type }));
       
       if (fulfilledTSResults.length > 0) {
         const baseData = fulfilledTSResults.find(r => r.type === sensorType)?.data || fulfilledTSResults[0].data;

@@ -3,7 +3,7 @@
  * @route frontend/src/app/(main)/analytics/
  * @description Página de análisis reorganizada con visualización condicional real
  * @author kevin mariano
- * @version 2.0.0
+ * @version 2.0.10 (Layout de aside con h-full forzado y estilos de página eliminados)
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -27,6 +27,7 @@ import { BrainCircuit, AlertCircle, CheckCircle, BarChart3, PieChart as PieChart
 import { Skeleton } from '@/components/common/Skeleton';
 import { differenceInDays, parseISO, subDays, subMonths, subYears, startOfDay, endOfDay } from 'date-fns';
 import { sensorTypeTranslations } from '@/utils/translations';
+// Eliminada la importación de withAuth
 
 const AnalyticsPage = () => {
   const { user: currentUser, loading: isAuthLoading } = useAuth();
@@ -330,7 +331,7 @@ const AnalyticsPage = () => {
             tankId: selectedTankId,
             range: selectedRange,
             startDate: currentRange.from.toISOString(),
-            endDate: currentRange.to.toISOString(),
+            endDate: currentRange.from.toISOString(),
           }}
         />
       </div>
@@ -384,81 +385,84 @@ const AnalyticsPage = () => {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-4 min-h-full lg:flex-row md:p-6 bg-slate-50 dark:bg-slate-900">
-      <aside className="lg:w-1/4 xl:w-1/5 lg:sticky lg:top-6 h-fit">
-        <AnalyticsControlPanel
-          users={users || []}
-          selectedUserId={selectedUserId}
-          onUserChange={handleUserChange}
-          isAdmin={isAdmin}
-          tanks={tanks || []}
-          selectedTankId={selectedTankId}
-          onTankChange={(id) => { setSelectedTankId(id); setSelectedSensorId('ALL'); }}
-          selectedSensorType={mainSensorType}
-          onSensorTypeChange={handleMainSensorTypeChange}
-          availableSensors={availableSensors}
-          selectedSensorId={selectedSensorId}
-          onSensorChange={setSelectedSensorId}
-          availableRanges={availableRanges}
-          selectedRange={selectedRange}
-          onRangeChange={setSelectedRange}
-          secondarySensorTypes={secondarySensorTypes}
-          onSecondarySensorTypesChange={handleSecondarySensorTypesChange}
-          samplingFactor={samplingFactor}
-          onSamplingFactorChange={handleSamplingFactorChange}
-          isLoading={isLoading || isAnalyticsLoading.kpis}
-        />
-      </aside>
+    // Ya no hay div contenedor externo con padding. El layout padre lo proporciona.
+    // Usamos un Fragment para inyectar el contenido directamente en el <main> del layout.
+    <> 
+      {/* 1. TÍTULO y SUBTÍTULO: Bloque de encabezado */}
+      <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Analíticas de Datos</h1>
+      <p className="text-lg text-slate-600 dark:text-slate-400"> 
+        Visualiza métricas avanzadas, tendencias y correlaciones del sistema.
+      </p>
 
-      <main className="flex-1 space-y-6">
-        <div className="flex items-center gap-3 p-6 bg-gradient-to-r from-green-500 to-blue-600 rounded-xl shadow-lg">
-          <BrainCircuit className="w-10 h-10 text-white" />
-          <div>
-            <h1 className="text-2xl font-bold text-white">Panel de Analíticas Avanzadas</h1>
-            <p className="text-white/80 text-sm">
-              {viewMode === 'comparative' && 'Vista comparativa de todos los tanques'}
-              {viewMode === 'tank_detail' && 'Análisis detallado del tanque seleccionado'}
-              {viewMode === 'sensor_detail' && 'Análisis específico del sensor'}
-            </p>
-          </div>
-        </div>
+      {/* 2. CONTENEDOR DE DOS COLUMNAS: aside (filtros) y main (contenido) */}
+      {/* min-h-[80vh] forza la altura del contenedor flex, y mt-6 lo separa del subtítulo. */}
+      <div className="flex flex-col gap-6 lg:flex-row mt-6 min-h-[80vh] items-stretch"> 
+        
+        {/* Panel de Filtros: h-full para estirarse completamente. */}
+        <aside className="lg:w-1/4 xl:w-1/5 lg:sticky lg:top-6 **h-full** bg-white dark:bg-slate-800 p-4 rounded-xl shadow-lg">
+          <AnalyticsControlPanel
+            users={users || []}
+            selectedUserId={selectedUserId}
+            onUserChange={handleUserChange}
+            isAdmin={isAdmin}
+            tanks={tanks || []}
+            selectedTankId={selectedTankId}
+            onTankChange={(id) => { setSelectedTankId(id); setSelectedSensorId('ALL'); }}
+            selectedSensorType={mainSensorType}
+            onSensorTypeChange={handleMainSensorTypeChange}
+            availableSensors={availableSensors}
+            selectedSensorId={selectedSensorId}
+            onSensorChange={setSelectedSensorId}
+            availableRanges={availableRanges}
+            selectedRange={selectedRange}
+            onRangeChange={setSelectedRange}
+            // Props añadidas (ya corregidas en el componente)
+            secondarySensorTypes={secondarySensorTypes}
+            onSecondarySensorTypesChange={handleSecondarySensorTypesChange}
+            samplingFactor={samplingFactor}
+            onSamplingFactorChange={handleSamplingFactorChange}
+            isLoading={isLoading || isAnalyticsLoading.kpis}
+          />
+        </aside>
 
-        {isLoading && (
-          <div className="flex flex-col items-center justify-center h-64 p-8 text-center bg-white rounded-xl shadow-lg dark:bg-slate-800">
-            <div className="w-16 h-16 mb-4 border-4 border-green-500 rounded-full animate-spin border-t-transparent"></div>
-            <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Cargando Analíticas</h3>
-            <p className="mt-2 text-slate-500 dark:text-slate-400">Preparando datos para el análisis...</p>
-          </div>
-        )}
-
-        {error && !isLoading && (
-          <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
-            <div className="flex items-center gap-3 p-4">
-              <AlertCircle className="w-6 h-6 text-red-600" />
-              <p className="text-red-800 dark:text-red-200">{error}</p>
+        <main className="flex-1 space-y-6">
+          {isLoading && (
+            <div className="flex flex-col items-center justify-center h-64 p-8 text-center bg-white rounded-xl shadow-lg dark:bg-slate-800">
+              <div className="w-16 h-16 mb-4 border-4 border-green-500 rounded-full animate-spin border-t-transparent"></div>
+              <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Cargando Analíticas</h3>
+              <p className="mt-2 text-slate-500 dark:text-slate-400">Preparando datos para el análisis...</p>
             </div>
-          </Card>
-        )}
+          )}
 
-        {!isLoading && hasInitialData === true && (
-          <>
-            {viewMode === 'comparative' && renderComparativeView()}
-            {viewMode === 'tank_detail' && renderTankDetailView()}
-            {viewMode === 'sensor_detail' && renderSensorDetailView()}
-          </>
-        )}
+          {error && !isLoading && (
+            <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
+              <div className="flex items-center gap-3 p-4">
+                <AlertCircle className="w-6 h-6 text-red-600" />
+                <p className="text-red-800 dark:text-red-200">{error}</p>
+              </div>
+            </Card>
+          )}
 
-        {!isLoading && hasInitialData === false && (
-          <Card className="p-12 text-center">
-            <Database className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-            <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300">No hay datos disponibles</h3>
-            <p className="mt-2 text-gray-500 dark:text-gray-400">
-              Selecciona un usuario con datos registrados o espera a que se registren nuevas lecturas.
-            </p>
-          </Card>
-        )}
-      </main>
-    </div>
+          {!isLoading && hasInitialData === true && (
+            <>
+              {viewMode === 'comparative' && renderComparativeView()}
+              {viewMode === 'tank_detail' && renderTankDetailView()}
+              {viewMode === 'sensor_detail' && renderSensorDetailView()}
+            </>
+          )}
+
+          {!isLoading && hasInitialData === false && (
+            <Card className="p-12 text-center">
+              <Database className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+              <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300">No hay datos disponibles</h3>
+              <p className="mt-2 text-gray-500 dark:text-gray-400">
+                Selecciona un usuario con datos registrados o espera a que se registren nuevas lecturas.
+              </p>
+            </Card>
+          )}
+        </main>
+      </div>
+    </>
   );
 };
 

@@ -3,7 +3,7 @@
  * @route frontend/src/components/analytics/
  * @description Panel de control con filtros para la página de analíticas.
  * @author kevin mariano
- * @version 1.0.0
+ * @version 1.1.0 (Añadidas props y UI para filtros avanzados: Secundarios y Sampling)
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -31,6 +31,12 @@ interface AnalyticsControlPanelProps {
   selectedRange: string;
   onRangeChange: (range: string) => void;
   isLoading: boolean;
+  
+  // PROPIEDADES FALTANTES AÑADIDAS AQUÍ:
+  secondarySensorTypes: SensorType[];
+  onSecondarySensorTypesChange: (types: SensorType[]) => void;
+  samplingFactor: number;
+  onSamplingFactorChange: (factor: number) => void;
 }
 
 export const AnalyticsControlPanel: React.FC<AnalyticsControlPanelProps> = ({
@@ -39,8 +45,22 @@ export const AnalyticsControlPanel: React.FC<AnalyticsControlPanelProps> = ({
   selectedSensorType, onSensorTypeChange,
   availableSensors, selectedSensorId, onSensorChange,
   availableRanges, selectedRange, onRangeChange,
-  isLoading
+  isLoading,
+  // Desestructuración de props añadidas
+  secondarySensorTypes, onSecondarySensorTypesChange,
+  samplingFactor, onSamplingFactorChange
 }) => {
+
+  const availableTypes = Object.values(SensorType).filter(type => type !== selectedSensorType);
+  
+  const handleSecondaryTypeChange = (type: SensorType, isChecked: boolean) => {
+    if (isChecked) {
+      onSecondarySensorTypesChange([...secondarySensorTypes, type]);
+    } else {
+      onSecondarySensorTypesChange(secondarySensorTypes.filter(t => t !== type));
+    }
+  };
+
   return (
     <Card className="shadow-lg">
       <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
@@ -79,7 +99,7 @@ export const AnalyticsControlPanel: React.FC<AnalyticsControlPanelProps> = ({
         </div>
         
         <div>
-          <label htmlFor="sensor-select" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Parámetro</label>
+          <label htmlFor="sensor-select" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Parámetro Principal</label>
           <select
             id="sensor-select" value={selectedSensorId} onChange={(e) => onSensorChange(e.target.value)}
             disabled={isLoading || !selectedUserId}
@@ -96,6 +116,44 @@ export const AnalyticsControlPanel: React.FC<AnalyticsControlPanelProps> = ({
           </select>
         </div>
 
+        {/* Nuevo Filtro: Parámetros Secundarios (para correlación/gráficas) */}
+        <div className="border-t border-slate-200 dark:border-slate-700 pt-4 space-y-2">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Parámetros Secundarios</label>
+          {availableTypes.map(type => (
+            <div key={type} className="flex items-center">
+              <input
+                id={`secondary-${type}`}
+                type="checkbox"
+                checked={secondarySensorTypes.includes(type)}
+                onChange={(e) => handleSecondaryTypeChange(type, e.target.checked)}
+                disabled={isLoading || !selectedUserId || selectedSensorId !== 'ALL'}
+                className="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+              />
+              <label htmlFor={`secondary-${type}`} className="ml-2 text-sm text-slate-700 dark:text-slate-300">
+                {sensorTypeTranslations[type]}
+              </label>
+            </div>
+          ))}
+        </div>
+        {/* Fin: Parámetros Secundarios */}
+
+        {/* Nuevo Filtro: Factor de Muestreo */}
+        <div>
+          <label htmlFor="sampling-select" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Factor de Muestreo</label>
+          <select
+            id="sampling-select" value={samplingFactor} onChange={(e) => onSamplingFactorChange(Number(e.target.value))}
+            disabled={isLoading || !selectedUserId}
+            className="mt-1 block w-full rounded-md border-slate-300 shadow-sm dark:border-slate-600 dark:bg-slate-700 focus:border-green-500 focus:ring-green-500"
+          >
+            <option value={1}>1:1 (Datos Crudos)</option>
+            <option value={5}>1:5</option>
+            <option value={10}>1:10</option>
+            <option value={50}>1:50</option>
+            <option value={100}>1:100 (Resumido)</option>
+          </select>
+        </div>
+        {/* Fin: Factor de Muestreo */}
+        
         <div>
           <label htmlFor="range-select" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Período</label>
           <select
