@@ -5,7 +5,7 @@
  * automático del eje X con formato de 12 horas, márgenes optimizados y línea dinámica 
  * con colores basados en umbrales de sensores.
  * @author Kevin Mariano
- * @version 1.0.1 
+ * @version 1.0.3
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -77,6 +77,13 @@ interface ProcessedDataPoint extends ChartDataPoint {
 const TIME_ZONE = 'America/Bogota';
 const MAX_VISIBLE_POINTS = 150;
 const MIN_POINTS_FOR_SAMPLING = 50;
+
+const SENSOR_HARD_LIMITS = {
+    [SensorType.TEMPERATURE]: { min: 0, max: 50 },
+    [SensorType.PH]: { min: 0, max: 14 },
+    [SensorType.OXYGEN]: { min: 0, max: 14 },
+    default: { min: 0, max: 100 },
+};
 
 enum TimeRangeType {
     MINUTES = 'MINUTES',
@@ -244,9 +251,12 @@ const getTickInterval = (dataLength: number, rangeType: TimeRangeType): number =
 };
 
 const generateDateRangeLabel = (from: Date, to: Date, rangeType: TimeRangeType): string => {
-    const isSameDayRange = isSameDay(from, to);
+    const fromDayKey = format(from, 'yyyyMMdd');
+    const toDayKey = format(to, 'yyyyMMdd');
+
+    const isSingleCalendarDay = fromDayKey === toDayKey; 
     
-    if (isSameDayRange) {
+    if (isSingleCalendarDay) {
         const dateStr = format(from, 'd MMM yyyy', { locale: es });
         const startTime = format(from, 'h:mm a', { locale: es });
         const endTime = format(to, 'h:mm a', { locale: es });
@@ -262,9 +272,15 @@ const generateDateRangeLabel = (from: Date, to: Date, rangeType: TimeRangeType):
             
         case TimeRangeType.DAYS:
         case TimeRangeType.WEEKS:
-            const startDate = format(from, 'd MMM', { locale: es });
-            const endDate = format(to, 'd MMM yyyy', { locale: es });
-            return `${startDate} - ${endDate}`;
+        case TimeRangeType.MONTHS:
+        case TimeRangeType.YEARS:
+            const labelStartDate = startOfDay(from); 
+            const labelEndDate = endOfDay(to); 
+
+            const dateStart = format(labelStartDate, 'd MMM, h:mm a', { locale: es }); 
+            const dateEnd = format(labelEndDate, 'd MMM, h:mm a', { locale: es });     
+            
+            return `${dateStart} - ${dateEnd}`;
             
         default:
             const startMonth = format(from, 'MMM yyyy', { locale: es });
@@ -272,6 +288,7 @@ const generateDateRangeLabel = (from: Date, to: Date, rangeType: TimeRangeType):
             return `${startMonth} - ${endMonth}`;
     }
 };
+
 
 /**
  * Tooltip personalizado para mostrar el valor original de la lectura.
@@ -423,11 +440,11 @@ export const LineChart: React.FC<LineChartProps> = ({
         }
     }, [settings, sensorType]);
 
-    const { processedData, stats, xAxisConfig, rangeType, dataInfo, dominantColor } = useMemo(() => {
+    const { processedData, stats, xAxisConfig, rangeType, dataInfo, dominantColor, finalYDomain } = useMemo(() => {
         if (!data || data.length === 0) {
             return {
                 processedData: [],
-                stats: { min: 0, max: 0, avg: 0, yDomain: ['auto', 'auto'] },
+                stats: { min: 0, max: 0, avg: 0 },
                 xAxisConfig: { 
                     tickFormatter: () => '', 
                     interval: 0, 
@@ -440,7 +457,8 @@ export const LineChart: React.FC<LineChartProps> = ({
                     samplingRatio: 0,
                     timeSpan: 'Sin datos'
                 },
-                dominantColor: theme.color
+                dominantColor: theme.color,
+                finalYDomain: [0, 100] as [number, number], 
             };
         }
 
@@ -455,14 +473,11 @@ export const LineChart: React.FC<LineChartProps> = ({
             ? intelligentSampling(data, MAX_VISIBLE_POINTS)
             : data;
 
+        const hardLimits = SENSOR_HARD_LIMITS[sensorType] || SENSOR_HARD_LIMITS.default;
         const dataWithOriginalValue = sampledData.map(point => {
             const originalValue = point.value;
-            let plotValue = originalValue;
-            
-            if (sensorType === SensorType.TEMPERATURE) {
-                plotValue = Math.max(0, Math.min(50, originalValue));
-            } 
-            const finalPlotValue = Math.floor(plotValue);
+            const clampedValue = Math.min(hardLimits.max, Math.max(hardLimits.min, originalValue));
+            const finalPlotValue = clampedValue;
             
             return {
                 ...point, 
@@ -492,27 +507,37 @@ export const LineChart: React.FC<LineChartProps> = ({
         
         const calculatedDominantColor = STATUS_COLORS[dominantStatus] || theme.color;
 
-        const values = data.map((d) => d.value);
-        const min = Math.min(...values);
-        const max = Math.max(...values);
-        const avg = values.reduce((a, b) => a + b, 0) / values.length;
-        
-        let yDomain: [string | number, string | number] = ['auto', 'auto'];
+        const originalValues = data.map((d) => d.value);
+        const min = originalValues.length > 0 ? Math.min(...originalValues) : 0;
+        const max = originalValues.length > 0 ? Math.max(...originalValues) : 0;
+        const avg = originalValues.reduce((a, b) => a + b, 0) / originalValues.length;
+                
+        let minFocus = min;
+        let maxFocus = max;
 
-        if (sensorType === SensorType.TEMPERATURE) {
-            yDomain = [0, 50]; 
-        } else if (sensorType === SensorType.PH || sensorType === SensorType.OXYGEN) {
-            yDomain = [0, 14];
-        } else {
-            const range = max - min;
-            const padding = range > 0 ? range * 0.15 : 2;
-            yDomain = [
-                `dataMin - ${padding}`,
-                `dataMax + ${padding}`
-            ];
+        if (thresholds) {
+            minFocus = Math.min(min, thresholds.min);
+            maxFocus = Math.max(max, thresholds.max);
         }
         
-        const finalYDomain = yDomain as [string, string];
+        const rangeFocus = maxFocus - minFocus;
+        
+        const dynamicPadding = Math.max(1, rangeFocus * 0.2); 
+        
+        let yMin = minFocus - dynamicPadding;
+        let yMax = maxFocus + dynamicPadding;
+        
+        yMin = Math.max(hardLimits.min, yMin); 
+        yMax = Math.min(hardLimits.max, yMax);
+        
+        if (rangeFocus === 0 || data.length === 0) {
+            yMin = Math.max(hardLimits.min, minFocus - 2);
+            yMax = Math.min(hardLimits.max, maxFocus + 2);
+        }
+
+        const calculatedYDomain: [number, number] = [yMin, yMax];
+        const finalYDomain = calculatedYDomain as [number, number];
+        
         const tickFormatter = getTickFormatter(detectedRangeType, firstDate, lastDate);
         const tickInterval = getTickInterval(processedDataWithStatus.length, detectedRangeType);
 
@@ -528,7 +553,7 @@ export const LineChart: React.FC<LineChartProps> = ({
 
         return {
             processedData: processedDataWithStatus,
-            stats: { min, max, avg, yDomain: finalYDomain },
+            stats: { min, max, avg },
             xAxisConfig: { 
                 tickFormatter, 
                 interval: tickInterval, 
@@ -541,7 +566,8 @@ export const LineChart: React.FC<LineChartProps> = ({
                 samplingRatio: Math.round(samplingRatio),
                 timeSpan: timeSpanLabels[detectedRangeType]
             },
-            dominantColor: calculatedDominantColor
+            dominantColor: calculatedDominantColor,
+            finalYDomain,
         };
     }, [data, dateRange, thresholds, theme.color, sensorType]);
 
@@ -644,7 +670,7 @@ export const LineChart: React.FC<LineChartProps> = ({
                         <YAxis
                             type='number'
                             className='text-xs text-gray-600 dark:text-gray-400'
-                            domain={stats.yDomain as [string, string]} // Se usa el dominio fijo (0-50 o 0-14)
+                            domain={finalYDomain} 
                             label={{
                                 value: yAxisLabel,
                                 angle: -90,
@@ -652,8 +678,7 @@ export const LineChart: React.FC<LineChartProps> = ({
                                 style: { fill: 'currentColor', fontSize: '14px' },
                                 className: 'fill-gray-600 dark:fill-gray-400 font-medium',
                             }}
-                            allowDataOverflow={true}
-                            // Formateador para asegurar que las etiquetas del eje Y sean ENTEROS (truncados/floor)
+                            allowDataOverflow={false} 
                             tickFormatter={(value) => Math.floor(value).toString()} 
                         />
                         <Tooltip
@@ -672,10 +697,11 @@ export const LineChart: React.FC<LineChartProps> = ({
                                     label={{
                                         value: 'Alto',
                                         position: 'right',
-                                        className: 'fill-red-500 text-xs font-semibold',
+                                        className: 'fill-red-500 text-sm font-extrabold',
+                                        dx: 10,
                                     }}
                                     stroke='#ef4444'
-                                    strokeWidth={1.5}
+                                    strokeWidth={1.5} 
                                     strokeDasharray='4 4'
                                     ifOverflow='extendDomain'
                                 />
@@ -684,10 +710,11 @@ export const LineChart: React.FC<LineChartProps> = ({
                                     label={{
                                         value: 'Bajo',
                                         position: 'right',
-                                        className: 'fill-blue-500 text-xs font-semibold',
+                                        className: 'fill-blue-500 text-sm font-extrabold',
+                                        dx: 10,
                                     }}
                                     stroke='#3b82f6'
-                                    strokeWidth={1.5}
+                                    strokeWidth={1.5} 
                                     strokeDasharray='4 4'
                                     ifOverflow='extendDomain'
                                 />
@@ -746,7 +773,6 @@ export const LineChart: React.FC<LineChartProps> = ({
 
             <div className='mt-8 px-4'>
                 <div className='grid grid-cols-1 divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white shadow-sm dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-800/50 sm:grid-cols-3 sm:divide-x sm:divide-y-0'>
-                    {/* Mínimo (Entero) */}
                     <div className='flex items-center justify-between p-6'>
                         <div className='flex items-center gap-3'>
                             <div 
@@ -761,10 +787,9 @@ export const LineChart: React.FC<LineChartProps> = ({
                             className='text-3xl font-bold tracking-tight'
                             style={{ color: minColor }}
                         >
-                            {stats.min.toFixed(0)} 
+                            {stats.min.toFixed(2)} 
                         </p>
                     </div>
-                    {/* Promedio (Entero) */}
                     <div className='flex items-center justify-between p-6'>
                         <div className='flex items-center gap-3'>
                             <div 
@@ -779,10 +804,9 @@ export const LineChart: React.FC<LineChartProps> = ({
                             className='text-3xl font-bold tracking-tight'
                             style={{ color: avgColor }}
                         >
-                            {stats.avg.toFixed(0)}
+                            {stats.avg.toFixed(2)}
                         </p>
                     </div>
-                    {/* Máximo (Entero) */}
                     <div className='flex items-center justify-between p-6'>
                         <div className='flex items-center gap-3'>
                             <div 
@@ -797,7 +821,7 @@ export const LineChart: React.FC<LineChartProps> = ({
                             className='text-3xl font-bold tracking-tight'
                             style={{ color: maxColor }}
                         >
-                            {stats.max.toFixed(0)}
+                            {stats.max.toFixed(2)}
                         </p>
                     </div>
                 </div>
