@@ -3,7 +3,7 @@
  * @route /backend/src/events
  * @description Gateway de WebSockets completo y corregido con tipos apropiados.
  * @author Kevin Mariano
- * @version 1.1.1 
+ * @version 1.0.3
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -47,7 +47,7 @@ interface ReportWithUser extends Report {
 @WebSocketGateway({
   path: '/acuaponiaapi/socket.io', 
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: process.env.FRONTEND_URL || 'https://tecnoparqueatlantico.com',
     credentials: true,
   },
   transports: ['websocket', 'polling'],

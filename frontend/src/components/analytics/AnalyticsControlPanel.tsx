@@ -3,7 +3,7 @@
  * @route frontend/src/components/analytics/
  * @description Panel de control con filtros para la página de analíticas.
  * @author kevin mariano
- * @version 1.1.0 (Añadidas props y UI para filtros avanzados: Secundarios y Sampling)
+ * @version 1.0.3
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -31,8 +31,6 @@ interface AnalyticsControlPanelProps {
   selectedRange: string;
   onRangeChange: (range: string) => void;
   isLoading: boolean;
-  
-  // PROPIEDADES FALTANTES AÑADIDAS AQUÍ:
   secondarySensorTypes: SensorType[];
   onSecondarySensorTypesChange: (types: SensorType[]) => void;
   samplingFactor: number;
@@ -46,7 +44,6 @@ export const AnalyticsControlPanel: React.FC<AnalyticsControlPanelProps> = ({
   availableSensors, selectedSensorId, onSensorChange,
   availableRanges, selectedRange, onRangeChange,
   isLoading,
-  // Desestructuración de props añadidas
   secondarySensorTypes, onSecondarySensorTypesChange,
   samplingFactor, onSamplingFactorChange
 }) => {
@@ -116,7 +113,7 @@ export const AnalyticsControlPanel: React.FC<AnalyticsControlPanelProps> = ({
           </select>
         </div>
 
-        {/* Nuevo Filtro: Parámetros Secundarios (para correlación/gráficas) */}
+        {/* Parámetros Secundarios (para correlación/gráficas) */}
         <div className="border-t border-slate-200 dark:border-slate-700 pt-4 space-y-2">
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Parámetros Secundarios</label>
           {availableTypes.map(type => (
@@ -135,9 +132,8 @@ export const AnalyticsControlPanel: React.FC<AnalyticsControlPanelProps> = ({
             </div>
           ))}
         </div>
-        {/* Fin: Parámetros Secundarios */}
 
-        {/* Nuevo Filtro: Factor de Muestreo */}
+        {/* Factor de Muestreo */}
         <div>
           <label htmlFor="sampling-select" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Factor de Muestreo</label>
           <select
@@ -152,7 +148,6 @@ export const AnalyticsControlPanel: React.FC<AnalyticsControlPanelProps> = ({
             <option value={100}>1:100 (Resumido)</option>
           </select>
         </div>
-        {/* Fin: Factor de Muestreo */}
         
         <div>
           <label htmlFor="range-select" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Período</label>

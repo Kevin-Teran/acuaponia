@@ -3,7 +3,7 @@
  * @route frontend/src/hooks/
  * @description Hook personalizado para manejar la lógica de la página de analíticas - VERSIÓN FINAL CORREGIDA.
  * @author kevin mariano
- * @version 1.0.4 (Corrección de error de tipado en Promise.allSettled)
+ * @version 1.0.4
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -14,14 +14,12 @@ import { useState, useCallback } from 'react';
 import * as analyticsService from '@/services/analyticsService';
 import { Kpi, AlertSummary, CorrelationData, SensorType } from '@/types';
 
-// NUEVOS TIPOS DE DATOS
 interface SingleTimeSeriesData { timestamp: string; value: number; }
 type MultiTimeSeriesData = {
   timestamp: string;
   [key: string]: number | string | null;
 };
 
-// FILTROS MEJORADOS
 interface AnalyticsFilters {
   userId?: string;
   tankId?: string;

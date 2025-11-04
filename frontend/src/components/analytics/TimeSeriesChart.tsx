@@ -18,7 +18,6 @@ import { sensorTypeTranslations } from '@/utils/translations';
 import { Info } from 'lucide-react';
 import { format } from 'date-fns';
 
-// Nuevo tipo de dato para el gráfico de múltiples líneas (del hook)
 type MultiTimeSeriesData = {
   timestamp: string;
   [key: string]: number | string | null;
@@ -30,8 +29,8 @@ interface TimeSeriesChartProps {
   mainSensorType: SensorType;
   secondarySensorTypes: SensorType[] | null | undefined;
   samplingFactor: number;
-  userSettings: UserSettings | null; // <-- Umbrales
-  dateRange: { from: Date; to: Date } | undefined; // <-- Rango de fechas
+  userSettings: UserSettings | null; 
+  dateRange: { from: Date; to: Date } | undefined; 
 }
 
 export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({ 
@@ -52,10 +51,8 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
         );
     }
     
-    // **SOLUCIÓN AL RUNTIME TYPEERROR:** Asegurar que secondarySensorTypes sea un array
     const validSecondaryTypes = Array.isArray(secondarySensorTypes) ? secondarySensorTypes : [];
     
-    // Identificar todos los sensores a graficar
     const allSensorTypes = [mainSensorType, ...validSecondaryTypes].filter(type => 
         type && data[0] && data[0].hasOwnProperty(type)
     ) as SensorType[];
@@ -72,15 +69,13 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
         );
     }
     
-    // 1. Mapear los datos del formato MultiTimeSeriesData al formato ChartDataPoint[] (time, value)
     const getChartDataForSensor = (sensorType: SensorType): { time: string; value: number }[] => {
         return data.map(d => ({
             time: d.timestamp as string,
-            value: (d[sensorType] as number) || 0, // Usar 0 si el valor es null
-        })).filter(d => d.value !== null); // Eliminar puntos nulos para el LineChart
+            value: (d[sensorType] as number) || 0, 
+        })).filter(d => d.value !== null); 
     };
     
-    // 2. Definir la etiqueta del eje Y
     const getUnitForSensor = (sensorType: SensorType): string => {
         switch (sensorType) {
             case SensorType.TEMPERATURE: return 'Temperatura (°C)';
@@ -97,11 +92,9 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
                 const isMain = type === mainSensorType;
                 
                 return (
-                    // Cada gráfico se envuelve en su propia Card para la apariencia y el padding
                     <Card 
                         key={type} 
                         className={`shadow-lg transition-shadow hover:shadow-xl ${isMain ? 'border-4 border-green-500/50' : ''}`}
-                        // Se remueve el padding interno para que lo maneje el LineChart
                         style={{ padding: 0 }} 
                     >
                         <LineChart
@@ -109,10 +102,10 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
                             title={sensorTypeTranslations[type] || type}
                             yAxisLabel={getUnitForSensor(type)}
                             sensorType={type}
-                            settings={userSettings} // Umbrales
+                            settings={userSettings} 
                             loading={false}
                             isLive={false} 
-                            dateRange={dateRange} // Rango para el formateo de tiempo
+                            dateRange={dateRange} 
                         />
                     </Card>
                 );

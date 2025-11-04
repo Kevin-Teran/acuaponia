@@ -3,7 +3,7 @@
  * @route frontend/src/app/(main)/analytics/
  * @description Página de análisis reorganizada con visualización condicional real
  * @author kevin mariano
- * @version 2.0.10 (Layout de aside con h-full forzado y estilos de página eliminados)
+ * @version 1.0.1
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -27,7 +27,6 @@ import { BrainCircuit, AlertCircle, CheckCircle, BarChart3, PieChart as PieChart
 import { Skeleton } from '@/components/common/Skeleton';
 import { differenceInDays, parseISO, subDays, subMonths, subYears, startOfDay, endOfDay } from 'date-fns';
 import { sensorTypeTranslations } from '@/utils/translations';
-// Eliminada la importación de withAuth
 
 const AnalyticsPage = () => {
   const { user: currentUser, loading: isAuthLoading } = useAuth();
@@ -51,7 +50,6 @@ const AnalyticsPage = () => {
   const [hasInitialData, setHasInitialData] = useState<boolean | null>(null);
   const [dataRangeLoading, setDataRangeLoading] = useState(true);
 
-  // Determinar modo de visualización
   const viewMode = useMemo(() => {
     if (selectedTankId === 'ALL') return 'comparative';
     if (selectedSensorId !== 'ALL') return 'sensor_detail';
@@ -174,7 +172,6 @@ const AnalyticsPage = () => {
     setSamplingFactor(factor);
   }, []);
 
-  // Calcular estadísticas por tanque para vista comparativa
   const tankStats = useMemo(() => {
     if (viewMode !== 'comparative' || !tanks || !sensors) return [];
     return tanks.map(tank => {
@@ -190,7 +187,6 @@ const AnalyticsPage = () => {
     });
   }, [viewMode, tanks, sensors]);
 
-  // Vista Comparativa (Todos los tanques)
   const renderComparativeView = () => (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -282,7 +278,6 @@ const AnalyticsPage = () => {
     </div>
   );
 
-  // Vista Detallada de Tanque
   const renderTankDetailView = () => {
     const selectedTank = tanks?.find(t => t.id === selectedTankId);
     return (
@@ -338,7 +333,6 @@ const AnalyticsPage = () => {
     );
   };
 
-  // Vista Detallada de Sensor
   const renderSensorDetailView = () => {
     const selectedSensor = sensors?.find(s => s.id === selectedSensorId);
     return (
@@ -385,20 +379,12 @@ const AnalyticsPage = () => {
   }
 
   return (
-    // Ya no hay div contenedor externo con padding. El layout padre lo proporciona.
-    // Usamos un Fragment para inyectar el contenido directamente en el <main> del layout.
     <> 
-      {/* 1. TÍTULO y SUBTÍTULO: Bloque de encabezado */}
       <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Analíticas de Datos</h1>
       <p className="text-lg text-slate-600 dark:text-slate-400"> 
         Visualiza métricas avanzadas, tendencias y correlaciones del sistema.
       </p>
-
-      {/* 2. CONTENEDOR DE DOS COLUMNAS: aside (filtros) y main (contenido) */}
-      {/* min-h-[80vh] forza la altura del contenedor flex, y mt-6 lo separa del subtítulo. */}
       <div className="flex flex-col gap-6 lg:flex-row mt-6 min-h-[80vh] items-stretch"> 
-        
-        {/* Panel de Filtros: h-full para estirarse completamente. */}
         <aside className="lg:w-1/4 xl:w-1/5 lg:sticky lg:top-6 **h-full** bg-white dark:bg-slate-800 p-4 rounded-xl shadow-lg">
           <AnalyticsControlPanel
             users={users || []}
@@ -416,7 +402,6 @@ const AnalyticsPage = () => {
             availableRanges={availableRanges}
             selectedRange={selectedRange}
             onRangeChange={setSelectedRange}
-            // Props añadidas (ya corregidas en el componente)
             secondarySensorTypes={secondarySensorTypes}
             onSecondarySensorTypesChange={handleSecondarySensorTypesChange}
             samplingFactor={samplingFactor}
