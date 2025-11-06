@@ -1,10 +1,9 @@
 /**
  * @file page.tsx
  * @route frontend/src/app/(main)/analytics/
- * @description Página de análisis reorganizada con visualización condicional real
- * * MODIFICACIÓN: Se elimina la tarjeta de "Opciones de Tiempo y Muestreo" para simplificar la interfaz.
- * @author kevin mariano
- * @version 1.0.10
+ * @description Página principal de analíticas de datos. Utiliza un filtro unificado (estilo dashboard) y presenta la información en vistas segmentadas (Comparative, Tank Detail, Sensor Detail).
+ * @author Kevin Mariano
+ * @version 1.0.14
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -19,16 +18,18 @@ import { getDataDateRange } from '@/services/analyticsService';
 import * as settingsService from '@/services/settingsService';
 import { Card } from '@/components/common/Card';
 import { AnalyticsFilters } from '@/components/analytics/AnalyticsFilters'; 
-import { KpiCards } from '@/components/analytics/KpiCards';
-import { TimeSeriesChart } from '@/components/analytics/TimeSeriesChart';
-import { AlertsSummaryCharts } from '@/components/analytics/AlertsSummaryCharts';
-import { ParameterCorrelation } from '@/components/analytics/ParameterCorrelation';
+// Importación de los componentes de vista segmentados
+import { ComparativeView } from '@/components/analytics/ComparativeView'; 
+import { TankDetailView } from '@/components/analytics/TankDetailView'; 
+import { SensorDetailView } from '@/components/analytics/SensorDetailView'; 
+
 import { Role, SensorType, UserSettings } from '@/types';
-import { BrainCircuit, AlertCircle, CheckCircle, BarChart3, PieChart as PieChartIcon, TrendingUp, Database, Container, Activity } from 'lucide-react';
+import { AlertCircle, Database } from 'lucide-react';
 import { Skeleton } from '@/components/common/Skeleton';
 import { differenceInDays, parseISO, subDays, subMonths, subYears, startOfDay, endOfDay, format, differenceInHours, subHours } from 'date-fns';
 import { sensorTypeTranslations } from '@/utils/translations';
 
+// Definición de las constantes de rango 
 const RANGES_MAP: { label: string, value: string }[] = [
     { label: 'Última Hora', value: 'hour' },
     { label: 'Último Día', value: 'day' },
@@ -38,6 +39,35 @@ const RANGES_MAP: { label: string, value: string }[] = [
     { label: 'Rango Manual', value: 'custom' },
 ];
 
+/**
+ * @interface BaseViewProps
+ * @description Define el conjunto mínimo de props necesarios para inyectar datos y estado a los componentes de vista segmentados.
+ */
+interface BaseViewProps {
+    tanks: any;
+    sensors: any;
+    kpis: any;
+    isAnalyticsLoading: any;
+    timeSeriesData: any;
+    alertsSummary: any;
+    correlationData: any;
+    userSettings: UserSettings | null;
+    selectedUserId: string | null;
+    selectedTankId: string;
+    mainSensorType: SensorType | undefined;
+    selectedRange: string;
+    currentRange: { from: Date; to: Date };
+    samplingFactor: number;
+    sensorTypeTranslations: { [key in SensorType]: string };
+    secondarySensorTypes: SensorType[]; // <--- CORRECCIÓN AÑADIDA
+}
+
+/**
+ * @function AnalyticsPage
+ * @description Componente principal de la página de Analíticas. Gestiona el estado de los filtros, 
+ * la disponibilidad de datos históricos y la lógica de conmutación de vistas.
+ * @returns {JSX.Element}
+ */
 const AnalyticsPage = () => {
   const { user: currentUser, loading: isAuthLoading } = useAuth();
   const isAdmin = currentUser?.role === Role.ADMIN;
@@ -45,34 +75,43 @@ const AnalyticsPage = () => {
   const { loading: isAnalyticsLoading, kpis, timeSeriesData, alertsSummary, correlationData, fetchData, error, resetState } = useAnalytics();
   const { tanks, sensors, users, loading: isInfraLoading, fetchDataForUser, sensors: allSensorsList } = useInfrastructure(isAdmin);
   
+  // --- Estados de Filtro y UI ---
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedTankId, setSelectedTankId] = useState('ALL');
   const [mainSensorType, setMainSensorType] = useState<SensorType | undefined>(undefined); 
-  const [selectedSensorId, setSelectedSensorId] = useState('ALL');
+  const [selectedSensorId] = useState('ALL'); 
   
   const [selectedRange, setSelectedRange] = useState('hour'); 
-  const [samplingFactor] = useState(1); // Muestreo ahora es fijo/automático
+  const [samplingFactor] = useState(1); 
   
   const [selectedStartDate, setSelectedStartDate] = useState<string | undefined>(undefined);
   const [selectedEndDate, setSelectedEndDate] = useState<string | undefined>(undefined);
-  const [secondarySensorTypes, setSecondarySensorTypes] = useState<SensorType[]>([]);
+  const [secondarySensorTypes] = useState<SensorType[]>([]); // CORRECCIÓN: Se debe pasar a TankDetailView
   
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
   const [isSettingsLoading, setIsSettingsLoading] = useState(true);
   const [availableRanges, setAvailableRanges] = useState({ hour: true, day: false, week: false, month: false, year: false, custom: true });
-  const [hasInitialData, setHasInitialData] = useState<boolean | null>(null);
-  const [dataRangeLoading, setDataRangeLoading] = useState(true);
+  const [hasInitialData, setHasInitialData] = useState<boolean | null>(true); // Asumir true para iniciar
+  const [dataRangeLoading, setDataRangeLoading] = useState(false); // Asumir false para iniciar
 
+  /**
+   * @property {string} viewMode
+   * @description Determina qué componente de vista debe renderizarse según los filtros seleccionados.
+   */
   const viewMode = useMemo(() => {
+    // 1. Vista Comparativa Global (Todos los Tanques + Sin Parámetro)
     if (selectedTankId === 'ALL' && !mainSensorType) return 'comparative'; 
+    // 2. Vista Detalle de Tanque (Tanque Específico + Sin Parámetro)
     if (selectedTankId !== 'ALL' && !mainSensorType) return 'tank_detail'; 
+    // 3. Vista de Detalle de Sensor/Parámetro (Global de Parámetro vs. Detalle de Sensor)
     return 'sensor_detail'; 
   }, [selectedTankId, mainSensorType]);
+
+  // --- Efectos de Carga Inicial y Configuración ---
 
   useEffect(() => {
     if (currentUser?.id) {
       setSelectedUserId(currentUser.id);
-      
       const loadSettings = async () => {
         setIsSettingsLoading(true);
         try {
@@ -131,6 +170,10 @@ const AnalyticsPage = () => {
     }
   }, [selectedUserId, fetchDataForUser]);
 
+  /**
+   * @function currentRange
+   * @description Calcula las fechas exactas de inicio y fin (Date objects) basadas en el selectedRange.
+   */
   const currentRange = useMemo(() => {
     const now = new Date();
     let from = startOfDay(now);
@@ -151,17 +194,25 @@ const AnalyticsPage = () => {
     return { from, to };
   }, [selectedRange, selectedStartDate, selectedEndDate]);
 
-  // --- LÓGICA DE FILTROS CENTRALIZADOS ---
+  /**
+   * @property {object} filtersState
+   * @description Objeto consolidado del estado de filtros, utilizado para pasar a AnalyticsFilters.
+   */
   const filtersState = useMemo(() => ({
     userId: selectedUserId,
     tankId: selectedTankId,
     sensorType: mainSensorType,
     range: selectedRange, 
-    // Las fechas del filtro horizontal se basan en el rango actual solo si es custom o hour
     startDate: selectedRange !== 'custom' ? format(currentRange.from, 'yyyy-MM-dd') : selectedStartDate,
     endDate: selectedRange !== 'custom' ? format(currentRange.to, 'yyyy-MM-dd') : selectedEndDate,
   }), [selectedUserId, selectedTankId, mainSensorType, selectedRange, currentRange, selectedStartDate, selectedEndDate]);
 
+  // --- Manejadores de Interfaz y Estado ---
+
+  /**
+   * @function handleFiltersChange
+   * @description Maneja los cambios en los selectores de Tanque, Usuario y Parámetro.
+   */
   const handleFiltersChange = useCallback((newFilters: any) => {
     
     if (newFilters.startDate !== undefined || newFilters.endDate !== undefined) {
@@ -188,16 +239,22 @@ const AnalyticsPage = () => {
 
   }, [selectedUserId, selectedTankId]);
   
+  /**
+   * @function handleRangeChange
+   * @description Maneja el cambio en el selector de Rango (hour, week, custom, etc.).
+   */
   const handleRangeChange = useCallback((range: string) => {
     setSelectedRange(range);
-    // Limpiar fechas manuales si el usuario cambia a un rango preestablecido
     if (range !== 'custom') {
         setSelectedStartDate(undefined);
         setSelectedEndDate(undefined);
     }
   }, []);
-  // --- FIN LÓGICA DE FILTROS CENTRALIZADOS ---
 
+  /**
+   * @function useEffect
+   * @description Efecto principal para llamar a la API cuando los filtros cambian.
+   */
   useEffect(() => {
     if (!selectedUserId || hasInitialData !== true || isSettingsLoading) return;
     
@@ -212,7 +269,6 @@ const AnalyticsPage = () => {
 
     let dateFilters: { range?: string, startDate?: string, endDate?: string };
 
-    // Si es custom o hour, enviamos fechas explícitas. Si no, enviamos la palabra clave del rango.
     if (selectedRange === 'custom' || selectedRange === 'hour') {
         dateFilters = {
             startDate: currentRange.from.toISOString(),
@@ -224,242 +280,47 @@ const AnalyticsPage = () => {
         };
     }
 
-    // Construcción de filtros finales, omitiendo 'ALL' y asegurando la estructura de tiempo
     const finalFilters = {
         ...baseFilters,
         ...dateFilters,
-        // Incluir tankId y sensorId solo si no son 'ALL'
         ...(selectedTankId !== 'ALL' && { tankId: selectedTankId }),
-        ...(selectedSensorId !== 'ALL' && { sensorId: selectedSensorId }),
     };
 
     fetchData(finalFilters);
     
-  }, [selectedUserId, selectedTankId, selectedSensorId, mainSensorType, secondarySensorTypes, samplingFactor, selectedRange, currentRange, hasInitialData, sensors, fetchData, isSettingsLoading]);
+  }, [selectedUserId, selectedTankId, mainSensorType, secondarySensorTypes, samplingFactor, selectedRange, currentRange, hasInitialData, sensors, fetchData, isSettingsLoading]);
 
-  const availableSensors = useMemo(() => {
-    if (!sensors) return [];
-    if (selectedTankId === 'ALL') return sensors;
-    return sensors.filter(s => s.tankId === selectedTankId);
-  }, [sensors, selectedTankId]);
-
-  const isLoading = isAuthLoading || isInfraLoading || dataRangeLoading || isSettingsLoading;
-  const hasLoadingError = !isLoading && (!tanks || !sensors || (isAdmin && !users));
+  // --- Propiedades y Cálculos Secundarios ---
 
   const tankStats = useMemo(() => {
     if (viewMode !== 'comparative' || !tanks || !sensors) return [];
-    return tanks.map(tank => {
-      const tankSensors = sensors.filter(s => s.tankId === tank.id);
+    // Calcula las estadísticas para la vista comparativa (sensores por tanque)
+    return tanks.map((tank: any) => {
+      const tankSensors = sensors.filter((s: any) => s.tankId === tank.id);
       return {
         id: tank.id,
         name: tank.name,
         sensorsCount: tankSensors.length,
-        temperature: tankSensors.filter(s => s.type === SensorType.TEMPERATURE).length,
-        ph: tankSensors.filter(s => s.type === SensorType.PH).length,
-        oxygen: tankSensors.filter(s => s.type === SensorType.OXYGEN).length,
+        temperature: tankSensors.filter((s: any) => s.type === SensorType.TEMPERATURE).length,
+        ph: tankSensors.filter((s: any) => s.type === SensorType.PH).length,
+        oxygen: tankSensors.filter((s: any) => s.type === SensorType.OXYGEN).length,
       };
     });
   }, [viewMode, tanks, sensors]);
 
-  const renderComparativeView = () => (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl">
-            <PieChartIcon className="w-8 h-8 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Vista Comparativa</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Análisis general de todos los tanques</p>
-          </div>
-        </div>
-      </div>
+  const isLoading = isAuthLoading || isInfraLoading || dataRangeLoading || isSettingsLoading;
+  const hasLoadingError = !isLoading && (!tanks || !sensors || (isAdmin && !users));
 
-      {/* KPIs Generales */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Total Tanques</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">{tanks?.length || 0}</p>
-            </div>
-            <Container className="w-8 h-8 text-blue-500" />
-          </div>
-        </Card>
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Sensores Activos</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">{sensors?.length || 0}</p>
-            </div>
-            <Activity className="w-8 h-8 text-green-500" />
-          </div>
-        </Card>
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Alertas Recientes</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">{kpis?.count ? Math.floor(kpis.count * 0.05) : 0}</p>
-            </div>
-            <AlertCircle className="w-8 h-8 text-red-500" />
-          </div>
-        </Card>
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Datos Totales</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">{kpis?.count ? (kpis.count / 1000).toFixed(1) + 'K' : '0'}</p>
-            </div>
-            <Database className="w-8 h-8 text-purple-500" />
-          </div>
-        </Card>
-      </div>
-
-      {/* Tabla Comparativa de Tanques */}
-      <Card className="p-6">
-        <h3 className="text-xl font-bold mb-4 text-slate-800 dark:text-slate-200 flex items-center gap-2">
-          <BarChart3 className="w-6 h-6 text-green-600" />
-          Distribución de Sensores por Tanque
-        </h3>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-700/50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Tanque</th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Total Sensores</th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Temperatura</th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">pH</th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Oxígeno</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {tankStats.map((tank, idx) => (
-                <tr key={tank.id} className={idx % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700/30'}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{tank.name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900 dark:text-white font-bold">{tank.sensorsCount}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-blue-600 dark:text-blue-400">{tank.temperature}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-green-600 dark:text-green-400">{tank.ph}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-cyan-600 dark:text-cyan-400">{tank.oxygen}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* Resumen de Alertas */}
-      {alertsSummary && <AlertsSummaryCharts data={alertsSummary} loading={isAnalyticsLoading.alerts} />}
-    </div>
-  );
-
-  const renderTankDetailView = () => {
-    const selectedTank = tanks?.find(t => t.id === selectedTankId);
-    return (
-      <div className="space-y-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-gradient-to-br from-green-500 to-teal-600 rounded-xl">
-              <Container className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">
-                Análisis del Tanque: {selectedTank?.name || 'Cargando...'}
-              </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Vista detallada con todos los sensores del tanque
-              </p>
-            </div>
-          </div>
-          {kpis && kpis.count > 0 && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-green-100 rounded-lg dark:bg-green-900/30">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              <span className="text-sm font-medium text-green-700 dark:text-green-300">
-                {kpis.count.toLocaleString()} datos procesados
-              </span>
-            </div>
-          )}
-        </div>
-
-        <KpiCards kpis={kpis} loading={isAnalyticsLoading.kpis} />
-
-        <TimeSeriesChart
-          data={timeSeriesData}
-          loading={isAnalyticsLoading.timeSeries}
-          mainSensorType={mainSensorType || SensorType.TEMPERATURE} 
-          secondarySensorTypes={secondarySensorTypes}
-          samplingFactor={samplingFactor}
-          userSettings={userSettings}
-          dateRange={currentRange}
-        />
-
-        <ParameterCorrelation
-          data={correlationData}
-          loading={isAnalyticsLoading.correlation}
-          filters={{
-            userId: selectedUserId,
-            tankId: selectedTankId,
-            range: selectedRange,
-            startDate: currentRange.from.toISOString(),
-            endDate: currentRange.from.toISOString(),
-          }}
-        />
-      </div>
-    );
+  /**
+   * @property {BaseViewProps} commonViewProps
+   * @description Objeto que contiene todas las props necesarias para renderizar las vistas.
+   */
+  const commonViewProps: BaseViewProps = {
+    tanks, sensors, kpis, isAnalyticsLoading, timeSeriesData, alertsSummary, correlationData, userSettings,
+    selectedUserId, selectedTankId, mainSensorType, selectedRange, currentRange, samplingFactor, sensorTypeTranslations,
+    secondarySensorTypes // CORRECCIÓN: Se incluye secondarySensorTypes
   };
 
-  const renderSensorDetailView = () => {
-    const selectedTank = tanks?.find(t => t.id === selectedTankId);
-    
-    const title = selectedTankId === 'ALL'
-        ? `Análisis Global: ${sensorTypeTranslations[mainSensorType || SensorType.TEMPERATURE]}`
-        : `Análisis del Sensor: ${selectedTank?.name || 'Cargando...'} - ${sensorTypeTranslations[mainSensorType || SensorType.TEMPERATURE]}`;
-        
-    const subtitle = selectedTankId === 'ALL'
-        ? 'Comparativa de este parámetro en todos los tanques'
-        : `Detalle del parámetro en el tanque seleccionado`;
-
-    return (
-      <div className="space-y-8">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
-            <TrendingUp className="w-8 h-8 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">
-              {title}
-            </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              {subtitle}
-            </p>
-          </div>
-        </div>
-
-        <KpiCards kpis={kpis} loading={isAnalyticsLoading.kpis} />
-
-        <TimeSeriesChart
-          data={timeSeriesData}
-          loading={isAnalyticsLoading.timeSeries}
-          mainSensorType={mainSensorType || SensorType.TEMPERATURE}
-          secondarySensorTypes={selectedTankId === 'ALL' ? [] : secondarySensorTypes}
-          samplingFactor={samplingFactor}
-          userSettings={userSettings}
-          dateRange={currentRange}
-        />
-      </div>
-    );
-  };
-
-  if (isAuthLoading) return <Skeleton className="w-full h-screen" />;
-
-  if (hasLoadingError) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-white rounded-xl shadow-lg dark:bg-slate-800">
-        <AlertCircle className="w-20 h-20 mb-6 text-red-400" />
-        <h3 className="text-2xl font-bold text-red-600 dark:text-red-400">Error de Carga</h3>
-        <p className="max-w-sm mt-2 text-slate-500 dark:text-slate-400">No se pudo cargar la información necesaria.</p>
-      </div>
-    );
-  }
 
   return (
     <> 
@@ -468,35 +329,27 @@ const AnalyticsPage = () => {
         Visualiza métricas avanzadas, tendencias y correlaciones del sistema.
       </p>
       
-      {/* ------------------------------------------------------------- */}
-      {/* UBICACIÓN: Filtros Horizontales (Estilo Dashboard) */}
+      {/* Filtros Horizontales */}
       <div className="mt-6">
         <AnalyticsFilters 
             filters={filtersState}
             onFiltersChange={handleFiltersChange}
-            onRangeChange={handleRangeChange} // Pasamos el manejador de rango
+            onRangeChange={handleRangeChange}
             usersList={users || []}
             tanksList={tanks || []}
             currentUserRole={currentUser?.role}
             loading={isLoading}
             allSensorsList={allSensorsList || []}
-            // Pasamos los estados de rango
             selectedRange={selectedRange}
             availableRanges={availableRanges}
             rangesMap={RANGES_MAP}
         />
       </div>
-      {/* ------------------------------------------------------------- */}
-
       <main className="flex-1 space-y-6 mt-6"> 
         
-        {/*
-          SECCIÓN ELIMINADA:
-          La tarjeta de Opciones de Tiempo y Muestreo fue eliminada según solicitud.
-        */}
-
         {isLoading && (
           <div className="flex flex-col items-center justify-center h-64 p-8 text-center bg-white rounded-xl shadow-lg dark:bg-slate-800">
+            {/* Si estás usando un componente de spinner personalizado (LoadingSpinner), úsalo aquí */}
             <div className="w-16 h-16 mb-4 border-4 border-green-500 rounded-full animate-spin border-t-transparent"></div>
             <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Cargando Analíticas</h3>
             <p className="mt-2 text-slate-500 dark:text-slate-400">Preparando datos para el análisis...</p>
@@ -512,11 +365,12 @@ const AnalyticsPage = () => {
           </Card>
         )}
 
+        {/* Renderizado de Vistas Segmentadas */}
         {!isLoading && hasInitialData === true && (
           <>
-            {viewMode === 'comparative' && renderComparativeView()}
-            {viewMode === 'tank_detail' && renderTankDetailView()}
-            {viewMode === 'sensor_detail' && renderSensorDetailView()}
+            {viewMode === 'comparative' && <ComparativeView {...commonViewProps} tankStats={tankStats} />}
+            {viewMode === 'tank_detail' && <TankDetailView {...commonViewProps} />}
+            {viewMode === 'sensor_detail' && <SensorDetailView {...commonViewProps} />}
           </>
         )}
 
