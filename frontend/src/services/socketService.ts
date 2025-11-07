@@ -3,7 +3,7 @@
  * @route frontend/src/services
  * @description Servicio para gestionar la conexión de Socket.IO con reconexión automática y tipado correcto.
  * @author Kevin Mariano
- * @version 1.1.0 
+ * @version 1.2.4 // Versión actualizada y corregida para evitar reconexiones redundantes
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -40,6 +40,23 @@ class SocketManager {
             this.logger.error('❌ No se puede conectar: token no disponible');
             return;
         }
+        
+        // FIX CLAVE: Si ya está conectado y el token no ha cambiado, no hacer nada.
+        if (this.socket && this.socket.connected) {
+             const currentAuth = this.socket.auth as { token: string };
+             
+             // Si ya estamos conectados y el token es el mismo, salimos de forma limpia.
+             if (currentAuth.token === `Bearer ${token}`) {
+                 this.logger.log('✅ El socket ya está conectado con el token correcto. Conexión ignorada.');
+                 return; 
+             }
+             
+             // Si el token es diferente, forzamos la reconexión.
+             this.logger.warn('⚠️ Socket conectado pero token diferente. Forzando reconexión con nuevo token.');
+             this.socket.disconnect();
+        }
+        
+        // --- Continúa la lógica de conexión si no está conectado o si se forzó la desconexión ---
 
         const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
         if (!apiBaseUrl) {
@@ -58,17 +75,12 @@ class SocketManager {
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
             timeout: 20000,
-            forceNew: true,
+            forceNew: true, 
             transports: ['websocket', 'polling'],
             auth: {
                 token: `Bearer ${token}`,
             },
         };
-
-        if (this.socket && this.socket.connected) {
-            this.logger.warn('El socket ya está conectado. Desconectando para reconectar con el nuevo token.');
-            this.socket.disconnect();
-        }
 
         this.logger.log(`🔗 Intentando conectar a: ${url}`);
         this.socket = io(url, options);
@@ -77,7 +89,7 @@ class SocketManager {
   
     public close(): void {
         this.logger.log('Cerrando conexión de socket...');
-        if (this.socket && this.socket.connected) {
+        if (this.socket) { 
             this.socket.disconnect();
             this.socket = null; 
         }
@@ -124,7 +136,7 @@ class SocketManager {
         this.reconnectTimeout = setTimeout(() => {
             this.reconnectTimeout = null;
             
-            const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+            const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
             
             if (token) {
                 this.connect(token);
@@ -141,7 +153,16 @@ class SocketManager {
         this.connectionAttempts = 0;
         this.startReconnectionProcess();
     }
+    
+    public on(event: string, callback: (...args: any[]) => void): void {
+        this.socket?.on(event, callback);
+    }
+
+    public off(event: string, callback: (...args: any[]) => void): void {
+        this.socket?.off(event, callback);
+    }
 }
 
 export const socketManager = SocketManager.getInstance();
+export const socketService = socketManager as any; 
 export const socket = socketManager ? socketManager.getSocket() : null;

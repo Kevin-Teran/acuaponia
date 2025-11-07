@@ -68,13 +68,6 @@ export const modules: Module[] = [
     adminOnly: true, 
   },
   {
-    id: 'ai-assistant',
-    name: 'Asistente IA',
-    icon: BotMessageSquare,
-    href: '/ai-assistant',
-    adminOnly: false,
-  },
-  {
     id: 'users',
     name: 'Usuarios',
     icon: Users,

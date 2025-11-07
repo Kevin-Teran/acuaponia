@@ -1,9 +1,9 @@
 /**
- * @file page.tsx
- * @route frontend/src/app/(main)/ai-assistant
- * @description Interfaz de chat que utiliza el cliente Axios centralizado para la autenticación.
- * @author kevin mariano
- * @version 1.0.0
+ * @file AiAssistantButton.tsx
+ * @description Implementa el botón flotante y el panel lateral de chat con toda la lógica del asistente de IA.
+ * Se fija en la esquina inferior derecha (bottom-6, right-6).
+ * @author Kevin Mariano
+ * @version 1.0.6 // Versión final de Layout y Control de Ocultamiento
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -13,10 +13,13 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Card } from '@/components/common/Card';
 import { useAuth } from '@/context/AuthContext';
-import { Bot, Sparkles, Clipboard, Trash2, Send } from 'lucide-react';
+import { Bot, Sparkles, Clipboard, Trash2, Send, X, Bot as BotIconComponent } from 'lucide-react'; 
 import { clsx } from 'clsx';
 import api from '@/config/api'; 
-import { toast } from 'react-hot-toast';
+const cn = (...classes: (string | boolean | null | undefined)[]) => classes.filter(Boolean).join(' ');
+
+const XIcon = X; 
+const BotIcon = BotIconComponent;
 
 type Message = {
   id: number;
@@ -46,12 +49,52 @@ const UserAvatar = ({ name }: { name: string }) => {
   );
 };
 
-/**
- * @page AsistenteIAPage
- * @description Renderiza una interfaz de chat pulida para conversar con el asistente de IA.
- */
-const AsistenteIAPage: React.FC = () => {
+const processAIResponse = (rawText: string) => {
+    let cleanText = rawText;
+    let command = null;
+
+    const commandBlockRegex = /[\s\S]*?/g;
+    cleanText = cleanText.replace(commandBlockRegex, '').trim();
+    cleanText = cleanText.replace(/```[\s\S]*?```/g, '').trim();
+    cleanText = cleanText.replace(/'''[\s\S]*?'''/g, '').trim();
+    cleanText = cleanText.replace(/\{[\s\S]*?\}/g, '').trim();
+    cleanText = cleanText.replace(/`{1,3}[^`]*`{1,3}/g, '').trim();
+    cleanText = cleanText.replace(/^\s*(json|type|message|id|respuesta)\s*$/gmi, '').trim();
+    cleanText = cleanText.replace(/^\s*\.{2,}\s*$/gm, '').trim();
+    cleanText = cleanText.replace(/^["']+|["']+$/g, '').trim();
+    
+    const lines = cleanText.split('\n');
+    const filteredLines = lines.filter(line => {
+      const trimmedLine = line.trim();
+      if (trimmedLine.includes('":') || trimmedLine.includes('{"') || trimmedLine.includes('"}')) {
+        return false;
+      }
+      if (/^[\{\}\[\]:,"]*$/.test(trimmedLine)) {
+        return false;
+      }
+      return trimmedLine.length > 0;
+    });
+    cleanText = filteredLines.join('\n').trim();
+
+    cleanText = cleanText.replace(/\n{3,}/g, '\n\n').trim();
+    cleanText = cleanText.replace(/\s{2,}/g, ' ').trim();
+
+    if (cleanText.length < 10) {
+      cleanText = 'Lo siento, no pude procesar tu consulta correctamente. Por favor, intenta reformular tu pregunta.';
+    }
+
+    return { cleanText, command };
+};
+
+interface AiAssistantButtonProps {
+    isOtherPanelOpen: boolean; // Para saber si el AlertsPanel está abierto
+    setIsOpen: (isOpen: boolean) => void;
+    isOpen: boolean;
+}
+
+export const AiAssistantButton: React.FC<AiAssistantButtonProps> = ({ isOtherPanelOpen, setIsOpen, isOpen }) => {
   const { user } = useAuth();
+  
   const [input, setInput] = useState<string>('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [cargando, setCargando] = useState<boolean>(false);
@@ -60,72 +103,27 @@ const AsistenteIAPage: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const togglePanel = useCallback(() => {
+      setIsOpen(!isOpen);
+      if (!isOpen) {
+          setTimeout(() => inputRef.current?.focus(), 100);
+      }
+  }, [isOpen, setIsOpen]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, cargando]);
-
+  
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  /**
-   * FUNCIÓN DE EXTRACCIÓN DE JSON: 
-   * Limpia completamente cualquier rastro de JSON o código de la respuesta.
-   */
-  const processAIResponse = (rawText: string) => {
-    let cleanText = rawText;
-    let command = null;
-
-    // 1. Remover comentarios HTML con comandos
-    const commandBlockRegex = /<!--\s*COMMAND_START\s*-->[\s\S]*?<!--\s*COMMAND_END\s*-->/g;
-    cleanText = cleanText.replace(commandBlockRegex, '').trim();
-
-    // 2. Remover bloques de código markdown completos
-    cleanText = cleanText.replace(/```[\s\S]*?```/g, '').trim();
-    cleanText = cleanText.replace(/'''[\s\S]*?'''/g, '').trim();
-
-    // 3. Remover cualquier estructura JSON completa { ... }
-    cleanText = cleanText.replace(/\{[\s\S]*?\}/g, '').trim();
-
-    // 4. Remover comillas con etiquetas de código
-    cleanText = cleanText.replace(/`{1,3}[^`]*`{1,3}/g, '').trim();
-
-    // 5. Remover líneas que contienen palabras clave de código
-    cleanText = cleanText.replace(/^\s*(json|type|message|id|respuesta)\s*$/gmi, '').trim();
-
-    // 6. Remover puntos suspensivos solos
-    cleanText = cleanText.replace(/^\s*\.{2,}\s*$/gm, '').trim();
-
-    // 7. Remover comillas dobles o simples sueltas al inicio/fin
-    cleanText = cleanText.replace(/^["']+|["']+$/g, '').trim();
-
-    // 8. Remover cualquier fragmento que parezca JSON (contiene ":", "{", "}")
-    const lines = cleanText.split('\n');
-    const filteredLines = lines.filter(line => {
-      const trimmedLine = line.trim();
-      // Si la línea contiene caracteres típicos de JSON, la eliminamos
-      if (trimmedLine.includes('":') || trimmedLine.includes('{"') || trimmedLine.includes('"}')) {
-        return false;
+      if (messages.length === 0 && !cargando && user) {
+           setMessages([{
+               id: 1,
+               text: `Hola ${user.name.split(' ')[0]}, soy ACUAGENIUS, tu asistente de IA. ¿En qué puedo ayudarte con tu sistema hoy?`,
+               sender: 'ai'
+           }]);
       }
-      // Si la línea solo tiene símbolos raros, la eliminamos
-      if (/^[\{\}\[\]:,"]*$/.test(trimmedLine)) {
-        return false;
-      }
-      return trimmedLine.length > 0;
-    });
-    cleanText = filteredLines.join('\n').trim();
+  }, [messages.length, cargando, user]);
 
-    // 9. Limpiar espacios múltiples y saltos de línea excesivos
-    cleanText = cleanText.replace(/\n{3,}/g, '\n\n').trim();
-    cleanText = cleanText.replace(/\s{2,}/g, ' ').trim();
-
-    // 10. Si después de todo esto queda vacío o muy corto, devolver mensaje por defecto
-    if (cleanText.length < 10) {
-      cleanText = 'Lo siento, no pude procesar tu consulta correctamente. Por favor, intenta reformular tu pregunta.';
-    }
-
-    return { cleanText, command };
-  };
 
   const sendMessage = useCallback(async (pregunta: string) => {
     if (!pregunta.trim() || cargando) return;
@@ -147,59 +145,117 @@ const AsistenteIAPage: React.FC = () => {
     setCargando(true);
     try {
       const response = await api.post('/asistente', { pregunta });
-
-      const rawAiResponseText = response.data.respuesta;
+      const rawAiResponseText = response.data.respuesta; 
       const { cleanText, command } = processAIResponse(rawAiResponseText);
 
-      if (command) {
-          console.log("Comando de IA detectado y extraído:", command);
-      }
-
       setMessages(prev => [...prev, { id: Date.now() + 1, text: cleanText, sender: 'ai', command }]);
-      
     } catch (error: any) {
       const errorMsg = error.response?.data?.message || 'Error al contactar al servidor.';
-      setMessages(prev => [...prev, { id: Date.now() + 1, text: `Error: ${errorMsg}`, sender: 'ai' }]);
+      setMessages(prev => [...prev, { id: Date.now() + 1, text: `Error: ${errorMsg}. Verifique la API de Groq en el backend.`, sender: 'ai' }]);
     } finally {
       setCargando(false);
       inputRef.current?.focus();
     }
-  }, [cargando, user]);
+  }, [cargando, isOpen, setIsOpen]);
   
   const handleFormSubmit = (e: React.FormEvent) => { e.preventDefault(); sendMessage(input); };
-  const handleCopy = (text: string, id: number) => { navigator.clipboard.writeText(text); setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); };
+  const handleCopy = (text: string, id: number) => { 
+      if (navigator.clipboard) {
+          navigator.clipboard.writeText(text);
+      } else {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+      }
+      setCopiedId(id); 
+      setTimeout(() => setCopiedId(null), 2000); 
+  };
   const handleClearChat = () => setMessages([]);
 
+
+  // --- Renderización del Botón Flotante y Panel Lateral ---
+
+  const floatingButtonClasses = clsx(
+    // POSICIÓN INFERIOR DERECHA: bottom-6 right-6
+    "fixed bottom-6 right-6 z-50 p-4 rounded-full shadow-xl transition-all duration-300", 
+    "bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-emerald-700 dark:hover:bg-emerald-800",
+    "flex items-center justify-center transform hover:scale-105"
+  );
+  
   return (
-    <div className="flex flex-col h-full -m-6 animate-in fade-in duration-500">
-      <header className="flex-shrink-0 flex justify-between items-center p-6 pb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Asistente de IA</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Conversa con la IA para obtener análisis y recomendaciones.</p>
-        </div>
-        {messages.length > 0 && (
-          <button onClick={handleClearChat} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 transition-all">
-            <Trash2 size={16} /> Limpiar
-          </button>
-        )}
-      </header>
+    <div className='relative'>
+      {/* 1. Botón Flotante para el Asistente IA */}
+      <button
+        onClick={togglePanel}
+        aria-label="Abrir Asistente de IA"
+        // Ocultar si el panel de IA está cerrado Y el otro (Alertas) está abierto
+        className={clsx(floatingButtonClasses, { 'hidden': isOtherPanelOpen && !isOpen })} 
+      >
+        <BotIcon size={24} />
+      </button>
+
+      {/* 2. Panel de Chat del Asistente IA */}
       
-      <div className="flex flex-col flex-grow p-6 pt-2 overflow-hidden rounded-xl">
-        <Card className="flex flex-col flex-grow p-0 overflow-hidden w-full rounded-xl">
-          <div className="flex-grow overflow-y-auto p-4 sm:p-6 space-y-6 rounded-xl">
+      {/* Overlay para cerrar el panel al hacer clic fuera */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-[49]" 
+          onClick={togglePanel} 
+        ></div>
+      )}
+
+      {/* Contenedor del panel deslizable */}
+      <div
+        className={clsx(
+          // FIX CLAVE DE LAYOUT: h-full y flex-col
+          'fixed bottom-0 right-0 h-full w-full sm:w-96 shadow-2xl z-50 transition-transform duration-300 transform', 
+          'bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col rounded-t-xl',
+          isOpen ? 'translate-x-0' : 'translate-x-full'
+        )}
+      >
+        
+        
+          {/* Cabecera del Panel (flex-shrink-0) */}
+          <header className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+             <div className='flex items-center gap-2'>
+                <BotIcon size={20} className='text-emerald-600' />
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">ACUAGENIUS (Asistente IA)</h2>
+             </div>
+             <div className="flex space-x-2">
+                {messages.length > 0 && (
+                    <button onClick={handleClearChat} className="flex items-center gap-1 p-1 text-sm font-medium text-gray-500 dark:text-gray-400 bg-transparent rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 transition-all">
+                        <Trash2 size={16} />
+                    </button>
+                )}
+                <button 
+                    onClick={togglePanel} 
+                    aria-label="Cerrar Asistente"
+                    className="p-1 rounded-full text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                >
+                    <XIcon size={24} />
+                </button>
+             </div>
+          </header>
+        
+          {/* Cuerpo del Chat (Mensajes) - USAR flex-grow DIRECTAMENTE */}
+          <div className="flex-grow overflow-y-auto p-4 sm:p-6 space-y-6 bg-gray-50 dark:bg-gray-900/50">
             {messages.length === 0 && (
               <div className="text-center text-gray-500 dark:text-gray-400 h-full flex flex-col justify-center items-center p-4">
-                <Bot size={48} className="mb-4 text-gray-400" />
+                <BotIcon size={48} className="mb-4 text-gray-400" />
                 <h2 className="text-lg font-semibold">Bienvenido al Asistente</h2>
-                <p className="text-sm max-w-sm mx-auto">Puedes empezar saludando o usando una de las sugerencias de abajo.</p>
+                <p className="text-sm max-w-sm mx-auto">Puedes empezar saludando o usando una de las sugerencias.</p>
               </div>
             )}
+            
             {messages.map((msg) => (
               <div key={msg.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <div className={clsx('group flex items-start gap-3 sm:gap-4', { 'justify-end': msg.sender === 'user' })}>
                   {msg.sender === 'ai' && (
-                    <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
-                      <Bot size={20} className="text-gray-600 dark:text-gray-300"/>
+                    <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                      <BotIcon size={20} className="text-emerald-600 dark:text-emerald-400"/>
                     </div>
                   )}
                   <div className={clsx('relative max-w-xs md:max-w-md rounded-xl px-4 py-3 text-sm', {
@@ -220,7 +276,7 @@ const AsistenteIAPage: React.FC = () => {
             ))}
             {cargando && (
               <div className="flex items-start gap-4 animate-in fade-in">
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center"> <Bot size={24} /> </div>
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center"> <BotIcon size={24} className='text-emerald-600'/> </div>
                 <div className="bg-gray-100 dark:bg-gray-700 rounded-xl px-4 py-3 flex items-center">
                   <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse-dot [animation-delay:0s]"></span>
                   <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse-dot [animation-delay:0.2s] mx-1"></span>
@@ -231,10 +287,11 @@ const AsistenteIAPage: React.FC = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 p-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+          {/* Input Area (flex-shrink-0) */}
+          <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
             <div className="hidden sm:flex flex-wrap gap-2 mb-3">
-              {PREGUNTAS_SUGERIDAS.map(sug => (
-                <button key={sug} onClick={() => sendMessage(sug)} disabled={cargando} className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-900 transition-colors disabled:opacity-50">
+              {messages.length < 5 && PREGUNTAS_SUGERIDAS.map(sug => (
+                <button key={sug} onClick={() => sendMessage(sug)} disabled={cargando} className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors disabled:opacity-50">
                   <Sparkles size={12} className="inline mr-1.5" />{sug}
                 </button>
               ))}
@@ -246,7 +303,7 @@ const AsistenteIAPage: React.FC = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Escribe tu mensaje..."
-                className="flex-grow w-full h-12 px-4 rounded-xl border-gray-300 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-200 focus:border-emerald-500 focus:ring-emerald-500 text-base"
+                className="flex-grow w-full h-12 px-4 rounded-xl border-gray-300 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:border-emerald-500 focus:ring-emerald-500 text-base"
                 disabled={cargando}
               />
               <button 
@@ -259,10 +316,8 @@ const AsistenteIAPage: React.FC = () => {
               </button>
             </form>
           </div>
-        </Card>
+        
       </div>
     </div>
   );
 };
-
-export default AsistenteIAPage;

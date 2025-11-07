@@ -3,7 +3,7 @@
  * @route backend/src/alerts
  * @description 
  * @author kevin mariano
- * @version 1.1.0
+ * @version 1.2.1 // Versión actualizada
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -12,7 +12,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { EventsGateway } from '../events/events.gateway';
-import { Sensor, AlertType, AlertSeverity, sensors_type, SystemConfig, User } from '@prisma/client';
+import { Sensor, AlertType, AlertSeverity, sensors_type, SystemConfig, User, Prisma, Alert, Role } from '@prisma/client'; // Importar Role
 
 @Injectable()
 export class AlertsService {
@@ -159,7 +159,7 @@ export class AlertsService {
       include: { sensor: { include: { tank: true } } }
     });
 
-    const admins = await this.prisma.user.findMany({ where: { role: 'ADMIN' } });
+    const admins = await this.prisma.user.findMany({ where: { role: Role.ADMIN } }); // Usar Role.ADMIN
     const recipients = new Map<string, User>();
 
     for (const admin of admins) {
@@ -189,5 +189,62 @@ export class AlertsService {
         this.logger.error(`Error al enviar correo de alerta a ${user.email}:`, error);
       }
     }
+  }
+  
+  /**
+   * Obtiene las alertas no resueltas para un usuario específico.
+   * Si el usuario es ADMIN, devuelve todas las alertas no resueltas.
+   * @param userId - ID del usuario.
+   * @returns Un array de alertas.
+   */
+  async getUnresolvedAlerts(userId: string): Promise<Alert[]> {
+    this.logger.log(`Obteniendo alertas no resueltas para el usuario: ${userId}`);
+    
+    // Obtenemos el rol del usuario
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    
+    // Si el usuario no existe (debería estar cubierto por el AuthGuard, pero por seguridad)
+    if (!user) {
+        return [];
+    }
+
+    const where: Prisma.AlertWhereInput = {
+      resolved: false,
+    };
+    
+    // APLICACIÓN DEL FILTRO:
+    // Si NO es administrador (es decir, es Role.USER), filtramos por los tanques del usuario.
+    if (user.role !== Role.ADMIN) {
+        // Se asegura que la alerta esté ligada a un sensor, y que el tanque de ese sensor sea del usuario.
+        where.sensor = {
+            tank: {
+                userId: userId,
+            },
+        };
+    }
+    // Si es ADMIN, la cláusula 'where.sensor' se omite, devolviendo TODAS las alertas no resueltas (resolved: false).
+
+    return this.prisma.alert.findMany({
+      where: where,
+      orderBy: { createdAt: 'desc' },
+      include: { sensor: { include: { tank: true } } },
+      take: 50,
+    });
+  }
+
+  /**
+   * Marca una alerta como resuelta.
+   * @param alertId - ID de la alerta a resolver.
+   * @returns La alerta actualizada.
+   */
+  async resolveAlert(alertId: string, resolvedByUserId: string): Promise<Alert> {
+    this.logger.log(`Resolviendo alerta ${alertId} por el usuario ${resolvedByUserId}`);
+    return this.prisma.alert.update({
+      where: { id: alertId, resolved: false },
+      data: {
+        resolved: true,
+        resolvedAt: new Date(),
+      },
+    });
   }
 }

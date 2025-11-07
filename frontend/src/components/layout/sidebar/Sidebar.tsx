@@ -1,9 +1,9 @@
 /**
  * @file Sidebar.tsx
  * @route frontend/src/components/layout/sidebar
- * @description Componente principal de la barra lateral.
+ * @description Componente principal de la barra lateral. Fix definitivo para la retracción total en móvil.
  * @author Kevin Mariano
- * @version 1.0.0
+ * @version 1.0.8
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -13,11 +13,11 @@
 import React, { useCallback } from 'react';
 import { clsx } from 'clsx';
 import { LogOut, Settings, Sun, Moon } from 'lucide-react';
-import { SidebarProps } from './types';
-import { SidebarHeader } from './SidebarHeader';
-import { SidebarNav } from './SidebarNav';
-import { UserProfile } from './UserProfile';
-import { ActionButton } from './ActionButton';
+import { SidebarProps } from './types'; 
+import { SidebarHeader } from './SidebarHeader'; 
+import { SidebarNav } from './SidebarNav'; 
+import { UserProfile } from './UserProfile'; 
+import { ActionButton } from './ActionButton'; 
 import { useTheme } from '@/context/ThemeContext';
 
 export const Sidebar: React.FC<Omit<SidebarProps, 'theme' | 'onToggleTheme'>> = ({
@@ -36,11 +36,26 @@ export const Sidebar: React.FC<Omit<SidebarProps, 'theme' | 'onToggleTheme'>> = 
   
   const themeText = theme === 'light' ? 'Tema Oscuro' : 'Tema Claro';
 
+  // Ancho fijo para el estado colapsado (w-20 = 80px)
+  const sidebarWidth = collapsed ? 'w-20' : 'w-64';
+  const sidebarTransform = collapsed ? 'transform -translate-x-full' : 'translate-x-0';
+
+
   return (
     <aside
       className={clsx(
-        'hidden h-full flex-col border-r border-gray-200 bg-white transition-all duration-300 dark:border-gray-700 dark:bg-gray-800 md:flex',
-        collapsed ? 'w-20' : 'w-64'
+        // Mobile: Fija (fixed), alto completo, z-40. Usamos el translate y el ancho de forma explícita.
+        'flex h-full flex-col border-r border-gray-200 bg-white transition-all duration-300 ease-in-out dark:border-gray-700 dark:bg-gray-800',
+        'fixed inset-y-0 left-0 z-40', 
+        
+        // Aplicamos la lógica de ancho y transformación siempre.
+        sidebarWidth, 
+        sidebarTransform,
+
+        // Comportamiento en Desktop (md:): Relativa, anula 'fixed' y 'transform'.
+        // Mantenemos la lógica de ancho en desktop.
+        'md:relative md:transform-none md:flex', 
+        collapsed ? 'md:w-20' : 'md:w-64' 
       )}
       aria-label="Barra lateral de navegación principal"
     >
