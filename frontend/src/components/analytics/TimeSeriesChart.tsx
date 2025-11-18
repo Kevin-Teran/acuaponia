@@ -28,7 +28,6 @@ interface TimeSeriesChartProps {
   loading: boolean;
   mainSensorType: SensorType;
   secondarySensorTypes: SensorType[] | null | undefined;
-  samplingFactor: number;
   userSettings: UserSettings | null; 
   dateRange: { from: Date; to: Date } | undefined; 
 }
@@ -38,7 +37,6 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
     loading, 
     mainSensorType, 
     secondarySensorTypes, 
-    samplingFactor,
     userSettings,
     dateRange
 }) => {

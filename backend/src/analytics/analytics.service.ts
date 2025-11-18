@@ -1,9 +1,9 @@
 /**
  * @file analytics.service.ts
  * @route backend/src/analytics/
- * @description Servicio para la lógica de negocio de analíticas avanzadas.
- * @author kevin mariano
- * @version 1.0.0
+ * @description Servicio de analíticas OPTIMIZADO con muestreo inteligente
+ * @author Kevin Mariano
+ * @version 2.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -18,18 +18,16 @@ import { subDays, startOfDay, endOfDay, subMonths, subYears, parseISO, isValid }
 @Injectable()
 export class AnalyticsService {
   private readonly logger = new Logger(AnalyticsService.name);
+  private readonly MAX_POINTS = 500; // Máximo de puntos a retornar
 
   constructor(private prisma: PrismaService) {}
 
   /**
    * @method getDataDateRange
    * @description Obtiene el rango de fechas de los datos para un usuario específico.
-   * @param {string} userId - ID del usuario
-   * @returns {Promise<{firstDataPoint: Date | null, lastDataPoint: Date | null}>}
    */
   async getDataDateRange(userId: string) {
     try {
-      // @ts-ignore
       const aggregations = await this.prisma.sensorData.aggregate({
         where: { sensor: { tank: { userId } } },
         _min: { timestamp: true },
@@ -50,16 +48,40 @@ export class AnalyticsService {
   }
 
   /**
+   * @method calculateOptimalSampling
+   * @description Calcula el factor de muestreo óptimo basado en la cantidad de datos
+   */
+  private calculateOptimalSampling(totalPoints: number, maxPoints: number = this.MAX_POINTS): number {
+    if (totalPoints <= maxPoints) return 1;
+    return Math.ceil(totalPoints / maxPoints);
+  }
+
+  /**
+   * @method applySampling
+   * @description Aplica muestreo uniforme a los datos
+   */
+  private applySampling<T>(data: T[], samplingFactor: number): T[] {
+    if (samplingFactor <= 1 || data.length === 0) return data;
+    
+    // Muestreo uniforme: toma cada N-ésimo elemento
+    const sampled = data.filter((_, index) => index % samplingFactor === 0);
+    
+    // Siempre incluir el último punto para continuidad visual
+    if (data.length > 0 && !sampled.includes(data[data.length - 1])) {
+      sampled.push(data[data.length - 1]);
+    }
+    
+    return sampled;
+  }
+
+  /**
    * @method getKpis
-   * @description Obtiene las métricas KPI basadas en los filtros proporcionados.
-   * @param {AnalyticsFiltersDto} filters - Filtros de consulta
-   * @param {User} user - Usuario que realiza la consulta
-   * @returns {Promise<{average: number, max: number, min: number, count: number, stdDev: number}>}
+   * @description Obtiene las métricas KPI con validación mejorada
    */
   async getKpis(filters: AnalyticsFiltersDto, user: User) {
     try {
       const where = this.buildWhereClause(filters, user);
-      // @ts-ignore
+      
       const aggregations = await this.prisma.sensorData.aggregate({
         where,
         _avg: { value: true },
@@ -95,29 +117,55 @@ export class AnalyticsService {
 
   /**
    * @method getTimeSeries
-   * @description Obtiene datos de series temporales basados en los filtros.
-   * @param {AnalyticsFiltersDto} filters - Filtros de consulta
-   * @param {User} user - Usuario que realiza la consulta
-   * @returns {Promise<Array>}
+   * @description Obtiene datos de series temporales CON MUESTREO INTELIGENTE
    */
   async getTimeSeries(filters: AnalyticsFiltersDto, user: User) {
     try {
       const where = this.buildWhereClause(filters, user);
-      // @ts-ignore
-      const data = await this.prisma.sensorData.findMany({
+      
+      // 1️⃣ Contar total de puntos
+      const totalCount = await this.prisma.sensorData.count({ where });
+      
+      // 2️⃣ Calcular muestreo óptimo
+      const samplingFactor = this.calculateOptimalSampling(totalCount);
+      
+      this.logger.log(
+        `📊 [TimeSeries] Total: ${totalCount} pts | Muestreo: 1:${samplingFactor} | Retorno: ~${Math.ceil(totalCount / samplingFactor)} pts`
+      );
+      
+      // 3️⃣ Obtener TODOS los datos (necesario para muestreo uniforme)
+      const allData = await this.prisma.sensorData.findMany({
         where,
         orderBy: { timestamp: 'asc' },
         select: { 
           timestamp: true, 
           value: true, 
+          type: true,
           sensor: { 
-            select: { name: true, type: true } 
+            select: { 
+              name: true, 
+              type: true,
+              hardwareId: true,
+            } 
           } 
         },
-        take: 1000, 
       });
 
-      return data;
+      // 4️⃣ Aplicar muestreo
+      const sampledData = this.applySampling(allData, samplingFactor);
+      
+      this.logger.log(`✅ [TimeSeries] Retornando: ${sampledData.length} puntos`);
+      
+      // 5️⃣ Retornar con metadata
+      return {
+        data: sampledData,
+        metadata: {
+          totalPoints: totalCount,
+          returnedPoints: sampledData.length,
+          samplingFactor,
+          compressionRatio: totalCount > 0 ? (sampledData.length / totalCount * 100).toFixed(1) + '%' : '100%',
+        }
+      };
     } catch (error) {
       this.logger.error('Error obteniendo series temporales:', error);
       throw new BadRequestException('Error al obtener los datos de series temporales');
@@ -127,9 +175,6 @@ export class AnalyticsService {
   /**
    * @method getAlertsSummary
    * @description Obtiene un resumen de alertas agrupadas por tipo y severidad.
-   * @param {AnalyticsFiltersDto} filters - Filtros de consulta
-   * @param {User} user - Usuario que realiza la consulta
-   * @returns {Promise<{alertsByType: Array, alertsBySeverity: Array}>}
    */
   async getAlertsSummary(filters: AnalyticsFiltersDto, user: User) {
     try {
@@ -137,19 +182,23 @@ export class AnalyticsService {
       const dateFilter = this.getDateFilter(filters.range, filters.startDate, filters.endDate);
 
       const [alertsByType, alertsBySeverity] = await Promise.all([
-        // @ts-ignore
         this.prisma.alert.groupBy({
           by: ['type'],
-          where: { userId: targetUserId, createdAt: dateFilter },
+          where: { 
+            sensor: { tank: { userId: targetUserId } },
+            createdAt: dateFilter 
+          },
           _count: { type: true },
         }).catch(error => {
           this.logger.warn('Error obteniendo alertas por tipo:', error);
           return [];
         }),
-        // @ts-ignore
         this.prisma.alert.groupBy({
           by: ['severity'],
-          where: { userId: targetUserId, createdAt: dateFilter },
+          where: { 
+            sensor: { tank: { userId: targetUserId } },
+            createdAt: dateFilter 
+          },
           _count: { severity: true },
         }).catch(error => {
           this.logger.warn('Error obteniendo alertas por severidad:', error);
@@ -166,14 +215,11 @@ export class AnalyticsService {
 
   /**
    * @method getCorrelations
-   * @description Obtiene datos de correlación entre dos tipos de sensores.
-   * @param {CorrelationFiltersDto} filters - Filtros de correlación
-   * @param {User} user - Usuario que realiza la consulta
-   * @returns {Promise<Array<{x: number, y: number}>>}
+   * @description Obtiene datos de correlación entre dos tipos de sensores CON MUESTREO
    */
   async getCorrelations(filters: CorrelationFiltersDto, user: User) {
     try {
-      this.logger.log('Procesando correlaciones con filtros:', JSON.stringify(filters));
+      this.logger.log('🔗 [Correlations] Procesando con filtros:', JSON.stringify(filters));
 
       const sensorTypeX = filters.sensorTypeX || SensorTypePrisma.TEMPERATURE;
       const sensorTypeY = filters.sensorTypeY || SensorTypePrisma.PH;
@@ -221,31 +267,33 @@ export class AnalyticsService {
         },
       };
 
+      // Obtener datos con límite razonable
       const [dataX, dataY] = await Promise.all([
-        // @ts-ignore
         this.prisma.sensorData.findMany({
           where: whereX,
           orderBy: { timestamp: 'asc' },
           select: { value: true, timestamp: true },
-          take: 500,
+          take: 1000, // Límite para correlación
         }),
-        // @ts-ignore
         this.prisma.sensorData.findMany({
           where: whereY,
           orderBy: { timestamp: 'asc' },
           select: { value: true, timestamp: true },
-          take: 500,
+          take: 1000,
         })
       ]);
 
-      this.logger.log(`Datos obtenidos - X: ${dataX.length}, Y: ${dataY.length}`);
+      this.logger.log(`📊 [Correlations] Datos obtenidos - X: ${dataX.length}, Y: ${dataY.length}`);
 
       if (dataX.length === 0 || dataY.length === 0) {
-        this.logger.warn('No se encontraron datos suficientes para la correlación');
+        this.logger.warn('⚠️ [Correlations] No se encontraron datos suficientes');
         return [];
       }
 
+      // Crear mapa de valores Y por timestamp normalizado
       const yMap = new Map(dataY.map((d) => [this.normalizeTimestamp(d.timestamp), d.value]));
+      
+      // Generar puntos de correlación
       const correlationData = dataX
         .map((dx) => {
           const normalizedTime = this.normalizeTimestamp(dx.timestamp);
@@ -254,12 +302,18 @@ export class AnalyticsService {
         })
         .filter((item): item is { x: number; y: number } => item !== null);
 
-      this.logger.log(`Puntos de correlación generados: ${correlationData.length}`);
+      // Aplicar muestreo si hay muchos puntos
+      const samplingFactor = this.calculateOptimalSampling(correlationData.length);
+      const sampledCorrelation = this.applySampling(correlationData, samplingFactor);
 
-      return correlationData;
+      this.logger.log(
+        `✅ [Correlations] Retornando: ${sampledCorrelation.length} puntos (muestreo: 1:${samplingFactor})`
+      );
+
+      return sampledCorrelation;
 
     } catch (error) {
-      this.logger.error('Error obteniendo correlaciones:', error);
+      this.logger.error('❌ [Correlations] Error:', error);
       if (error instanceof BadRequestException) {
         throw error;
       }
@@ -269,11 +323,7 @@ export class AnalyticsService {
 
   /**
    * @method buildWhereClause
-   * @description Construye la cláusula WHERE para las consultas de Prisma.
-   * @private
-   * @param {AnalyticsFiltersDto} filters - Filtros de consulta
-   * @param {User} user - Usuario que realiza la consulta
-   * @returns {Prisma.SensorDataWhereInput}
+   * @description Construye la cláusula WHERE con validación mejorada
    */
   private buildWhereClause(
     filters: AnalyticsFiltersDto,
@@ -286,24 +336,23 @@ export class AnalyticsService {
       timestamp: dateFilter,
       sensor: {
         tank: {
-          userId: targetUserId,
+          userId: targetUserId, // 🔒 Siempre filtrar por usuario
+          // Solo agregar tankId si NO es 'ALL'
           ...(filters.tankId && filters.tankId !== 'ALL' && { id: filters.tankId }),
         },
+        // Solo agregar sensorId si NO es 'ALL'
         ...(filters.sensorId && filters.sensorId !== 'ALL' && { id: filters.sensorId }),
+        // Solo agregar type si está especificado
         ...(filters.sensorType && { type: filters.sensorType as SensorTypePrisma }),
       },
     };
+    
     return whereClause;
   }
 
   /**
    * @method getDateFilter
-   * @description Genera el filtro de fechas basado en el rango especificado o fechas custom.
-   * @private
-   * @param {string} range - Rango de tiempo (day, week, month, year)
-   * @param {string} startDate - Fecha de inicio custom (opcional)
-   * @param {string} endDate - Fecha de fin custom (opcional)
-   * @returns {{ gte: Date; lte: Date }}
+   * @description Genera el filtro de fechas basado en el rango especificado
    */
   private getDateFilter(range?: string, startDate?: string, endDate?: string): { gte: Date; lte: Date } {
     if (startDate && endDate) {
@@ -327,11 +376,7 @@ export class AnalyticsService {
 
   /**
    * @method resolveTargetUserId
-   * @description Resuelve el ID del usuario objetivo basado en permisos.
-   * @private
-   * @param {string | undefined} requestedUserId - ID del usuario solicitado
-   * @param {User} currentUser - Usuario actual
-   * @returns {string}
+   * @description Resuelve el ID del usuario objetivo basado en permisos
    */
   private resolveTargetUserId(requestedUserId: string | undefined, currentUser: User): string {
     if (currentUser.role === Role.ADMIN && requestedUserId) {
@@ -342,18 +387,14 @@ export class AnalyticsService {
 
   /**
    * @method calculateVariance
-   * @description Calcula la varianza de los datos que coinciden con la consulta WHERE.
-   * @private
-   * @param {Prisma.SensorDataWhereInput} where - Cláusula WHERE
-   * @returns {Promise<number>}
+   * @description Calcula la varianza de los datos
    */
   private async calculateVariance(where: Prisma.SensorDataWhereInput): Promise<number> {
     try {
-      // @ts-ignore
       const data = await this.prisma.sensorData.findMany({ 
         where,
         select: { value: true },
-        take: 1000, 
+        take: 1000, // Límite para cálculo de varianza
       });
 
       if (data.length < 2) return 0;
@@ -371,10 +412,7 @@ export class AnalyticsService {
 
   /**
    * @method normalizeTimestamp
-   * @description Normaliza timestamps para permitir correlación con tolerancia de tiempo.
-   * @private
-   * @param {Date} timestamp - Timestamp a normalizar
-   * @returns {string} Timestamp normalizado a minutos
+   * @description Normaliza timestamps para permitir correlación con tolerancia de tiempo
    */
   private normalizeTimestamp(timestamp: Date): string {
     const normalized = new Date(timestamp);

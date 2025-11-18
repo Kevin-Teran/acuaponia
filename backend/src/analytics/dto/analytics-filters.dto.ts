@@ -8,7 +8,7 @@
  * @copyright SENA 2025
  */
 
-import { IsOptional, IsString, IsDateString, IsEnum } from 'class-validator';
+import { IsOptional, IsString, IsDateString, IsEnum, IsNumber } from 'class-validator';
 import { sensors_type } from '@prisma/client';
 
 export class AnalyticsFiltersDto {
@@ -68,4 +68,12 @@ export class AnalyticsFiltersDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  /**
+   * @description Factor de muestreo progresivo (N: tomar 1 de N).
+   * @example 5
+   */
+  @IsOptional()
+  @IsNumber()
+  samplingFactor?: number;
 }

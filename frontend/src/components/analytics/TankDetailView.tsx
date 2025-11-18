@@ -1,93 +1,121 @@
 /**
  * @file TankDetailView.tsx
  * @route frontend/src/components/analytics/
- * @description Componente de vista para el análisis detallado de un tanque específico.
- * @author Kevin Mariano
- * @version 1.0.0
+ * @description Muestra la vista detallada de un tanque con todos sus sensores.
+ * @author kevin mariano
+ * @version 1.0.3
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
-import React from 'react';
-import { Container, CheckCircle } from 'lucide-react';
-import { TimeSeriesChart } from '@/components/analytics/TimeSeriesChart';
-import { KpiCards } from '@/components/analytics/KpiCards';
-import { ParameterCorrelation } from '@/components/analytics/ParameterCorrelation';
-import { SensorType } from '@/types'; 
+'use client';
 
-interface TankDetailViewProps {
-    tanks: any;
-    kpis: any;
-    isAnalyticsLoading: any;
-    userSettings: any;
-    timeSeriesData: any;
-    mainSensorType: SensorType | undefined;
-    secondarySensorTypes: any;
-    samplingFactor: number;
-    currentRange: any;
-    selectedTankId: string;
-    selectedUserId: string | null;
-    selectedRange: string;
-    correlationData: any; 
-}
+import React, { useMemo } from 'react';
+import { BaseViewProps } from '@/app/(main)/analytics/page';
+import { Card } from '@/components/common/Card';
+import { KpiCards } from './KpiCards';
+import { TimeSeriesChart } from './TimeSeriesChart';
+import { ParameterCorrelation } from './ParameterCorrelation';
+import { AlertsSummaryCharts } from './AlertsSummaryCharts';
+import { Info, Gauge, Container } from 'lucide-react';
+import { SensorType } from '@/types';
+import { sensorTypeTranslations } from '@/utils/translations';
 
-/**
- * @function TankDetailView
- * @description Muestra KPIs, el gráfico de series de tiempo y la correlación para un tanque específico.
- * @param {TankDetailViewProps} props - Propiedades de la vista.
- */
-export const TankDetailView: React.FC<TankDetailViewProps> = ({ tanks, kpis, isAnalyticsLoading, userSettings, timeSeriesData, mainSensorType, secondarySensorTypes, samplingFactor, currentRange, selectedTankId, selectedUserId, selectedRange, correlationData }) => {
-    const selectedTank = tanks?.find((t: any) => t.id === selectedTankId);
+// Hereda BaseViewProps, que contiene todas las props necesarias.
+interface TankDetailViewProps extends BaseViewProps {}
+
+export const TankDetailView: React.FC<TankDetailViewProps> = ({
+  tanks,
+  kpis,
+  isAnalyticsLoading,
+  timeSeriesData,
+  alertsSummary,
+  correlationData,
+  currentRange,
+  userSettings,
+  selectedTankId,
+  mainSensorType, // El tipo principal (e.g., Temperatura)
+  secondarySensorTypes, // Los tipos secundarios (e.g., pH, Oxígeno)
+}) => {
+  
+  const selectedTank = useMemo(() => tanks.find((t: any) => t.id === selectedTankId), [tanks, selectedTankId]);
+  
+  // El KPI se calcula usando el mainSensorType (el primer tipo en la lista)
+  const kpiSensorType = mainSensorType || SensorType.TEMPERATURE; 
+  const kpiSensorName = sensorTypeTranslations[kpiSensorType] || kpiSensorType;
+  
+  // Lista combinada de sensores para la gráfica (para el título)
+  const allSensorTypes = [kpiSensorType, ...secondarySensorTypes].filter(Boolean) as SensorType[];
+  const chartTitle = allSensorTypes.length > 1 
+    ? `Tendencias de Parámetros Activos (${allSensorTypes.map(t => sensorTypeTranslations[t]).join(', ')})`
+    : `Tendencia Histórica de ${kpiSensorName}`;
+
+
+  if (selectedTankId === 'ALL' || !selectedTank) {
     return (
-        <div className="space-y-8">
-        <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-            <div className="p-3 bg-gradient-to-br from-green-500 to-teal-600 rounded-xl">
-                <Container className="w-8 h-8 text-white" />
-            </div>
-            <div>
-                <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">
-                Análisis del Tanque: {selectedTank?.name || 'Cargando...'}
-                </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                Vista detallada con todos los sensores del tanque
-                </p>
-            </div>
-            </div>
-            {kpis && kpis.count > 0 && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-green-100 rounded-lg dark:bg-green-900/30">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-                <span className="text-sm font-medium text-green-700 dark:text-green-300">
-                {kpis.count.toLocaleString()} datos procesados
-                </span>
-            </div>
-            )}
-        </div>
+      <Card className="p-10 text-center">
+        <Container className="w-12 h-12 mx-auto mb-4 text-indigo-500" />
+        <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300">
+          Seleccione un Tanque para el Detalle
+        </h3>
+        <p className="mt-2 text-gray-500 dark:text-gray-400">
+          Utilice el filtro de Tanque para ver el desempeño histórico y las métricas de un tanque específico.
+        </p>
+      </Card>
+    );
+  }
 
-        <KpiCards kpis={kpis} loading={isAnalyticsLoading.kpis} />
-
-        <TimeSeriesChart
-            data={timeSeriesData}
-            loading={isAnalyticsLoading.timeSeries}
-            mainSensorType={mainSensorType || SensorType.TEMPERATURE} 
-            secondarySensorTypes={secondarySensorTypes}
-            samplingFactor={samplingFactor}
-            userSettings={userSettings}
-            dateRange={currentRange}
+  return (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold text-slate-800 dark:text-white border-b pb-2 dark:border-slate-700">
+        Análisis Detallado del Tanque: {selectedTank.name}
+      </h2>
+      
+      {/* 1. KPIs */}
+      <div className="space-y-6">
+        <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 flex items-center">
+          <Gauge className="w-5 h-5 mr-2 text-indigo-500" /> Métricas Clave de {kpiSensorName}
+        </h3>
+        {/* CORRECCIÓN CLAVE: Pasar la prop sensorType, que es requerida por KpiCards */}
+        <KpiCards 
+          kpis={kpis} 
+          loading={isAnalyticsLoading.kpis} 
+          sensorType={kpiSensorType} // <-- ¡Propiedad Requerida Añadida!
         />
+      </div>
 
-        <ParameterCorrelation
+      {/* 2. Tendencia Histórica de todos los sensores del tanque */}
+      <Card>
+        <h2 className="text-xl font-semibold text-slate-800 dark:text-white mb-4 p-4 border-b dark:border-slate-700">
+          {chartTitle}
+        </h2>
+        <div className="p-4">
+            <TimeSeriesChart
+                data={timeSeriesData}
+                loading={isAnalyticsLoading.timeSeries}
+                mainSensorType={kpiSensorType} // El primario (T° si existe)
+                secondarySensorTypes={secondarySensorTypes} // El resto (pH, O₂)
+                userSettings={userSettings}
+                dateRange={currentRange}
+            />
+        </div>
+      </Card>
+      
+      {/* 3. Correlación y Alertas */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Correlación (Por defecto T° vs pH si ambos existen) */}
+          <ParameterCorrelation
             data={correlationData}
             loading={isAnalyticsLoading.correlation}
-            filters={{
-                userId: selectedUserId,
-                tankId: selectedTankId,
-                range: selectedRange,
-                // Nota: Estas fechas pueden necesitar ser ajustadas si correlationData usa un rango diferente al principal
-                startDate: currentRange.from.toISOString(),
-                endDate: currentRange.to.toISOString(),
-            }}
-        />
-        </div>
-    );
+          />
+
+          {/* Resumen de Alertas */}
+          <AlertsSummaryCharts 
+            summary={alertsSummary} 
+            loading={isAnalyticsLoading.alerts} 
+          />
+      </div>
+    </div>
+  );
 };

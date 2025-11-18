@@ -1,9 +1,9 @@
 /**
  * @file aiAssistantService.ts
  * @route frontend/src/services
- * @description 
+ * @description Servicios para la interacción con el Asistente de IA (ACUAGENIUS).
  * @author kevin mariano
- * @version 1.0.1 
+ * @version 1.0.3
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -24,14 +24,26 @@ export const aiAssistantService = {
    */
   async getAIResponse(query: string): Promise<string> {
     try {
-      // Llama a POST /api/asistente, donde su controlador está mapeado
-      const response = await api.post<ApiResponse<string>>(`${AI_BASE_URL}`, {
+      // Llama a POST /api/asistente, que es el endpoint del controlador
+      const response = await api.post<ApiResponse<any>>(`${AI_BASE_URL}`, {
         pregunta: query,
       });
-      // La respuesta de su backend debe venir en response.data.data
-      return response.data.data || 'Lo siento, no pude obtener una respuesta de la IA.';
+      
+      const responseData = response.data.data || response.data;
+      
+      if (typeof responseData === 'string') {
+        return responseData;
+      }
+      
+      // Si el controlador devuelve { respuesta: string }, lo extraemos aquí.
+      if (responseData && typeof responseData === 'object' && typeof responseData.respuesta === 'string') {
+        return responseData.respuesta;
+      }
+      
+      return 'Lo siento, no pude obtener una respuesta de la IA.';
     } catch (error) {
       console.error('Error al obtener respuesta de la IA:', error);
+      // Se lanza el error para que sea capturado por el hook y muestre un mensaje en la UI
       throw new Error('Error de comunicación con el asistente de IA.');
     }
   },

@@ -1,9 +1,9 @@
 /**
  * @file analytics.controller.ts
  * @route backend/src/analytics/
- * @description Controlador para los endpoints del módulo de analíticas.
- * @author kevin mariano
- * @version 1.0.0
+ * @description Controlador optimizado con validación mejorada
+ * @author Kevin Mariano
+ * @version 2.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -25,10 +25,7 @@ export class AnalyticsController {
 
   /**
    * @route GET /analytics/data-range
-   * @description Endpoint para obtener el rango de fechas de los datos de un usuario.
-   * @param {User} user - Usuario autenticado.
-   * @param {string} userId - ID del usuario a consultar (opcional, para admins).
-   * @returns {Promise<{firstDataPoint: Date | null, lastDataPoint: Date | null}>}
+   * @description Obtiene el rango de fechas de los datos de un usuario
    */
   @Get('data-range')
   async getDataDateRange(
@@ -48,10 +45,7 @@ export class AnalyticsController {
 
   /**
    * @route GET /analytics/kpis
-   * @description Endpoint para obtener métricas KPI basadas en filtros.
-   * @param {AnalyticsFiltersDto} filters - Filtros de consulta
-   * @param {User} user - Usuario autenticado
-   * @returns {Promise<any>} Métricas KPI
+   * @description Obtiene métricas KPI
    */
   @Get('kpis')
   async getKpis(
@@ -75,10 +69,7 @@ export class AnalyticsController {
 
   /**
    * @route GET /analytics/time-series
-   * @description Endpoint para obtener datos de series temporales.
-   * @param {AnalyticsFiltersDto} filters - Filtros de consulta
-   * @param {User} user - Usuario autenticado
-   * @returns {Promise<any>} Datos de series temporales
+   * @description Obtiene datos de series temporales CON MUESTREO
    */
   @Get('time-series')
   async getTimeSeries(
@@ -90,7 +81,16 @@ export class AnalyticsController {
       
       this.validateBasicFilters(filters);
 
-      return await this.analyticsService.getTimeSeries(filters, user);
+      const result = await this.analyticsService.getTimeSeries(filters, user);
+      
+      // Log de metadata útil
+      if (result.metadata) {
+        this.logger.log(
+          `✅ [Analytics] Serie temporal generada: ${result.metadata.returnedPoints} pts (${result.metadata.compressionRatio} del total)`
+        );
+      }
+      
+      return result;
     } catch (error) {
       this.logger.error('❌ [Analytics] Error en getTimeSeries:', error);
       if (error instanceof BadRequestException) {
@@ -102,10 +102,7 @@ export class AnalyticsController {
 
   /**
    * @route GET /analytics/alerts-summary
-   * @description Endpoint para obtener resumen de alertas.
-   * @param {AnalyticsFiltersDto} filters - Filtros de consulta
-   * @param {User} user - Usuario autenticado
-   * @returns {Promise<any>} Resumen de alertas
+   * @description Obtiene resumen de alertas
    */
   @Get('alerts-summary')
   async getAlertsSummary(
@@ -129,10 +126,7 @@ export class AnalyticsController {
 
   /**
    * @route GET /analytics/correlations
-   * @description Endpoint para obtener correlaciones entre sensores.
-   * @param {CorrelationFiltersDto} filters - Filtros de correlación
-   * @param {User} user - Usuario autenticado
-   * @returns {Promise<any>} Datos de correlación
+   * @description Obtiene correlaciones entre sensores
    */
   @Get('correlations')
   async getCorrelations(
@@ -169,10 +163,7 @@ export class AnalyticsController {
 
   /**
    * @method validateBasicFilters
-   * @description Valida filtros básicos de analíticas.
-   * @private
-   * @param {AnalyticsFiltersDto} filters - Filtros a validar
-   * @throws {BadRequestException} Si los filtros son inválidos
+   * @description Valida filtros básicos de analíticas
    */
   private validateBasicFilters(filters: AnalyticsFiltersDto): void {
     if (filters.sensorType && !Object.values(SensorType).includes(filters.sensorType as SensorType)) {
@@ -199,10 +190,7 @@ export class AnalyticsController {
 
   /**
    * @method validateCorrelationFiltersManual
-   * @description Valida filtros específicos para correlaciones de forma manual.
-   * @private
-   * @param {CorrelationFiltersDto} filters - Filtros de correlación a validar
-   * @throws {BadRequestException} Si los filtros son inválidos
+   * @description Valida filtros específicos para correlaciones
    */
   private validateCorrelationFiltersManual(filters: CorrelationFiltersDto): void {
     this.validateBasicFilters(filters);

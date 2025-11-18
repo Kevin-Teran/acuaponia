@@ -3,12 +3,12 @@
  * @route backend/src/ai-assistant
  * @description Lógica de negocio para el asistente de IA (ACUAGENIUS) - Respuestas solo en texto natural
  * @author kevin mariano & Deiner
- * @version 1.2.0 - Sin comandos JSON visibles
+ * @version 1.2.1 - Corrección de consulta Prisma
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { sensors_type, Role, User, Prisma } from '@prisma/client'; 
 import axios from 'axios';
@@ -34,6 +34,7 @@ interface UserSettingsData {
 
 @Injectable()
 export class AiAssistantService {
+  private readonly logger = new Logger(AiAssistantService.name);
   private readonly groqApiKey: string;
   private readonly groqApiUrl: string;
   private readonly openWeatherMapApiKey: string;
@@ -44,11 +45,13 @@ export class AiAssistantService {
     this.openWeatherMapApiKey = process.env.OPENWEATHERMAP_API_KEY;
     
     if (!this.groqApiKey || this.groqApiKey.length < 10) { 
+      // Se mantiene el throw, ya que sin API Key la función es crítica
       throw new Error('GROQ_API_KEY no está definida o es inválida en el archivo .env');
     }
   }
 
   private async getWeatherData(lat: string | number, lon: string | number) {
+    // ... (Lógica de getWeatherData es correcta)
     const DEFAULT_LAT = 4.711; 
     const DEFAULT_LON = -74.0721;
     
@@ -75,108 +78,121 @@ export class AiAssistantService {
         windSpeed: data.wind.speed.toFixed(1) + ' m/s',
       };
     } catch (error) {
-      console.error("Error al obtener datos del clima:", error.message);
+      this.logger.error("Error al obtener datos del clima:", error.message);
       return { temperature: 'N/D', description: 'Error al consultar clima', windSpeed: 'N/D' };
     }
   }
 
   private async getSystemContext(user: CurrentUser) {
-    // IMPORTANTE: SIEMPRE filtrar por usuario actual, incluso si es ADMIN
-    // Cada usuario solo ve SUS propios datos
-    const userTankWhere: Prisma.TankWhereInput = { userId: user.id, status: 'ACTIVE' };
+    try {
+      // IMPORTANTE: SIEMPRE filtrar por usuario actual, incluso si es ADMIN
+      const userTankWhere: Prisma.TankWhereInput = { userId: user.id, status: 'ACTIVE' };
 
-    const userSettingsResult = await this.prisma.user.findUnique({
-        where: { id: user.id },
-        select: { settings: true },
-    });
-    
-    let userSettings: UserSettingsData = {};
-    let userCoords: LocationSettings = {};
-
-    if (userSettingsResult?.settings) {
-        try {
-            const settingsObject: UserSettingsData = JSON.parse(userSettingsResult.settings);
-            userSettings = settingsObject;
-            userCoords = settingsObject.location || {};
-        } catch (e) {
-            console.warn("Error al parsear la configuración del usuario:", e);
-        }
-    }
-    
-    // Contar SOLO los tanques del usuario actual
-    const activeTanksCount = await this.prisma.tank.count({ where: userTankWhere });
-    
-    // Contar sensores activos por tipo
-    const temperatureSensorsCount = await this.prisma.sensor.count({ 
-      where: { tank: userTankWhere, status: 'ACTIVE', type: sensors_type.TEMPERATURE } 
-    });
-    const phSensorsCount = await this.prisma.sensor.count({ 
-      where: { tank: userTankWhere, status: 'ACTIVE', type: sensors_type.PH } 
-    });
-    const oxygenSensorsCount = await this.prisma.sensor.count({ 
-      where: { tank: userTankWhere, status: 'ACTIVE', type: sensors_type.OXYGEN } 
-    });
-    
-    const totalActiveSensorsCount = temperatureSensorsCount + phSensorsCount + oxygenSensorsCount;
-    
-    const alertWhere: Prisma.AlertWhereInput = { 
-      resolved: false, 
-      sensor: { tank: userTankWhere } 
-    };
-    const unresolvedAlertsCount = await this.prisma.alert.count({ where: alertWhere });
-    
-    // Obtener SOLO los datos de sensores de los tanques del usuario
-    const getSensorHistory = async (type: sensors_type) => {
-      const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
-      const readings = await this.prisma.sensorData.findMany({
-        where: { 
-          type, 
-          timestamp: { gte: twelveHoursAgo }, 
-          tank: userTankWhere 
-        },
-        orderBy: { timestamp: 'desc' },
+      const userSettingsResult = await this.prisma.user.findUnique({
+          where: { id: user.id },
+          select: { settings: true },
       });
       
-      if (readings.length === 0) return { latest: null, avg: null, min: null, max: null };
+      let userSettings: UserSettingsData = {};
+      let userCoords: LocationSettings = {};
+
+      if (userSettingsResult?.settings) {
+          try {
+              const settingsObject: UserSettingsData = JSON.parse(userSettingsResult.settings);
+              userSettings = settingsObject;
+              userCoords = settingsObject.location || {};
+          } catch (e) {
+              this.logger.warn("Error al parsear la configuración del usuario:", e);
+          }
+      }
       
-      const values = readings.map(r => 
-          typeof r.value === 'number' ? r.value : (r.value as any).toNumber()
-      );
+      // Contar SOLO los tanques del usuario actual
+      const activeTanksCount = await this.prisma.tank.count({ where: userTankWhere });
+      
+      // Contar sensores activos por tipo
+      const temperatureSensorsCount = await this.prisma.sensor.count({ 
+        where: { tank: userTankWhere, status: 'ACTIVE', type: sensors_type.TEMPERATURE } 
+      });
+      const phSensorsCount = await this.prisma.sensor.count({ 
+        where: { tank: userTankWhere, status: 'ACTIVE', type: sensors_type.PH } 
+      });
+      const oxygenSensorsCount = await this.prisma.sensor.count({ 
+        where: { tank: userTankWhere, status: 'ACTIVE', type: sensors_type.OXYGEN } 
+      });
+      
+      const totalActiveSensorsCount = temperatureSensorsCount + phSensorsCount + oxygenSensorsCount;
+      
+      const alertWhere: Prisma.AlertWhereInput = { 
+        resolved: false, 
+        sensor: { tank: userTankWhere } 
+      };
+      const unresolvedAlertsCount = await this.prisma.alert.count({ where: alertWhere });
+      
+      // Obtener SOLO los datos de sensores de los tanques del usuario
+      const getSensorHistory = async (type: sensors_type) => {
+        const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+        
+        // CORRECCIÓN CLAVE: Filtrar usando la relación 'sensor' y luego 'tank'
+        const readings = await this.prisma.sensorData.findMany({
+          where: { 
+            timestamp: { gte: twelveHoursAgo }, 
+            sensor: { // <-- ACCESO A LA RELACIÓN DEL SENSOR
+                type,
+                tank: userTankWhere, // <-- FILTRADO POR TANQUE DEL USUARIO
+            }
+          },
+          orderBy: { timestamp: 'desc' },
+          take: 100, // Limitar lecturas para eficiencia
+        });
+        
+        if (readings.length === 0) return { latest: null, avg: null, min: null, max: null };
+        
+        const values = readings.map(r => 
+            typeof r.value === 'number' ? r.value : (r.value as any).toNumber()
+        );
+        
+        return { 
+            latest: values[0], 
+            avg: values.reduce((acc, val) => acc + val, 0) / values.length, 
+            min: Math.min(...values), 
+            max: Math.max(...values) 
+        };
+      };
+
+      const [temperature, ph, oxygen] = await Promise.all([
+          getSensorHistory(sensors_type.TEMPERATURE),
+          getSensorHistory(sensors_type.PH),
+          getSensorHistory(sensors_type.OXYGEN)
+      ]);
       
       return { 
-          latest: values[0], 
-          avg: values.reduce((acc, val) => acc + val, 0) / values.length, 
-          min: Math.min(...values), 
-          max: Math.max(...values) 
+          role: user.role,
+          userThresholds: userSettings.thresholds || null,
+          userCoords,
+          activeTanksCount,
+          activeSensorsCount: totalActiveSensorsCount,
+          temperatureSensorsCount,
+          phSensorsCount,
+          oxygenSensorsCount,
+          unresolvedAlertsCount,
+          temperature, 
+          ph, 
+          oxygen, 
       };
-    };
-
-    const [temperature, ph, oxygen] = await Promise.all([
-        getSensorHistory(sensors_type.TEMPERATURE),
-        getSensorHistory(sensors_type.PH),
-        getSensorHistory(sensors_type.OXYGEN)
-    ]);
-    
-    return { 
-        role: user.role,
-        userThresholds: userSettings.thresholds || null,
-        userCoords,
-        activeTanksCount,
-        activeSensorsCount: totalActiveSensorsCount,
-        temperatureSensorsCount,
-        phSensorsCount,
-        oxygenSensorsCount,
-        unresolvedAlertsCount,
-        temperature, 
-        ph, 
-        oxygen, 
-    };
+    } catch (error) {
+      this.logger.error('Error al construir el contexto del sistema para la IA:', error);
+      // Lanzar un error controlado para evitar el 500 silencioso
+      throw new InternalServerErrorException('Error al recuperar datos del sistema para el asistente de IA.');
+    }
   }
 
   async getAIResponse(pregunta: string, user: CurrentUser): Promise<string> {
+    // ... (El resto del método getAIResponse es correcto)
+    // Lógica para Groq API
     const context = await this.getSystemContext(user);
     const weather = await this.getWeatherData(context.userCoords.latitude, context.userCoords.longitude);
 
+    // ... (El resto del prompt y la llamada a Groq API son correctos)
     const userThresholds = context.userThresholds;
     const thresholdsPrompt = userThresholds
         ? `
@@ -269,7 +285,7 @@ export class AiAssistantService {
       }
       return 'No se pudo obtener una respuesta.';
     } catch (error) {
-      console.error("Error al contactar la API de Groq:", error.response?.data || error.message);
+      this.logger.error("Error al contactar la API de Groq:", error.response?.data || error.message);
       const groqError = error.response?.data?.error?.message || 'Error desconocido al contactar la API.';
       throw new InternalServerErrorException(`No se pudo procesar la solicitud con la IA de Groq. Detalle: ${groqError}`);
     }

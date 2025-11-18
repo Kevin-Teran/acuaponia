@@ -2,9 +2,8 @@
  * @file AnalyticsFilters.tsx
  * @route frontend/src/components/analytics/
  * @description Componente para los filtros de la página de analíticas, con estilo y ORDEN unificado al DashboardFilters, y lógica de RANGO CONSOLIDADA.
- * * MODIFICACIÓN: Se elimina la flecha del select y se añade un icono a TODOS los campos desplegables.
  * @author kevin mariano
- * @version 1.0.8
+ * @version 1.0.10
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -14,6 +13,7 @@ import { SensorType, Role } from '@/types';
 import { cn } from '@/utils/cn'; 
 // Íconos para los selectores
 import { Clock, User, Container, Activity } from 'lucide-react'; 
+import { sensorTypeTranslations } from '@/utils/translations'; 
 
 interface RangeAvailability {
     hour: boolean;
@@ -38,6 +38,28 @@ interface AnalyticsFiltersProps {
   rangesMap: { label: string, value: string }[];
 }
 
+// Componente auxiliar para Select con Icono (redefinido para claridad)
+const SelectWithIcon: React.FC<any> = ({ name, id, value, onChange, disabled, children, Icon }) => {
+    const inputBaseClasses = "w-full px-3 py-2 border rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 disabled:opacity-50";
+    const inputFocusClasses = "focus:ring-2 focus:ring-blue-500 focus:border-blue-500";
+    
+    return (
+        <div className="relative">
+            <select
+                name={name}
+                id={id}
+                value={value}
+                onChange={onChange}
+                disabled={disabled}
+                className={cn(inputBaseClasses, inputFocusClasses, "appearance-none pr-10")} 
+            >
+                {children}
+            </select>
+            <Icon className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        </div>
+    );
+};
+
 export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
   filters,
   onFiltersChange,
@@ -60,43 +82,24 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
     if (name === 'range') {
         onRangeChange(value);
     } else {
-        onFiltersChange({ [name]: value });
+        let finalValue: string | undefined = value;
+        
+        // LÓGICA DE CORRECCIÓN: Si es sensorType y el valor es 'ALL', lo convertimos a undefined
+        // para que el hook de analíticas active la vista comparativa global.
+        if (name === 'sensorType' && value === 'ALL') {
+            finalValue = undefined; 
+        }
+        
+        onFiltersChange({ [name]: finalValue });
     }
   };
   
   const isAdmin = currentUserRole === Role.ADMIN;
+  const today = new Date().toISOString().split('T')[0];
   
-  // Clases unificadas del DashboardFilters.tsx
   const inputBaseClasses = "w-full px-3 py-2 border rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 disabled:opacity-50";
   const inputFocusClasses = "focus:ring-2 focus:ring-blue-500 focus:border-blue-500";
 
-  // Componente auxiliar para Select con Icono
-  const SelectWithIcon: React.FC<{
-      name: string;
-      id: string;
-      value: string | number | readonly string[] | undefined;
-      onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
-      disabled: boolean;
-      children: React.ReactNode;
-      Icon: React.ElementType; // Tipo para el componente de icono (ej. User, Container)
-  }> = ({ name, id, value, onChange, disabled, children, Icon }) => (
-    <div className="relative">
-        <select
-            name={name}
-            id={id}
-            value={value}
-            onChange={onChange}
-            disabled={disabled}
-            // APLICAR appearance-none y padding derecho para el icono
-            className={cn(inputBaseClasses, inputFocusClasses, "appearance-none pr-10")} 
-        >
-            {children}
-        </select>
-        {/* Ícono posicionado absolutamente */}
-        <Icon className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 pointer-events-none" />
-    </div>
-  );
-  
   // Lógica de filtrado inteligente de sensores
   const availableSensorTypes = useMemo(() => {
     if (filters.tankId && filters.tankId !== 'ALL') {
@@ -105,13 +108,6 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
     }
     return Object.values(SensorType);
   }, [filters.tankId, allSensorsList]);
-
-  const isSelectedSensorTypeAvailable = useMemo(() => {
-    if (!filters.sensorType) return true;
-    return availableSensorTypes.includes(filters.sensorType as SensorType);
-  }, [filters.sensorType, availableSensorTypes]);
-
-  const today = new Date().toISOString().split('T')[0];
 
 
   return (
@@ -135,12 +131,12 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
               <SelectWithIcon
                 name="userId"
                 id="userId"
-                value={filters.userId || ''}
+                value={filters.userId || 'ALL'} 
                 onChange={handleInputChange}
                 disabled={loading}
-                Icon={User} // Ícono para Usuario
+                Icon={User} 
               >
-                <option value="">Todos los Usuarios</option>
+                <option value="ALL">Todos los Usuarios</option>
                 {(usersList || []).map((user: any) => (
                   <option key={user.id} value={user.id}>
                     {user.name}
@@ -164,9 +160,9 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
               value={filters.tankId || 'ALL'} 
               onChange={handleInputChange}
               disabled={loading}
-              Icon={Container} // Ícono para Tanque
+              Icon={Container} 
             >
-              <option value="ALL">Todos los Tanques (Global)</option>
+              <option value="ALL">Todos los Tanques</option>
               {(tanksList || []).map((tank: any) => (
                 <option key={tank.id} value={tank.id}>
                   {tank.name}
@@ -186,27 +182,23 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
             <SelectWithIcon
               name="sensorType"
               id="sensorType"
-              value={filters.sensorType || ''}
+              // CORRECCIÓN: Si filters.sensorType es undefined, la UI usa 'ALL' para seleccionar 'Todos los Parámetros'
+              value={filters.sensorType || 'ALL'} 
               onChange={handleInputChange}
-              disabled={loading || (filters.tankId && filters.tankId !== 'ALL' && availableSensorTypes.length === 0)}
-              Icon={Activity} // Ícono para Parámetro/Sensor
+              disabled={loading}
+              Icon={Activity} 
             >
-              <option value="">Todos los Parámetros (Global)</option>
+              {/* Opción global, su valor es 'ALL' */}
+              <option value="ALL">Todos los Parámetros</option> 
+              {/* Opciones individuales */}
               {availableSensorTypes.map((type) => (
-                <option 
-                    key={type} 
-                    value={type}
-                    disabled={filters.tankId !== 'ALL' && !availableSensorTypes.includes(type as SensorType)}
-                >
-                  {type}
-                </option>
+                  <option 
+                      key={type} 
+                      value={type}
+                  >
+                    {sensorTypeTranslations[type] || type}
+                  </option>
               ))}
-              
-              {!isSelectedSensorTypeAvailable && filters.sensorType && filters.tankId !== 'ALL' && (
-                <option value={filters.sensorType} disabled>
-                    {filters.sensorType} (No disponible)
-                </option>
-              )}
             </SelectWithIcon>
           </div>
           
@@ -224,7 +216,7 @@ export const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
                 value={selectedRange}
                 onChange={handleInputChange}
                 disabled={loading}
-                Icon={Clock} // Ícono para Rango de Tiempo
+                Icon={Clock} 
             >
                 {rangesMap.map(range => (
                     <option 
