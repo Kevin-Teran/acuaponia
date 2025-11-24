@@ -3,7 +3,7 @@
  * @route frontend/src/components/analytics/
  * @description Muestra gráficos de torta/barra para resumir alertas por tipo y severidad.
  * @author kevin mariano
- * @version 1.0.3
+ * @version 1.0.5 // Versión final, exportación corregida
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -13,8 +13,8 @@
 import React from 'react';
 import { Card } from '@/components/common/Card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { AlertSummary } from '@/types';
-import { AlertTriangle, Info } from 'lucide-react';
+import { AlertSummary } from '@/types'; 
+import { AlertTriangle } from 'lucide-react';
 import { Skeleton } from '../common/Skeleton';
 import { cn } from '@/utils/cn';
 
@@ -23,23 +23,25 @@ interface AlertsSummaryChartsProps {
   loading: boolean;
 }
 
-// Colores consistentes para alertas
 const TYPE_COLORS: { [key: string]: string } = {
+  TEMPERATURE_HIGH: '#FF6384',
+  TEMPERATURE_LOW: '#E94F74',
+  PH_HIGH: '#36A2EB',
+  PH_LOW: '#2C87C0',
+  OXYGEN_HIGH: '#FFCE56',
+  OXYGEN_LOW: '#E0B84D',
   TEMPERATURE: '#FF6384',
   PH: '#36A2EB',
   OXYGEN: '#FFCE56',
 };
 
 const SEVERITY_COLORS: { [key: string]: string } = {
-  LOW: '#22C55E', // green-500
-  MEDIUM: '#F59E0B', // amber-500
-  HIGH: '#EF4444', // red-500
+  LOW: '#22C55E', 
+  MEDIUM: '#F59E0B', 
+  HIGH: '#EF4444', 
+  CRITICAL: '#991B1B', 
 };
 
-/**
- * @function CustomTooltip
- * @description Tooltip personalizado para los gráficos de pastel
- */
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
@@ -55,13 +57,20 @@ const CustomTooltip = ({ active, payload }: any) => {
   return null;
 };
 
-// Interfaz para el Payload del label para Recharts
 interface PieLabelProps {
     name?: string;
-    percent?: number; // Tipado explícito como number
+    percent?: number; 
 }
 
 export const AlertsSummaryCharts: React.FC<AlertsSummaryChartsProps> = ({ summary, loading }) => {
+  
+  if (!loading && summary) {
+      console.log('🚨 [Alerts Chart] Resumen recibido:', summary);
+      if (summary.total === 0) {
+          console.warn('🚨 [Alerts Chart] Alertas no dibujadas: total es 0. Verifica los filtros de tiempo en la UI.');
+      }
+  }
+
   if (loading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -75,19 +84,21 @@ export const AlertsSummaryCharts: React.FC<AlertsSummaryChartsProps> = ({ summar
     );
   }
 
-  const alertsByType = summary?.alertsByType.map((item: any) => ({
-    name: item.type,
-    value: item._count.type,
+  const totalAlerts = summary?.total || 0;
+
+  // Mapeo de datos del resumen por tipo
+  const alertsByType = summary?.distributionByType?.map((item: any) => ({
+    name: item.type.replace(/_/g, ' '), 
+    value: item.count, // Usamos 'count'
     fill: TYPE_COLORS[item.type] || '#A0A0A0',
   })) || [];
 
-  const alertsBySeverity = summary?.alertsBySeverity.map((item: any) => ({
+  // Mapeo de datos del resumen por severidad
+  const alertsBySeverity = summary?.distributionBySeverity?.map((item: any) => ({
     name: item.severity,
-    value: item._count.severity,
+    value: item.count, // Usamos 'count'
     fill: SEVERITY_COLORS[item.severity] || '#A0A0A0',
   })) || [];
-
-  const totalAlerts = alertsByType.reduce((sum, item) => sum + item.value, 0);
 
   if (totalAlerts === 0) {
     return (
@@ -96,6 +107,9 @@ export const AlertsSummaryCharts: React.FC<AlertsSummaryChartsProps> = ({ summar
         <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300">Sin Alertas Registradas</h3>
         <p className="mt-2 text-gray-500 dark:text-gray-400">
           No se encontraron alertas en el rango de tiempo y filtros seleccionados.
+          <span className="block mt-1 text-sm font-semibold text-gray-600 dark:text-gray-500">
+            (Conteo total de la base de datos: {totalAlerts})
+          </span>
         </p>
       </Card>
     );
@@ -120,7 +134,6 @@ export const AlertsSummaryCharts: React.FC<AlertsSummaryChartsProps> = ({ summar
                 outerRadius={120}
                 fill="#8884d8"
                 labelLine={false}
-                // Solución: Usar la interfaz PieLabelProps
                 label={({ name, percent }: PieLabelProps) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`} 
               >
                 {alertsByType.map((entry, index) => (
@@ -151,7 +164,6 @@ export const AlertsSummaryCharts: React.FC<AlertsSummaryChartsProps> = ({ summar
                 outerRadius={120}
                 fill="#82ca9d"
                 labelLine={false}
-                // Solución: Usar la interfaz PieLabelProps
                 label={({ name, percent }: PieLabelProps) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
               >
                 {alertsBySeverity.map((entry, index) => (

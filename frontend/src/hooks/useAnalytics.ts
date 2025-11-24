@@ -3,7 +3,7 @@
  * @route frontend/src/hooks/
  * @description Hook personalizado para manejar la lógica de la página de analíticas - VERSIÓN FINAL CORREGIDA.
  * @author kevin mariano
- * @version 1.0.8
+ * @version 1.0.10 // Exportación default
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -12,8 +12,8 @@
 
 import { useState, useCallback } from 'react';
 import * as analyticsService from '@/services/analyticsService';
-import aiAssistantService from '@/services/aiAssistantService'; // <-- CORRECCIÓN: Usar default import (objeto con getAIResponse)
-import { Kpi, AlertSummary, CorrelationData, SensorType } from '@/types';
+import aiAssistantService from '@/services/aiAssistantService'; 
+import { Kpi, AlertSummary, CorrelationData, SensorType, Role } from '@/types'; 
 
 interface SingleTimeSeriesData { timestamp: string; value: number; }
 type MultiTimeSeriesData = {
@@ -48,14 +48,7 @@ interface CorrelationFilters extends Omit<AnalyticsFilters, 'sensorType'> {
   sensorTypeY: string;
 }
 
-// FUNCIÓN DE MUESTREO (Ya no se usa en el frontend, el backend la maneja)
-const sampleData = (data: MultiTimeSeriesData[], samplingFactor: number): MultiTimeSeriesData[] => {
-    const factor = samplingFactor > 0 ? samplingFactor : 1;
-    if (!data || factor <= 1) return data;
-    return data.filter((_, index) => index % factor === 0);
-};
-
-export const useAnalytics = () => {
+const useAnalytics = () => {
   const [kpis, setKpis] = useState<Kpi | null>(null);
   const [timeSeriesData, setTimeSeriesData] = useState<MultiTimeSeriesData[]>([]);
   const [alertsSummary, setAlertsSummary] = useState<AlertSummary | null>(null);
@@ -77,7 +70,6 @@ export const useAnalytics = () => {
     for (const key in filters) {
         const value = filters[key as keyof AnalyticsFilters];
         
-        // Se asegura de mantener los valores numéricos, arrays y tipos de correlación
         if (Array.isArray(value) || typeof value === 'number' || key === 'correlationX' || key === 'correlationY') {
              validatedFilters[key as keyof AnalyticsFilters] = value as any;
              continue;
@@ -98,7 +90,6 @@ export const useAnalytics = () => {
     setError(null);
     setLoading(prev => ({ ...prev, kpis: true, timeSeries: true, alerts: true, correlation: true, aiAnalysis: true }));
 
-    // 1. Desestructurar para obtener los nuevos filtros y los filtros base
     const { 
         sensorType, 
         secondarySensorTypes = [], 
@@ -108,7 +99,6 @@ export const useAnalytics = () => {
         ...baseRequestFilters 
     } = filters;
 
-    // 2. Crear filtros minimalistas SÓLO con los campos que KPI/Alerts esperan
     const minimalFilters = {
         userId: baseRequestFilters.userId,
         tankId: baseRequestFilters.tankId,
@@ -118,7 +108,6 @@ export const useAnalytics = () => {
         endDate: baseRequestFilters.endDate,
     };
     
-    // Validar y limpiar solo los filtros base
     const cleanedMinimalFilters = validateFilters(minimalFilters as AnalyticsFilters);
     
     const corrX = correlationX || SensorType.TEMPERATURE;
@@ -133,13 +122,11 @@ export const useAnalytics = () => {
         sensorTypeY: corrY, 
     };
 
-    // Filtros con factor de muestreo para series temporales
     const timeSeriesBaseFilters = {
         ...cleanedMinimalFilters,
         samplingFactor: samplingFactor, 
     };
     
-    // Generar prompt para AI Assistant
     const aiPrompt = `Genera un resumen de analíticas y tendencias para el sistema de Acuaponía. Tipo de sensor principal: ${timeSeriesSensorType}. Filtros de tiempo: ${cleanedMinimalFilters.range || cleanedMinimalFilters.startDate} a ${cleanedMinimalFilters.endDate}. Tanque: ${cleanedMinimalFilters.tankId || 'Todos'}. Céntrate en la interpretación de los datos (promedio, min, max, alertas) y la correlación.`;
 
 
@@ -148,11 +135,10 @@ export const useAnalytics = () => {
         analyticsService.getKpis(cleanedMinimalFilters),
         analyticsService.getAlertsSummary(cleanedMinimalFilters),
         analyticsService.getCorrelations(correlationFilters),
-        aiAssistantService.getAIResponse(aiPrompt), // <-- USO CORREGIDO
+        aiAssistantService.getAIResponse(aiPrompt),
       ];
 
       const timeSeriesPromises = sensorTypesToFetch.map(type => 
-        // Para series de tiempo, necesitamos pasar el tipo de sensor específico
         analyticsService.getTimeSeries({ ...timeSeriesBaseFilters, sensorType: type }) 
       );
       
@@ -161,7 +147,7 @@ export const useAnalytics = () => {
         ...timeSeriesPromises,
       ]);
 
-      // Consolidación de Series de Tiempo
+      // --- Consolidación de Series de Tiempo (Se mantiene el código original) ---
       let mergedTimeSeriesData: MultiTimeSeriesData[] = [];
       
       const resultsWithTypes = timeSeriesResults.map((result, index) => ({
@@ -194,15 +180,16 @@ export const useAnalytics = () => {
       } else {
         setTimeSeriesData([]); 
       }
+      // -----------------------------------------------------------------
       
-      // Manejo de resultados
-      if (kpisResult.status === 'fulfilled') setKpis(kpisResult.value as Kpi);
+      // --- Manejo de resultados (Extracción de .data) ---
+      if (kpisResult.status === 'fulfilled') setKpis(kpisResult.value.data as Kpi); 
       else { console.error('❌ Error KPIs:', kpisResult.reason); setKpis(null); }
 
-      if (summaryResult.status === 'fulfilled') setAlertsSummary(summaryResult.value as AlertSummary);
+      if (summaryResult.status === 'fulfilled') setAlertsSummary(summaryResult.value.data as AlertSummary); 
       else { console.error('❌ Error AlertsSummary:', summaryResult.reason); setAlertsSummary(null); }
 
-      if (corrResult.status === 'fulfilled') setCorrelationData(corrResult.value as CorrelationData[]);
+      if (corrResult.status === 'fulfilled') setCorrelationData(corrResult.value.data as CorrelationData[]); 
       else { console.error('❌ Error Correlations:', corrResult.reason); setCorrelationData([]); }
 
       if (aiResult.status === 'fulfilled') setAiAnalysis(aiResult.value as string);
@@ -210,6 +197,7 @@ export const useAnalytics = () => {
           console.error('❌ Error AI Analysis:', aiResult.reason); 
           setAiAnalysis('No se pudo generar un análisis automático. Intenta más tarde.'); 
       }
+      // -----------------------------------------------------------------
 
 
     } catch (err: any) {
@@ -231,3 +219,5 @@ export const useAnalytics = () => {
 
   return { kpis, timeSeriesData, alertsSummary, correlationData, aiAnalysis, loading, error, fetchData, resetState };
 };
+
+export default useAnalytics; // 🎯 Cambio a exportación por defecto

@@ -3,7 +3,7 @@
  * @route frontend/src/app/(main)/analytics/
  * @description Página principal de analíticas de datos. Utiliza un filtro unificado (estilo dashboard) y presenta la información en vistas segmentadas (Comparative, Tank Detail, Sensor Detail).
  * @author Kevin Mariano
- * @version 1.0.23
+ * @version 1.0.26 // Versión Final Sincronizada (Fix de Fechas y Range)
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -13,12 +13,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useInfrastructure } from '@/hooks/useInfrastructure';
-import { useAnalytics } from '@/hooks/useAnalytics';
+import useAnalytics from '@/hooks/useAnalytics'; // 🎯 Importación por defecto del hook
 import { getDataDateRange } from '@/services/analyticsService';
 import * as settingsService from '@/services/settingsService';
 import { Card } from '@/components/common/Card';
 import { AnalyticsFilters } from '@/components/analytics/AnalyticsFilters'; 
 import { AIAnalysisPanel } from '@/components/analytics/AiAnalysisPanel'; 
+import { AlertsSummaryCharts } from '@/components/analytics/AlertsSummaryCharts'; // Importación Nombrada
 // Importación de los componentes de vista segmentados
 import { ComparativeView } from '@/components/analytics/ComparativeView'; 
 import { TankDetailView } from '@/components/analytics/TankDetailView'; 
@@ -27,7 +28,8 @@ import { SensorDetailView } from '@/components/analytics/SensorDetailView';
 import { Role, SensorType, UserSettings } from '@/types';
 import { AlertCircle, Database } from 'lucide-react';
 import { Skeleton } from '@/components/common/Skeleton';
-import { differenceInDays, parseISO, subDays, subMonths, subYears, startOfDay, endOfDay, format, differenceInHours, subHours } from 'date-fns';
+// Usando endOfDay para asegurar que el rango incluya todo el último día
+import { differenceInDays, parseISO, subDays, subMonths, subYears, startOfDay, endOfDay, format, differenceInHours, subHours } from 'date-fns'; 
 import { sensorTypeTranslations } from '@/utils/translations';
 
 // Definición de las constantes de rango 
@@ -44,9 +46,9 @@ const MAX_CHART_POINTS = 500; // Constante asumida para el cálculo de muestreo
 
 /**
  * @interface BaseViewProps
- * @description Define el conjunto mínimo de props necesarios para inyectar datos y estado a los componentes de vista segmentados.
+ * @description Define el conjunto mínimo de props necesarias para inyectar datos y estado a los componentes de vista segmentados.
  */
-export interface BaseViewProps { // <-- EXPORTACIÓN CLAVE
+export interface BaseViewProps { 
     tanks: any;
     sensors: any;
     kpis: any;
@@ -63,7 +65,7 @@ export interface BaseViewProps { // <-- EXPORTACIÓN CLAVE
     samplingFactor: number;
     sensorTypeTranslations: { [key in SensorType]: string };
     secondarySensorTypes: SensorType[]; 
-    aiAnalysis?: string | null; // Añadido para compatibilidad
+    aiAnalysis?: string | null; 
 }
 
 /**
@@ -91,7 +93,7 @@ const AnalyticsPage = () => {
   
   const [selectedStartDate, setSelectedStartDate] = useState<string | undefined>(undefined);
   const [selectedEndDate, setSelectedEndDate] = useState<string | undefined>(undefined);
-  // secondarySensorTypes se calcula en el useEffect, pero DEBE ser un estado para pasarse a fetchData.
+  // secondarySensorTypes se calcula en el useEffect, pero DEBE ser un estado para pasar a fetchData.
   const [secondarySensorTypes, setSecondarySensorTypes] = useState<SensorType[]>([]); 
   
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
@@ -186,16 +188,33 @@ const AnalyticsPage = () => {
     let to = now;
     
     switch (selectedRange) {
-      case 'hour': from = subHours(now, 1); to = now; break;
-      case 'day': from = subDays(now, 1); to = now; break; 
-      case 'week': from = subDays(now, 7); to = now; break;
-      case 'month': from = subMonths(now, 1); to = now; break;
-      case 'year': from = subYears(now, 1); to = now; break;
+      case 'hour': 
+        from = subHours(now, 1); 
+        // to se deja como 'now' para ser preciso hasta el minuto/segundo actual
+        break;
+      case 'day': 
+        from = startOfDay(now); 
+        to = endOfDay(now); 
+        break; 
+      case 'week': 
+        from = subDays(startOfDay(now), 7); 
+        to = endOfDay(now); 
+        break;
+      case 'month': 
+        from = subMonths(startOfDay(now), 1); 
+        to = endOfDay(now); 
+        break;
+      case 'year': 
+        from = subYears(startOfDay(now), 1); 
+        to = endOfDay(now); 
+        break;
       case 'custom':
         if (selectedStartDate) from = parseISO(selectedStartDate);
-        if (selectedEndDate) to = parseISO(selectedEndDate);
+        if (selectedEndDate) to = endOfDay(parseISO(selectedEndDate || format(now, 'yyyy-MM-dd'))); // Asegura el fin del día en custom
         break;
-      default: from = subDays(now, 7); to = now;
+      default: 
+        from = subDays(startOfDay(now), 7); 
+        to = endOfDay(now);
     }
     return { from, to };
   }, [selectedRange, selectedStartDate, selectedEndDate]);
@@ -345,22 +364,15 @@ const AnalyticsPage = () => {
         samplingFactor: samplingFactor, 
     };
 
-    let dateFilters: { range?: string, startDate?: string, endDate?: string };
-
-    if (selectedRange === 'custom' || selectedRange === 'hour') {
-        dateFilters = {
-            startDate: currentRange.from.toISOString(),
-            endDate: currentRange.to.toISOString(),
-        };
-    } else {
-        dateFilters = {
-            range: selectedRange,
-        };
-    }
-
+    // 🎯 CORRECCIÓN CLAVE: Siempre enviar startDate/endDate como ISO strings
+    const dateFilters = {
+        startDate: currentRange.from.toISOString(),
+        endDate: currentRange.to.toISOString(),
+    };
+    
     const finalFilters = {
         ...baseFilters,
-        ...dateFilters,
+        ...dateFilters, // Ahora siempre usamos los ISO strings calculados
         ...(selectedTankId !== 'ALL' && { tankId: selectedTankId }),
     };
 
@@ -404,7 +416,7 @@ const AnalyticsPage = () => {
     tanks, sensors, kpis, isAnalyticsLoading, timeSeriesData, alertsSummary, correlationData, userSettings,
     selectedUserId, selectedTankId, mainSensorType, selectedRange, currentRange, samplingFactor, sensorTypeTranslations,
     secondarySensorTypes: secondarySensorTypes, 
-    aiAnalysis: aiAnalysis, // Añadido para compatibilidad
+    aiAnalysis: aiAnalysis, 
   };
 
 
@@ -455,11 +467,20 @@ const AnalyticsPage = () => {
         {/* Renderizado de Vistas Segmentadas */}
         {!isLoading && hasInitialData === true && (
           <>
-            <AIAnalysisPanel // Uso del nombre corregido
+            <AIAnalysisPanel 
                 analysis={aiAnalysis} 
                 loading={isAnalyticsLoading.aiAnalysis} 
                 prompt={''} 
             />
+            
+            {/* 🎯 SECCIÓN DE ALERTAS: Renderizada con importación corregida */}
+            <section className="space-y-4">
+                <h2 className="text-xl font-semibold text-slate-700 dark:text-white">Resumen de Alertas</h2>
+                <AlertsSummaryCharts 
+                    summary={alertsSummary} 
+                    loading={isAnalyticsLoading.alerts} 
+                />
+            </section>
             
             {viewMode === 'comparative' && <ComparativeView {...commonViewProps} tankStats={tankStats} />}
             {viewMode === 'tank_detail' && <TankDetailView {...commonViewProps} />}

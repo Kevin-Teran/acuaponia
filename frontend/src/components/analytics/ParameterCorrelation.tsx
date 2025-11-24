@@ -3,7 +3,7 @@
  * @route frontend/src/components/analytics/
  * @description Muestra un gráfico de dispersión para analizar la correlación entre dos tipos de sensores.
  * @author kevin mariano
- * @version 1.0.1
+ * @version 1.0.2 // Versión corregida
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -19,18 +19,19 @@ import { Skeleton } from '../common/Skeleton';
 import { sensorTypeTranslations } from '@/utils/translations';
 
 interface ParameterCorrelationProps {
-  data: CorrelationData[];
+  data: CorrelationData[] | null; // Aceptar que puede ser null al inicio
   loading: boolean;
 }
 
 /**
  * @function calculateCorrelation
  * @description Calcula el coeficiente de correlación de Pearson (r).
- * @param {CorrelationData[]} data - Datos de correlación.
+ * @param {CorrelationData[] | null} data - Datos de correlación.
  * @returns {number} Coeficiente r.
  */
-const calculateCorrelation = (data: CorrelationData[]): number => {
-  if (data.length < 2) return 0;
+const calculateCorrelation = (data: CorrelationData[] | null): number => {
+  // 🚩 CORRECCIÓN: Verifica si 'data' es null o tiene menos de 2 elementos
+  if (!data || data.length < 2) return 0;
 
   const n = data.length;
   const sumX = data.reduce((acc, d) => acc + d.x, 0);
@@ -61,6 +62,7 @@ const interpretCorrelation = (r: number): string => {
 };
 
 export const ParameterCorrelation: React.FC<ParameterCorrelationProps> = ({ data, loading }) => {
+  
   if (loading) {
     return (
       <Card className="p-6 h-[400px]">
@@ -69,12 +71,15 @@ export const ParameterCorrelation: React.FC<ParameterCorrelationProps> = ({ data
     );
   }
 
-  const r = calculateCorrelation(data);
+  // Se asegura que data sea al menos un array vacío si es null
+  const safeData = data || []; 
+
+  const r = calculateCorrelation(safeData);
   const interpretation = interpretCorrelation(r);
   const sign = r >= 0 ? 'Positiva' : 'Negativa';
   const correlationLabel = `${r.toFixed(4)} (${sign})`;
 
-  if (data.length === 0) {
+  if (safeData.length === 0) {
     return (
       <Card className="p-6 text-center h-[400px] flex flex-col justify-center">
         <Info className="w-12 h-12 mx-auto mb-4 text-gray-400" />
@@ -140,7 +145,7 @@ export const ParameterCorrelation: React.FC<ParameterCorrelationProps> = ({ data
               className="text-xs fill-slate-500 dark:fill-slate-400"
             />
             <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc' }} />
-            <Scatter name="Correlación" data={data} fill="#8884d8" shape="circle" />
+            <Scatter name="Correlación" data={safeData} fill="#8884d8" shape="circle" />
           </ScatterChart>
         </ResponsiveContainer>
       </div>

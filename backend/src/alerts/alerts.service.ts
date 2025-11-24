@@ -247,4 +247,34 @@ export class AlertsService {
       },
     });
   }
+
+  /**
+   * Marca automáticamente como resueltas las alertas antiguas no resueltas.
+   * Utiliza el campo createdAt para determinar la antigüedad.
+   * @param daysOld - Número de días tras los cuales una alerta se considera "antigua".
+   * @returns El conteo de alertas actualizadas.
+   */
+  async resolveOldAlerts(daysOld: number): Promise<number> {
+    const cutoffDate = new Date();
+    // Restar el número de días para obtener la fecha de corte
+    cutoffDate.setDate(cutoffDate.getDate() - daysOld); 
+
+    this.logger.log(`Intentando resolver alertas no resueltas creadas antes de: ${cutoffDate.toISOString()}`);
+
+    const result = await this.prisma.alert.updateMany({
+      where: {
+        resolved: false,
+        createdAt: {
+          lt: cutoffDate, // Filtra por alertas cuya fecha de creación es 'Less Than' (anterior a) la fecha de corte
+        },
+      },
+      data: {
+        resolved: true,
+        resolvedAt: new Date(),
+      },
+    });
+
+    this.logger.log(`Resolución automática completada: ${result.count} alertas marcadas como resueltas.`);
+    return result.count;
+  }
 }
