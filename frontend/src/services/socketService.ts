@@ -1,9 +1,9 @@
 /**
  * @file socketService.ts
  * @route frontend/src/services
- * @description Servicio para gestionar la conexión de Socket.IO con reconexión automática y tipado correcto.
+ * @description Servicio CORREGIDO para gestionar Socket.IO
  * @author Kevin Mariano
- * @version 1.2.4 // Versión actualizada y corregida para evitar reconexiones redundantes
+ * @version 2.0.1 - CORRECCIÓN TYPESCRIPT
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -41,49 +41,73 @@ class SocketManager {
             return;
         }
         
-        // FIX CLAVE: Si ya está conectado y el token no ha cambiado, no hacer nada.
+        // Verificar si ya está conectado
         if (this.socket && this.socket.connected) {
              const currentAuth = this.socket.auth as { token: string };
              
-             // Si ya estamos conectados y el token es el mismo, salimos de forma limpia.
              if (currentAuth.token === `Bearer ${token}`) {
-                 this.logger.log('✅ El socket ya está conectado con el token correcto. Conexión ignorada.');
+                 this.logger.log('✅ Socket ya conectado con el token correcto');
                  return; 
              }
              
-             // Si el token es diferente, forzamos la reconexión.
-             this.logger.warn('⚠️ Socket conectado pero token diferente. Forzando reconexión con nuevo token.');
+             this.logger.warn('⚠️ Reconectando con nuevo token...');
              this.socket.disconnect();
         }
-        
-        // --- Continúa la lógica de conexión si no está conectado o si se forzó la desconexión ---
 
+        // 🔥 CORRECCIÓN CRÍTICA: Construir URL correcta
         const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
         if (!apiBaseUrl) {
-            this.logger.error('❌ NEXT_PUBLIC_API_URL no está definida.');
+            this.logger.error('❌ NEXT_PUBLIC_API_URL no está definida');
             throw new Error('URL de la API no definida');
         }
 
-        const url = apiBaseUrl.startsWith('https://') ?
-            apiBaseUrl.replace(/^https/, 'wss') :
-            apiBaseUrl.replace(/^http/, 'ws');
+        // 🔥 FIX: Extraer solo el dominio base, sin /acuaponiaapi
+        const urlObj = new URL(apiBaseUrl);
+        const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+        
+        this.logger.log(`🔗 URL base: ${baseUrl}`);
+        this.logger.log(`🔗 Path Socket.IO: /acuaponiaapi/socket.io/`);
         
         const options: Partial<ManagerOptions & SocketOptions> = {
+            // 🔥 CORRECCIÓN: El path debe coincidir con el @WebSocketGateway
             path: '/acuaponiaapi/socket.io/',
-            extraHeaders: { Authorization: `Bearer ${token}` },
+            
+            // Headers de autenticación
+            extraHeaders: { 
+                Authorization: `Bearer ${token}` 
+            },
+            
+            // Configuración de reconexión
             reconnectionAttempts: this.MAX_ATTEMPTS,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
             timeout: 20000,
-            forceNew: true, 
+            
+            // Transportes
             transports: ['websocket', 'polling'],
+            
+            // Auth en el handshake
             auth: {
                 token: `Bearer ${token}`,
             },
+            
+            // Forzar nueva conexión
+            forceNew: true,
+            
+            // 🔥 IMPORTANTE: Upgrade automático a WebSocket
+            upgrade: true,
+            rememberUpgrade: true,
         };
 
-        this.logger.log(`🔗 Intentando conectar a: ${url}`);
-        this.socket = io(url, options);
+        this.logger.log(`🔗 Conectando a: ${baseUrl}`);
+        this.logger.log(`📋 Opciones:`, JSON.stringify({
+            path: options.path,
+            transports: options.transports,
+            timeout: options.timeout
+        }));
+        
+        // 🔥 CORRECCIÓN: Usar baseUrl sin el /acuaponiaapi
+        this.socket = io(baseUrl, options);
         this.registerEventListeners();
     }
   
@@ -99,25 +123,42 @@ class SocketManager {
         if (!this.socket) return;
         
         this.socket.on('connect', () => {
-            this.logger.log('✅ Socket conectado.');
+            this.logger.log('✅ Socket conectado exitosamente');
+            this.logger.log(`📍 Socket ID: ${this.socket?.id}`);
             this.connectionAttempts = 0; 
         });
         
-        this.socket.on('connect_error', (error) => {
-            this.logger.error('❌ Error de conexión de Socket:', error);
-            if (error.message === 'Invalid token') {
-                this.logger.error('Token de autenticación inválido o expirado. Se cerrará la conexión.');
+        this.socket.on('connect_error', (error: Error) => {
+            this.logger.error('❌ Error de conexión:', error.message);
+            
+            if (error.message.includes('Invalid token')) {
+                this.logger.error('🔒 Token inválido - cerrando conexión');
                 this.close(); 
             } else {
-                this.logger.error('Fallo en la conexión. Posible problema de CORS o servidor no disponible.');
+                this.logger.error('🌐 Posible problema de red o servidor');
             }
         });
 
-        this.socket.on('disconnect', (reason) => {
-            this.logger.warn(`🔴 Desconexión de socket: ${reason}`);
-            if (reason === 'transport close') { 
+        this.socket.on('disconnect', (reason: string) => {
+            this.logger.warn(`🔴 Desconectado: ${reason}`);
+            
+            if (reason === 'io server disconnect') {
+                this.logger.warn('⚠️ Servidor cerró la conexión');
+                this.startReconnectionProcess();
+            } else if (reason === 'transport close') {
+                this.logger.warn('⚠️ Transporte cerrado - reconectando...');
                 this.startReconnectionProcess();
             }
+        });
+
+        // 🔥 CORRECCIÓN: Tipar el parámetro data
+        this.socket.on('connection_established', (data: any) => {
+            this.logger.log('✅ Conexión establecida:', data);
+        });
+
+        // 🔥 CORRECCIÓN: Tipar el parámetro data
+        this.socket.on('connection_error', (data: any) => {
+            this.logger.error('❌ Error en handshake:', data);
         });
     }
 
@@ -126,23 +167,25 @@ class SocketManager {
         
         const attempt = this.connectionAttempts + 1;
         if (attempt > this.MAX_ATTEMPTS) {
-            this.logger.error(`❌ Reconexión fallida después de ${this.MAX_ATTEMPTS} intentos.`);
+            this.logger.error(`❌ Reconexión fallida (${this.MAX_ATTEMPTS} intentos)`);
             return;
         }
 
         const delay = Math.min(1000 * Math.pow(2, attempt), 30000);
-        this.logger.warn(`🔄 Intentando reconectar en ${delay / 1000}s... (Intento ${attempt}/${this.MAX_ATTEMPTS})`);
+        this.logger.warn(`🔄 Reconectando en ${delay / 1000}s (intento ${attempt}/${this.MAX_ATTEMPTS})`);
         
         this.reconnectTimeout = setTimeout(() => {
             this.reconnectTimeout = null;
             
-            const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+            const token = typeof window !== 'undefined' 
+                ? localStorage.getItem('accessToken') 
+                : null;
             
             if (token) {
                 this.connect(token);
                 this.connectionAttempts++;
             } else {
-                this.logger.error('❌ No se puede reconectar: token no disponible');
+                this.logger.error('❌ Token no disponible para reconexión');
                 this.socket?.disconnect();
             }
         }, delay);

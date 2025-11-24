@@ -8,7 +8,7 @@
  * @copyright SENA 2025
  */
 
-import {
+ import {
   WebSocketGateway,
   WebSocketServer,
   SubscribeMessage,
@@ -44,10 +44,10 @@ interface ReportWithUser extends Report {
   userId: string;
 }
 
-@WebSocketGateway({
-  path: '/acuaponiaapi/socket.io', 
+WebSocketGateway({
+  path: '/acuaponiaapi/socket.io',
   cors: {
-    origin: process.env.FRONTEND_URL || 'https://tecnoparqueatlantico.com',
+    origin: process.env.FRONTEND_URL || 'https://tecnoparqueatlantico.com/acuaponia',
     credentials: true,
   },
   transports: ['websocket', 'polling'],
@@ -73,8 +73,11 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleConnection(client: Socket) {
     try {
       const token = this.extractTokenFromHandshake(client);
+      
       if (!token) {
-        throw new Error('No se proporcionó token de autenticación.');
+        this.logger.warn(`Intento de conexión sin token desde ${client.id}`);
+        client.disconnect();
+        return;
       }
 
       const payload = await this.jwtService.verifyAsync(token, {
@@ -133,30 +136,37 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.log(`🔌 Cliente desconectado: ${clientInfo.userName} (${client.id})`);
       this.connectedClients.delete(client.id);
     } else {
-      this.logger.log(`🔌 Cliente no identificado desconectado: ${client.id}`);
+      // this.logger.log(`🔌 Cliente no identificado desconectado: ${client.id}`);
     }
 
-    this.logger.log(`📊 Total de clientes conectados: ${this.connectedClients.size}`);
+    // this.logger.log(`📊 Total de clientes conectados: ${this.connectedClients.size}`);
   }
 
   /**
    * @method extractTokenFromHandshake
    * @description Extrae el token JWT del handshake del socket.
+   * CORRECCIÓN: Soporta headers y auth object para mayor compatibilidad.
    */
   private extractTokenFromHandshake(client: Socket): string | undefined {
-    const authHeader = client.handshake.auth.token as string;
-    if (!authHeader) return undefined;
-    const [type, token] = authHeader.split(' ') ?? [];
-    return type === 'Bearer' ? token : undefined;
+    // Intenta obtener el token de auth (Socket.io v4 client) o de headers
+    const auth = client.handshake.auth?.token || client.handshake.headers?.authorization;
+    
+    if (!auth) return undefined;
+
+    const parts = auth.split(' ');
+    if (parts.length === 2 && parts[0] === 'Bearer') {
+        return parts[1];
+    }
+    
+    return auth;
   }
 
   /**
    * @method broadcastNewData
    * @description Alias para mantener compatibilidad con el código existente
-   * SOLUCIÓN: Mantener el método original que tu servicio está llamando
    */
   public broadcastNewData(data: any) {
-    this.logger.log('📊 broadcastNewData llamado - redirigiendo a broadcastNewSensorData');
+    // this.logger.log('📊 broadcastNewData llamado - redirigiendo a broadcastNewSensorData');
     this.broadcastNewSensorData(data);
   }
 
@@ -191,7 +201,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       },
     };
 
-    this.logger.log(`📊 Enviando datos de sensor a usuario ${userId}: ${sensorData.sensor.type} = ${sensorData.value}`);
+    // this.logger.log(`📊 Enviando datos de sensor a usuario ${userId}: ${sensorData.sensor.type} = ${sensorData.value}`);
     
     this.server.to(userId).emit('new_sensor_data', formattedData);
 
@@ -222,18 +232,14 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * @description Emite una nueva alerta a los administradores.
    */
   public broadcastNewAlertToAdmins(adminIds: string[], alertPayload: any) {
-    if (!adminIds || adminIds.length === 0) {
-      this.logger.warn('❌ No se puede emitir alerta: no hay IDs de administradores');
-      return;
-    }
-
-    this.logger.log(`🚨 Transmitiendo nueva alerta a administradores: ${adminIds.join(', ')}`);
-    
-    adminIds.forEach(adminId => {
-      this.server.to(adminId).emit('new-alert', alertPayload);
-    });
-    
     this.server.to('admin_room').emit('new-alert', alertPayload);
+
+    if (adminIds && adminIds.length > 0) {
+      // this.logger.log(`🚨 Transmitiendo nueva alerta a administradores: ${adminIds.join(', ')}`);
+      adminIds.forEach(adminId => {
+        this.server.to(adminId).emit('new-alert', alertPayload);
+      });
+    }
   }
 
   /**
@@ -274,7 +280,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
     };
 
-    this.logger.log(`🧪 Enviando datos de prueba a ${user.name} (${user.id})`);
+    // this.logger.log(`🧪 Enviando datos de prueba a ${user.name} (${user.id})`);
     this.broadcastNewSensorData(testSensorData);
 
     return { 
