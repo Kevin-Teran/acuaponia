@@ -3,7 +3,7 @@
  * @route frontend/src/components/analytics/
  * @description Muestra gráficos de torta/barra para resumir alertas por tipo y severidad.
  * @author kevin mariano
- * @version 1.0.5 // Versión final, exportación corregida
+ * @version 1.0.6 // Versión corregida para coincidir con AlertSummary type
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -16,7 +16,6 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 import { AlertSummary } from '@/types'; 
 import { AlertTriangle } from 'lucide-react';
 import { Skeleton } from '../common/Skeleton';
-import { cn } from '@/utils/cn';
 
 interface AlertsSummaryChartsProps {
   summary: AlertSummary | null;
@@ -33,12 +32,20 @@ const TYPE_COLORS: { [key: string]: string } = {
   TEMPERATURE: '#FF6384',
   PH: '#36A2EB',
   OXYGEN: '#FFCE56',
+  TEMPERATURE_OUT_OF_RANGE: '#FF6384',
+  PH_OUT_OF_RANGE: '#36A2EB',
+  OXYGEN_OUT_OF_RANGE: '#FFCE56',
+  SENSOR_DISCONNECTED: '#9CA3AF',
+  SYSTEM_FAILURE: '#000000',
 };
 
 const SEVERITY_COLORS: { [key: string]: string } = {
+  INFO: '#3B82F6',
   LOW: '#22C55E', 
+  WARNING: '#F59E0B',
   MEDIUM: '#F59E0B', 
   HIGH: '#EF4444', 
+  ERROR: '#EF4444',
   CRITICAL: '#991B1B', 
 };
 
@@ -64,9 +71,15 @@ interface PieLabelProps {
 
 export const AlertsSummaryCharts: React.FC<AlertsSummaryChartsProps> = ({ summary, loading }) => {
   
+  // Calcular el total dinámicamente basado en los arrays recibidos
+  const totalAlerts = React.useMemo(() => {
+    if (!summary?.alertsByType) return 0;
+    return summary.alertsByType.reduce((acc, item) => acc + (item._count?.type || 0), 0);
+  }, [summary]);
+
   if (!loading && summary) {
       console.log('🚨 [Alerts Chart] Resumen recibido:', summary);
-      if (summary.total === 0) {
+      if (totalAlerts === 0) {
           console.warn('🚨 [Alerts Chart] Alertas no dibujadas: total es 0. Verifica los filtros de tiempo en la UI.');
       }
   }
@@ -84,32 +97,27 @@ export const AlertsSummaryCharts: React.FC<AlertsSummaryChartsProps> = ({ summar
     );
   }
 
-  const totalAlerts = summary?.total || 0;
-
   // Mapeo de datos del resumen por tipo
-  const alertsByType = summary?.distributionByType?.map((item: any) => ({
+  const chartDataByType = summary?.alertsByType?.map((item) => ({
     name: item.type.replace(/_/g, ' '), 
-    value: item.count, // Usamos 'count'
+    value: item._count.type, 
     fill: TYPE_COLORS[item.type] || '#A0A0A0',
   })) || [];
 
   // Mapeo de datos del resumen por severidad
-  const alertsBySeverity = summary?.distributionBySeverity?.map((item: any) => ({
+  const chartDataBySeverity = summary?.alertsBySeverity?.map((item) => ({
     name: item.severity,
-    value: item.count, // Usamos 'count'
+    value: item._count.severity,
     fill: SEVERITY_COLORS[item.severity] || '#A0A0A0',
   })) || [];
 
   if (totalAlerts === 0) {
     return (
-      <Card className="p-6 text-center col-span-full">
-        <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-amber-500" />
+      <Card className="p-6 text-center col-span-full flex flex-col items-center justify-center h-[200px]">
+        <AlertTriangle className="w-12 h-12 mb-4 text-amber-500" />
         <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300">Sin Alertas Registradas</h3>
         <p className="mt-2 text-gray-500 dark:text-gray-400">
           No se encontraron alertas en el rango de tiempo y filtros seleccionados.
-          <span className="block mt-1 text-sm font-semibold text-gray-600 dark:text-gray-500">
-            (Conteo total de la base de datos: {totalAlerts})
-          </span>
         </p>
       </Card>
     );
@@ -126,22 +134,22 @@ export const AlertsSummaryCharts: React.FC<AlertsSummaryChartsProps> = ({ summar
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={alertsByType}
+                data={chartDataByType}
                 dataKey="value"
                 nameKey="name"
                 cx="50%"
                 cy="50%"
-                outerRadius={120}
+                outerRadius={100}
                 fill="#8884d8"
                 labelLine={false}
                 label={({ name, percent }: PieLabelProps) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`} 
               >
-                {alertsByType.map((entry, index) => (
+                {chartDataByType.map((entry, index) => (
                   <Cell key={`cell-type-${index}`} fill={entry.fill} />
                 ))}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
-              <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ paddingLeft: '20px' }} />
+              <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ paddingLeft: '10px', fontSize: '12px' }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -156,22 +164,22 @@ export const AlertsSummaryCharts: React.FC<AlertsSummaryChartsProps> = ({ summar
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={alertsBySeverity}
+                data={chartDataBySeverity}
                 dataKey="value"
                 nameKey="name"
                 cx="50%"
                 cy="50%"
-                outerRadius={120}
+                outerRadius={100}
                 fill="#82ca9d"
                 labelLine={false}
                 label={({ name, percent }: PieLabelProps) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
               >
-                {alertsBySeverity.map((entry, index) => (
+                {chartDataBySeverity.map((entry, index) => (
                   <Cell key={`cell-severity-${index}`} fill={entry.fill} />
                 ))}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
-              <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ paddingLeft: '20px' }} />
+              <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ paddingLeft: '10px', fontSize: '12px' }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
