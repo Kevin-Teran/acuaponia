@@ -1,15 +1,15 @@
 /**
  * @file useAlerts.ts
  * @route frontend/src/hooks
- * @description Hook para gestionar el estado de las alertas, su recolección por HTTP y la conexión WebSocket.
+ * @description Hook CORREGIDO para gestionar el estado de las alertas
  * @author kevin mariano
- * @version 1.0.2 
+ * @version 1.1.0 // VERSIÓN CORREGIDA
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Alert, AlertSeverity } from '@/types'; // Se importa AlertSeverity
+import { Alert, AlertSeverity } from '@/types';
 import alertsService from '@/services/alertService';
 import { socketManager } from '@/services/socketService'; 
 import Swal from 'sweetalert2'; 
@@ -22,86 +22,208 @@ export const useAlerts = () => {
   const [error, setError] = useState<string | null>(null);
   const isAuthenticated = !!user;
 
+  /**
+   * 🔥 CORRECCIÓN: fetchAlerts con manejo robusto de errores
+   */
   const fetchAlerts = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      console.log('⚠️ [useAlerts] Usuario no autenticado, limpiando alertas');
+      setAlerts([]);
+      setLoading(false);
+      return;
+    }
     
-    // Solo mostramos el spinner en el primer fetch real
-    if (alerts.length === 0) setLoading(true); 
+    // Solo mostrar spinner en la primera carga
+    if (alerts.length === 0) {
+      setLoading(true);
+    }
     
     setError(null);
+    
     try {
+      console.log('🔄 [useAlerts] Obteniendo alertas...');
       const fetchedAlerts = await alertsService.getUnresolvedAlerts();
-      fetchedAlerts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setAlerts(fetchedAlerts);
-    } catch (err) {
-      setError('No se pudieron cargar las alertas. Verifique la conexión con el servidor.');
-      console.error(err);
+      
+      // 🔥 CORRECCIÓN: Validar que sea un array
+      if (!Array.isArray(fetchedAlerts)) {
+        console.error('❌ [useAlerts] La respuesta no es un array:', fetchedAlerts);
+        setError('Formato de respuesta inválido');
+        setAlerts([]);
+        return;
+      }
+      
+      // Ordenar por fecha descendente
+      const sortedAlerts = fetchedAlerts.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      
+      console.log(`✅ [useAlerts] ${sortedAlerts.length} alertas cargadas`);
+      setAlerts(sortedAlerts);
+      
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.message || 
+                      err.message || 
+                      'No se pudieron cargar las alertas. Verifique la conexión con el servidor.';
+      
+      console.error('❌ [useAlerts] Error:', errorMsg);
+      setError(errorMsg);
+      setAlerts([]);
+      
     } finally {
       setLoading(false);
     }
   }, [isAuthenticated, alerts.length]); 
 
-  // Manejador para alertas recibidas por WebSocket
-  const handleNewAlert = useCallback((newAlert: Alert) => {
-    console.log('🚨 Nueva alerta recibida por WebSocket:', newAlert);
+  /**
+   * 🔥 CORRECCIÓN: handleNewAlert con validación completa
+   */
+  const handleNewAlert = useCallback((newAlert: any) => {
+    console.log('🚨 [useAlerts] Nueva alerta recibida por WebSocket:', newAlert);
+    
+    // 🔥 VALIDACIÓN CLAVE: Verificar estructura de la alerta
+    if (!newAlert || !newAlert.id) {
+      console.error('❌ [useAlerts] Alerta inválida recibida:', newAlert);
+      return;
+    }
+    
+    // Mapear la alerta al formato esperado
+    const mappedAlert: Alert = {
+      id: newAlert.id,
+      type: newAlert.type,
+      severity: newAlert.severity || AlertSeverity.WARNING,
+      message: newAlert.message || 'Alerta sin descripción',
+      userId: newAlert.sensor?.tank?.userId || user?.id || '',
+      tankId: newAlert.sensor?.tank?.id,
+      sensorId: newAlert.sensorId || newAlert.sensor?.id,
+      resolved: newAlert.resolved || false,
+      createdAt: newAlert.createdAt || new Date().toISOString(),
+      resolvedAt: newAlert.resolvedAt,
+      metadata: newAlert.sensor ? {
+        sensorName: newAlert.sensor.name,
+        tankName: newAlert.sensor.tank?.name,
+        sensorType: newAlert.sensor.type,
+        value: newAlert.value,
+        threshold: newAlert.threshold
+      } : undefined
+    };
+    
+    console.log('📋 [useAlerts] Alerta mapeada:', mappedAlert);
     
     setAlerts(prevAlerts => {
-        if (!newAlert.resolved && !prevAlerts.some(a => a.id === newAlert.id)) {
-            
-            // Lógica para determinar el ícono de SweetAlert
-            const isCritical = newAlert.severity === AlertSeverity.CRITICAL || newAlert.severity === AlertSeverity.ERROR;
-
-            Swal.fire({
-                title: `🚨 ${newAlert.severity.toUpperCase()}`,
-                text: newAlert.message,
-                // FIX: Usamos CRITICAL/ERROR para el ícono 'error', y WARNING para 'warning'
-                icon: isCritical ? 'error' : 'warning',
-                toast: true,
-                position: 'top-end',
-                showConfirmButton: false,
-                timer: 8000,
-                timerProgressBar: true,
-                customClass: {
-                    container: 'z-[9999]' 
-                }
-            });
-            
-            return [newAlert, ...prevAlerts];
-        }
+      // Evitar duplicados
+      if (prevAlerts.some(a => a.id === mappedAlert.id)) {
+        console.log('⚠️ [useAlerts] Alerta duplicada, ignorando');
         return prevAlerts;
+      }
+      
+      // Solo agregar si no está resuelta
+      if (!mappedAlert.resolved) {
+        // Determinar tipo de notificación según severidad
+        const isCritical = mappedAlert.severity === AlertSeverity.CRITICAL || 
+                          mappedAlert.severity === AlertSeverity.ERROR;
+
+        console.log('🔔 [useAlerts] Mostrando notificación SweetAlert');
+        
+        // Mostrar notificación visual
+        Swal.fire({
+          title: `🚨 ${mappedAlert.severity.toUpperCase()}`,
+          html: `
+            <div style="text-align: left;">
+              <p><strong>${mappedAlert.message}</strong></p>
+              ${mappedAlert.metadata ? `
+                <hr style="margin: 10px 0;">
+                <p><strong>Tanque:</strong> ${mappedAlert.metadata.tankName || 'N/A'}</p>
+                <p><strong>Sensor:</strong> ${mappedAlert.metadata.sensorName || 'N/A'}</p>
+                <p><strong>Valor:</strong> ${mappedAlert.metadata.value || 'N/A'}</p>
+                <p><strong>Umbral:</strong> ${mappedAlert.metadata.threshold || 'N/A'}</p>
+              ` : ''}
+            </div>
+          `,
+          icon: isCritical ? 'error' : 'warning',
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 10000, // 10 segundos para alertas críticas
+          timerProgressBar: true,
+          customClass: {
+            container: 'z-[9999]' 
+          }
+        });
+        
+        // Agregar al inicio del array
+        return [mappedAlert, ...prevAlerts];
+      }
+      
+      return prevAlerts;
     });
 
-  }, []); // handleNewAlert es estable
+  }, [user?.id]);
 
+  /**
+   * 🔥 CORRECCIÓN: markAsResolved con feedback visual
+   */
   const markAsResolved = useCallback(async (alertId: string) => {
     try {
+      console.log(`🔄 [useAlerts] Resolviendo alerta: ${alertId}`);
+      
       await alertsService.resolveAlert(alertId);
+      
+      // Actualizar estado local inmediatamente
       setAlerts(prevAlerts => prevAlerts.filter(alert => alert.id !== alertId));
-      Swal.fire('Resuelta', 'Alerta marcada como resuelta.', 'success');
-    } catch (err) {
-      Swal.fire('Error', 'No se pudo resolver la alerta. Intente de nuevo.', 'error');
-      console.error(err);
+      
+      console.log(`✅ [useAlerts] Alerta ${alertId} resuelta`);
+      
+      Swal.fire({
+        title: 'Resuelta',
+        text: 'Alerta marcada como resuelta.',
+        icon: 'success',
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000
+      });
+      
+    } catch (err: any) {
+      console.error(`❌ [useAlerts] Error resolviendo alerta:`, err);
+      
+      Swal.fire({
+        title: 'Error',
+        text: 'No se pudo resolver la alerta. Intente de nuevo.',
+        icon: 'error'
+      });
     }
   }, []);
 
+  /**
+   * 🔥 EFECTO PRINCIPAL: Inicialización y suscripción a WebSocket
+   */
   useEffect(() => {
     if (!isAuthenticated) {
-        setAlerts([]);
-        socketManager.close(); 
-        return;
+      setAlerts([]);
+      if (socketManager) {
+        socketManager.close();
+      }
+      return;
     }
     
-    fetchAlerts(); 
+    console.log('🚀 [useAlerts] Inicializando...');
+    fetchAlerts();
 
-    const token = localStorage.getItem('accessToken') || ''; 
+    const token = localStorage.getItem('accessToken') || '';
 
-    if (token) {
-        socketManager.connect(token); 
-        socketManager.on('new-alert', handleNewAlert); 
+    if (token && socketManager) {
+      console.log('🔌 [useAlerts] Conectando socket y suscribiendo a new-alert');
+      socketManager.connect(token);
+      socketManager.on('new-alert', handleNewAlert);
+    } else {
+      console.warn('⚠️ [useAlerts] Token o SocketManager no disponible');
     }
 
     return () => {
-      socketManager.off('new-alert', handleNewAlert); 
+      if (socketManager) {
+        console.log('🔌 [useAlerts] Desuscribiendo de new-alert');
+        socketManager.off('new-alert', handleNewAlert);
+      }
     };
     
   }, [isAuthenticated, fetchAlerts, handleNewAlert]);

@@ -1,9 +1,9 @@
 /**
  * @file alerts.service.ts
  * @route backend/src/alerts
- * @description 
+ * @description Servicio de alertas CORREGIDO con mapeo completo de datos
  * @author kevin mariano
- * @version 1.2.1 // Versión actualizada
+ * @version 1.3.0 // VERSIÓN CORREGIDA
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -12,7 +12,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { EventsGateway } from '../events/events.gateway';
-import { Sensor, AlertType, AlertSeverity, sensors_type, SystemConfig, User, Prisma, Alert, Role } from '@prisma/client'; // Importar Role
+import { Sensor, AlertType, AlertSeverity, sensors_type, SystemConfig, User, Prisma, Alert, Role } from '@prisma/client';
 
 @Injectable()
 export class AlertsService {
@@ -26,8 +26,6 @@ export class AlertsService {
 
   /**
    * Verifica si un usuario tiene activadas las notificaciones por email.
-   * @param user - El objeto de usuario (con 'settings' incluidos).
-   * @returns true si el usuario debe recibir correos, false en caso contrario.
    */
   private userWantsEmail(user: User): boolean {
     if (!user.settings) return true; 
@@ -56,11 +54,7 @@ export class AlertsService {
     return { type, severity };
   }
 
-  /**
-   * Obtiene los umbrales para un tipo de sensor específico.
-   * Prioriza los settings del usuario y usa SystemConfig como respaldo.
-   */
-   private getThresholdsForSensor(
+  private getThresholdsForSensor(
     sensorType: sensors_type, 
     configs: SystemConfig[],
     userThresholds?: any 
@@ -154,37 +148,92 @@ export class AlertsService {
     },
     affectedUser: User 
   ) {
+    // 🔥 CORRECCIÓN CLAVE: Incluir relaciones completas en la creación
     const newAlert = await this.prisma.alert.create({ 
       data,
-      include: { sensor: { include: { tank: true } } }
+      include: { 
+        sensor: { 
+          include: { 
+            tank: {
+              include: {
+                user: true // ✅ Incluir usuario para tener info completa
+              }
+            } 
+          } 
+        } 
+      }
     });
 
-    const admins = await this.prisma.user.findMany({ where: { role: Role.ADMIN } }); // Usar Role.ADMIN
+    this.logger.log(`🚨 Nueva alerta creada: ${newAlert.id} - ${newAlert.type} (${newAlert.severity})`);
+
+    // Obtener admins con sus datos completos
+    const admins = await this.prisma.user.findMany({ 
+      where: { role: Role.ADMIN },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        settings: true,
+        role: true
+      }
+    });
+
     const recipients = new Map<string, User>();
 
+    // Agregar admins que quieran email
     for (const admin of admins) {
-      if (this.userWantsEmail(admin)) {
-        recipients.set(admin.email, admin);
+      if (this.userWantsEmail(admin as User)) {
+        recipients.set(admin.email, admin as User);
       }
     }
 
+    // Agregar usuario afectado
     if (this.userWantsEmail(affectedUser)) {
       recipients.set(affectedUser.email, affectedUser);
     }
 
-    const adminIds = admins.map(admin => admin.id);
-    this.eventsGateway.broadcastNewAlertToAdmins(adminIds, newAlert);
+    // 🔥 CORRECCIÓN CLAVE: Broadcast con datos completos y serializables
+    const alertPayload = {
+      id: newAlert.id,
+      type: newAlert.type,
+      severity: newAlert.severity,
+      message: newAlert.message,
+      value: newAlert.value,
+      threshold: newAlert.threshold,
+      resolved: newAlert.resolved,
+      createdAt: newAlert.createdAt.toISOString(), // ✅ Serializar fecha
+      resolvedAt: newAlert.resolvedAt?.toISOString() || null,
+      sensorId: newAlert.sensorId,
+      sensor: {
+        id: newAlert.sensor.id,
+        name: newAlert.sensor.name,
+        type: newAlert.sensor.type,
+        hardwareId: newAlert.sensor.hardwareId,
+        tank: {
+          id: newAlert.sensor.tank.id,
+          name: newAlert.sensor.tank.name,
+          location: newAlert.sensor.tank.location,
+          userId: newAlert.sensor.tank.userId
+        }
+      }
+    };
 
+    // Broadcast a admins
+    const adminIds = admins.map(admin => admin.id);
+    this.logger.log(`📡 Broadcasting alerta a ${adminIds.length} admins`);
+    this.eventsGateway.broadcastNewAlertToAdmins(adminIds, alertPayload);
+
+    // Enviar emails
     if (recipients.size === 0) {
       this.logger.warn(`Alerta ${newAlert.id} creada, pero no se encontraron destinatarios con notificaciones de email activadas.`);
       return;
     }
 
-    this.logger.log(`Enviando notificaciones de alerta ${newAlert.id} a: [${Array.from(recipients.keys()).join(', ')}]`);
+    this.logger.log(`📧 Enviando notificaciones de alerta ${newAlert.id} a: [${Array.from(recipients.keys()).join(', ')}]`);
 
     for (const user of recipients.values()) {
       try {
-        await this.emailService.sendAlertEmail(user, newAlert);
+        await this.emailService.sendAlertEmail(user, newAlert as any);
       } catch (error) {
         this.logger.error(`Error al enviar correo de alerta a ${user.email}:`, error);
       }
@@ -192,51 +241,62 @@ export class AlertsService {
   }
   
   /**
-   * Obtiene las alertas no resueltas para un usuario específico.
-   * Si el usuario es ADMIN, devuelve todas las alertas no resueltas.
-   * @param userId - ID del usuario.
-   * @returns Un array de alertas.
+   * 🔥 CORRECCIÓN CLAVE: Retornar alertas con TODAS las relaciones necesarias
    */
   async getUnresolvedAlerts(userId: string): Promise<Alert[]> {
     this.logger.log(`Obteniendo alertas no resueltas para el usuario: ${userId}`);
     
-    // Obtenemos el rol del usuario
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    const user = await this.prisma.user.findUnique({ 
+      where: { id: userId }, 
+      select: { role: true } 
+    });
     
-    // Si el usuario no existe (debería estar cubierto por el AuthGuard, pero por seguridad)
     if (!user) {
-        return [];
+      return [];
     }
 
     const where: Prisma.AlertWhereInput = {
       resolved: false,
     };
     
-    // APLICACIÓN DEL FILTRO:
-    // Si NO es administrador (es decir, es Role.USER), filtramos por los tanques del usuario.
+    // Si NO es admin, filtrar por tanques del usuario
     if (user.role !== Role.ADMIN) {
-        // Se asegura que la alerta esté ligada a un sensor, y que el tanque de ese sensor sea del usuario.
-        where.sensor = {
-            tank: {
-                userId: userId,
-            },
-        };
+      where.sensor = {
+        tank: {
+          userId: userId,
+        },
+      };
     }
-    // Si es ADMIN, la cláusula 'where.sensor' se omite, devolviendo TODAS las alertas no resueltas (resolved: false).
 
-    return this.prisma.alert.findMany({
+    // 🔥 CORRECCIÓN CLAVE: Include completo con relaciones
+    const alerts = await this.prisma.alert.findMany({
       where: where,
       orderBy: { createdAt: 'desc' },
-      include: { sensor: { include: { tank: true } } },
+      include: { 
+        sensor: { 
+          include: { 
+            tank: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                }
+              }
+            } 
+          } 
+        } 
+      },
       take: 50,
     });
+
+    this.logger.log(`✅ Retornando ${alerts.length} alertas no resueltas`);
+    
+    return alerts;
   }
 
-  /**
-   * Marca una alerta como resuelta.
-   * @param alertId - ID de la alerta a resolver.
-   * @returns La alerta actualizada.
-   */
   async resolveAlert(alertId: string, resolvedByUserId: string): Promise<Alert> {
     this.logger.log(`Resolviendo alerta ${alertId} por el usuario ${resolvedByUserId}`);
     return this.prisma.alert.update({
@@ -248,15 +308,8 @@ export class AlertsService {
     });
   }
 
-  /**
-   * Marca automáticamente como resueltas las alertas antiguas no resueltas.
-   * Utiliza el campo createdAt para determinar la antigüedad.
-   * @param daysOld - Número de días tras los cuales una alerta se considera "antigua".
-   * @returns El conteo de alertas actualizadas.
-   */
   async resolveOldAlerts(daysOld: number): Promise<number> {
     const cutoffDate = new Date();
-    // Restar el número de días para obtener la fecha de corte
     cutoffDate.setDate(cutoffDate.getDate() - daysOld); 
 
     this.logger.log(`Intentando resolver alertas no resueltas creadas antes de: ${cutoffDate.toISOString()}`);
@@ -265,7 +318,7 @@ export class AlertsService {
       where: {
         resolved: false,
         createdAt: {
-          lt: cutoffDate, // Filtra por alertas cuya fecha de creación es 'Less Than' (anterior a) la fecha de corte
+          lt: cutoffDate,
         },
       },
       data: {
