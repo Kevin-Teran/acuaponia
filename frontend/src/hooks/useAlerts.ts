@@ -1,9 +1,9 @@
 /**
  * @file useAlerts.ts
  * @route frontend/src/hooks
- * @description Hook CORREGIDO para gestionar el estado de las alertas
+ * @description Hook CORREGIDO para gestionar el estado de las alertas con filtrado por usuario
  * @author kevin mariano
- * @version 1.1.0 // VERSIÓN CORREGIDA
+ * @version 2.0.0 // VERSIÓN FINAL CORREGIDA
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -52,12 +52,21 @@ export const useAlerts = () => {
         return;
       }
       
+      // 🔥 CORRECCIÓN CRÍTICA: Filtrar alertas por usuario en el frontend también
+      const filteredAlerts = fetchedAlerts.filter(alert => {
+        // Si es admin, mostrar todas
+        if (user?.role === 'ADMIN') return true;
+        
+        // Si no es admin, solo mostrar las del usuario
+        return alert.userId === user?.id;
+      });
+      
       // Ordenar por fecha descendente
-      const sortedAlerts = fetchedAlerts.sort((a, b) => 
+      const sortedAlerts = filteredAlerts.sort((a, b) => 
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       
-      console.log(`✅ [useAlerts] ${sortedAlerts.length} alertas cargadas`);
+      console.log(`✅ [useAlerts] ${sortedAlerts.length} alertas cargadas (${fetchedAlerts.length} total, ${sortedAlerts.length} filtradas)`);
       setAlerts(sortedAlerts);
       
     } catch (err: any) {
@@ -72,10 +81,10 @@ export const useAlerts = () => {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, alerts.length]); 
+  }, [isAuthenticated, alerts.length, user?.id, user?.role]); 
 
   /**
-   * 🔥 CORRECCIÓN: handleNewAlert con validación completa
+   * 🔥 CORRECCIÓN: handleNewAlert con validación completa y filtrado por usuario
    */
   const handleNewAlert = useCallback((newAlert: any) => {
     console.log('🚨 [useAlerts] Nueva alerta recibida por WebSocket:', newAlert);
@@ -85,6 +94,14 @@ export const useAlerts = () => {
       console.error('❌ [useAlerts] Alerta inválida recibida:', newAlert);
       return;
     }
+
+    // 🔥 CORRECCIÓN CRÍTICA: Verificar que la alerta pertenece al usuario actual
+    if (user?.role !== 'ADMIN' && newAlert.userId !== user?.id) {
+      console.log(`⚠️ [useAlerts] Alerta ignorada: pertenece a otro usuario (${newAlert.userId} vs ${user?.id})`);
+      return;
+    }
+    
+    console.log(`✅ [useAlerts] Alerta aceptada para usuario ${user?.id}`);
     
     // Mapear la alerta al formato esperado
     const mappedAlert: Alert = {
@@ -92,7 +109,7 @@ export const useAlerts = () => {
       type: newAlert.type,
       severity: newAlert.severity || AlertSeverity.WARNING,
       message: newAlert.message || 'Alerta sin descripción',
-      userId: newAlert.sensor?.tank?.userId || user?.id || '',
+      userId: newAlert.userId || newAlert.sensor?.tank?.userId || user?.id || '',
       tankId: newAlert.sensor?.tank?.id,
       sensorId: newAlert.sensorId || newAlert.sensor?.id,
       resolved: newAlert.resolved || false,
@@ -143,7 +160,7 @@ export const useAlerts = () => {
           toast: true,
           position: 'top-end',
           showConfirmButton: false,
-          timer: 10000, // 10 segundos para alertas críticas
+          timer: 10000,
           timerProgressBar: true,
           customClass: {
             container: 'z-[9999]' 
@@ -157,19 +174,20 @@ export const useAlerts = () => {
       return prevAlerts;
     });
 
-  }, [user?.id]);
+  }, [user?.id, user?.role]);
 
   /**
-   * 🔥 CORRECCIÓN: markAsResolved con feedback visual
+   * 🔥 CORRECCIÓN: markAsResolved con feedback visual y actualización optimista
    */
   const markAsResolved = useCallback(async (alertId: string) => {
     try {
       console.log(`🔄 [useAlerts] Resolviendo alerta: ${alertId}`);
       
-      await alertsService.resolveAlert(alertId);
-      
-      // Actualizar estado local inmediatamente
+      // 🔥 CORRECCIÓN: Actualización optimista - remover inmediatamente
       setAlerts(prevAlerts => prevAlerts.filter(alert => alert.id !== alertId));
+      
+      // Llamar al servicio
+      await alertsService.resolveAlert(alertId);
       
       console.log(`✅ [useAlerts] Alerta ${alertId} resuelta`);
       
@@ -186,13 +204,16 @@ export const useAlerts = () => {
     } catch (err: any) {
       console.error(`❌ [useAlerts] Error resolviendo alerta:`, err);
       
+      // 🔥 CORRECCIÓN: Si falla, volver a cargar las alertas
+      await fetchAlerts();
+      
       Swal.fire({
         title: 'Error',
-        text: 'No se pudo resolver la alerta. Intente de nuevo.',
+        text: err.message || 'No se pudo resolver la alerta. Intente de nuevo.',
         icon: 'error'
       });
     }
-  }, []);
+  }, [fetchAlerts]);
 
   /**
    * 🔥 EFECTO PRINCIPAL: Inicialización y suscripción a WebSocket

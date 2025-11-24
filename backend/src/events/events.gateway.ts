@@ -342,4 +342,17 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     return false;
   }
+
+  /**
+  * 🔥 NUEVO: Método para enviar alerta a un usuario específico
+  */
+  public broadcastNewAlertToUser(userId: string, alertPayload: any) {
+    if (!userId) {
+      this.logger.warn('❌ No se puede emitir alerta: userId no proporcionado');
+      return;
+    }
+
+    this.logger.log(`🚨 Transmitiendo alerta a usuario: ${userId}`);
+    this.server.to(userId).emit('new-alert', alertPayload);
+  }
 }

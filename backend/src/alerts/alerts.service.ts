@@ -1,9 +1,9 @@
 /**
  * @file alerts.service.ts
  * @route backend/src/alerts
- * @description Servicio de alertas CORREGIDO con mapeo completo de datos
+ * @description Servicio de alertas CORREGIDO con resolución automática
  * @author kevin mariano
- * @version 1.3.0 // VERSIÓN CORREGIDA
+ * @version 2.0.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { EventsGateway } from '../events/events.gateway';
 import { Sensor, AlertType, AlertSeverity, sensors_type, SystemConfig, User, Prisma, Alert, Role } from '@prisma/client';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class AlertsService {
@@ -23,6 +24,70 @@ export class AlertsService {
     private readonly emailService: EmailService,
     private readonly eventsGateway: EventsGateway,
   ) {}
+
+  /**
+   * 🔥 NUEVO: Tarea programada para resolver alertas antiguas automáticamente
+   * Se ejecuta cada 5 minutos
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async autoResolveOldAlerts() {
+    this.logger.log('🔄 Ejecutando resolución automática de alertas...');
+    
+    try {
+      const now = new Date();
+      
+      // 🎯 Alertas CRÍTICAS: resolver después de 60 minutos
+      const criticalCutoff = new Date(now.getTime() - 60 * 60 * 1000);
+      
+      // 🎯 Alertas de ALTA/MEDIA severidad: resolver después de 30 minutos
+      const normalCutoff = new Date(now.getTime() - 30 * 60 * 1000);
+      
+      // Resolver alertas críticas antiguas
+      const criticalResolved = await this.prisma.alert.updateMany({
+        where: {
+          resolved: false,
+          severity: AlertSeverity.CRITICAL,
+          createdAt: {
+            lt: criticalCutoff,
+          },
+        },
+        data: {
+          resolved: true,
+          resolvedAt: now,
+        },
+      });
+
+      // Resolver alertas normales antiguas
+      const normalResolved = await this.prisma.alert.updateMany({
+        where: {
+          resolved: false,
+          severity: {
+            in: [AlertSeverity.HIGH, AlertSeverity.MEDIUM],
+          },
+          createdAt: {
+            lt: normalCutoff,
+          },
+        },
+        data: {
+          resolved: true,
+          resolvedAt: now,
+        },
+      });
+
+      const totalResolved = criticalResolved.count + normalResolved.count;
+
+      if (totalResolved > 0) {
+        this.logger.log(
+          `✅ Resolución automática completada: ${criticalResolved.count} críticas + ${normalResolved.count} normales = ${totalResolved} total`
+        );
+      }
+
+      return totalResolved;
+    } catch (error) {
+      this.logger.error('❌ Error en resolución automática de alertas:', error);
+      return 0;
+    }
+  }
 
   /**
    * Verifica si un usuario tiene activadas las notificaciones por email.
@@ -148,15 +213,35 @@ export class AlertsService {
     },
     affectedUser: User 
   ) {
-    // 🔥 CORRECCIÓN CLAVE: Incluir relaciones completas en la creación
+    // 🔥 CORRECCIÓN: Obtener el sensor con todas las relaciones
+    const sensorWithDetails = await this.prisma.sensor.findUnique({
+      where: { id: data.sensorId },
+      include: {
+        tank: {
+          include: {
+            user: true
+          }
+        }
+      }
+    });
+
+    if (!sensorWithDetails) {
+      this.logger.error(`❌ Sensor ${data.sensorId} no encontrado`);
+      return;
+    }
+
+    // 🔥 CORRECCIÓN CRÍTICA: Asignar el userId del propietario del tanque
     const newAlert = await this.prisma.alert.create({ 
-      data,
+      data: {
+        ...data,
+        userId: sensorWithDetails.tank.userId, // ✅ CORRECCIÓN: Asignar userId correcto
+      },
       include: { 
         sensor: { 
           include: { 
             tank: {
               include: {
-                user: true // ✅ Incluir usuario para tener info completa
+                user: true
               }
             } 
           } 
@@ -164,7 +249,7 @@ export class AlertsService {
       }
     });
 
-    this.logger.log(`🚨 Nueva alerta creada: ${newAlert.id} - ${newAlert.type} (${newAlert.severity})`);
+    this.logger.log(`🚨 Nueva alerta creada: ${newAlert.id} - ${newAlert.type} (${newAlert.severity}) para usuario ${newAlert.userId}`);
 
     // Obtener admins con sus datos completos
     const admins = await this.prisma.user.findMany({ 
@@ -192,7 +277,7 @@ export class AlertsService {
       recipients.set(affectedUser.email, affectedUser);
     }
 
-    // 🔥 CORRECCIÓN CLAVE: Broadcast con datos completos y serializables
+    // Broadcast con datos completos
     const alertPayload = {
       id: newAlert.id,
       type: newAlert.type,
@@ -201,7 +286,8 @@ export class AlertsService {
       value: newAlert.value,
       threshold: newAlert.threshold,
       resolved: newAlert.resolved,
-      createdAt: newAlert.createdAt.toISOString(), // ✅ Serializar fecha
+      userId: newAlert.userId, // ✅ CORRECCIÓN: Incluir userId
+      createdAt: newAlert.createdAt.toISOString(),
       resolvedAt: newAlert.resolvedAt?.toISOString() || null,
       sensorId: newAlert.sensorId,
       sensor: {
@@ -218,10 +304,13 @@ export class AlertsService {
       }
     };
 
-    // Broadcast a admins
+    // Broadcast solo a admins
     const adminIds = admins.map(admin => admin.id);
     this.logger.log(`📡 Broadcasting alerta a ${adminIds.length} admins`);
     this.eventsGateway.broadcastNewAlertToAdmins(adminIds, alertPayload);
+
+    // 🔥 CORRECCIÓN: Broadcast también al usuario afectado
+    this.eventsGateway.broadcastNewAlertToUser(affectedUser.id, alertPayload);
 
     // Enviar emails
     if (recipients.size === 0) {
@@ -241,7 +330,7 @@ export class AlertsService {
   }
   
   /**
-   * 🔥 CORRECCIÓN CLAVE: Retornar alertas con TODAS las relaciones necesarias
+   * 🔥 CORRECCIÓN: Filtrar alertas por usuario correctamente
    */
   async getUnresolvedAlerts(userId: string): Promise<Alert[]> {
     this.logger.log(`Obteniendo alertas no resueltas para el usuario: ${userId}`);
@@ -259,16 +348,11 @@ export class AlertsService {
       resolved: false,
     };
     
-    // Si NO es admin, filtrar por tanques del usuario
+    // 🔥 CORRECCIÓN: Si NO es admin, filtrar por userId directo
     if (user.role !== Role.ADMIN) {
-      where.sensor = {
-        tank: {
-          userId: userId,
-        },
-      };
+      where.userId = userId; // ✅ Filtrar por userId del alert
     }
 
-    // 🔥 CORRECCIÓN CLAVE: Include completo con relaciones
     const alerts = await this.prisma.alert.findMany({
       where: where,
       orderBy: { createdAt: 'desc' },
@@ -292,13 +376,46 @@ export class AlertsService {
       take: 50,
     });
 
-    this.logger.log(`✅ Retornando ${alerts.length} alertas no resueltas`);
+    this.logger.log(`✅ Retornando ${alerts.length} alertas no resueltas para usuario ${userId}`);
     
     return alerts;
   }
 
+  /**
+   * 🔥 CORRECCIÓN: Verificar permisos al resolver
+   */
   async resolveAlert(alertId: string, resolvedByUserId: string): Promise<Alert> {
     this.logger.log(`Resolviendo alerta ${alertId} por el usuario ${resolvedByUserId}`);
+    
+    // Verificar que el usuario tenga permiso
+    const alert = await this.prisma.alert.findUnique({
+      where: { id: alertId },
+      include: {
+        sensor: {
+          include: {
+            tank: true
+          }
+        }
+      }
+    });
+
+    if (!alert) {
+      throw new Error('Alerta no encontrada');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: resolvedByUserId }
+    });
+
+    if (!user) {
+      throw new Error('Usuario no encontrado');
+    }
+
+    // 🔥 CORRECCIÓN: Verificar permisos
+    if (user.role !== Role.ADMIN && alert.userId !== resolvedByUserId) {
+      throw new Error('No tiene permisos para resolver esta alerta');
+    }
+
     return this.prisma.alert.update({
       where: { id: alertId, resolved: false },
       data: {
@@ -308,6 +425,9 @@ export class AlertsService {
     });
   }
 
+  /**
+   * Función original para resolver alertas antiguas (mantener por compatibilidad)
+   */
   async resolveOldAlerts(daysOld: number): Promise<number> {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysOld); 

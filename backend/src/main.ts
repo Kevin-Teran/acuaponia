@@ -8,6 +8,13 @@
  * @copyright SENA 2025
  */
 
+import * as crypto from 'crypto';
+
+if (!global.crypto) {
+  // @ts-ignore
+  global.crypto = crypto;
+}
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';

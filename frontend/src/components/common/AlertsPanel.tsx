@@ -1,9 +1,9 @@
 /**
  * @file AlertsPanel.tsx
  * @route frontend/src/components/common
- * @description Panel de alertas CORREGIDO con renderizado robusto
+ * @description Panel de alertas CORREGIDO con renderizado robusto y filtrado por usuario
  * @author Kevin Mariano
- * @version 1.1.0 (VERSIÓN CORREGIDA)
+ * @version 2.0.0 (VERSIÓN FINAL CORREGIDA)
  * @since 1.0.0
  */
 
@@ -34,14 +34,16 @@ const getSeverityClasses = (severity: AlertSeverity) => {
         bg: 'bg-red-50 dark:bg-red-900/20', 
         border: 'border-red-500', 
         text: 'text-red-800 dark:text-red-300',
-        icon: <AlertCircle className="w-5 h-5" />
+        icon: <AlertCircle className="w-5 h-5" />,
+        badge: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300'
       };
     case AlertSeverity.WARNING: 
       return { 
         bg: 'bg-yellow-50 dark:bg-yellow-900/20', 
         border: 'border-yellow-500', 
         text: 'text-yellow-800 dark:text-yellow-300',
-        icon: <AlertTriangle className="w-5 h-5" />
+        icon: <AlertTriangle className="w-5 h-5" />,
+        badge: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300'
       };
     case AlertSeverity.INFO: 
     default:
@@ -49,7 +51,8 @@ const getSeverityClasses = (severity: AlertSeverity) => {
         bg: 'bg-blue-50 dark:bg-blue-900/20', 
         border: 'border-blue-500', 
         text: 'text-blue-800 dark:text-blue-300',
-        icon: <InfoIcon className="w-5 h-5" />
+        icon: <InfoIcon className="w-5 h-5" />,
+        badge: 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300'
       };
   }
 };
@@ -58,7 +61,7 @@ const getSeverityClasses = (severity: AlertSeverity) => {
  * 🔥 CORRECCIÓN: Componente de alerta individual con renderizado robusto
  */
 const AlertItem: React.FC<{ alert: Alert; onResolve: (id: string) => void }> = ({ alert, onResolve }) => {
-  const { bg, border, text, icon } = getSeverityClasses(alert.severity);
+  const { bg, border, text, icon, badge } = getSeverityClasses(alert.severity);
   
   // Mapeo de tipo de alerta a texto legible
   const alertTypeDisplay = alert.type
@@ -97,14 +100,13 @@ const AlertItem: React.FC<{ alert: Alert; onResolve: (id: string) => void }> = (
         
         {/* Contenido de la alerta */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <p className={cn('font-bold text-sm', text)}>
               {alertTypeDisplay}
             </p>
             <span className={cn(
               'px-2 py-0.5 text-xs font-semibold rounded-full',
-              'bg-white/50 dark:bg-black/20',
-              text
+              badge
             )}>
               {alert.severity}
             </span>
@@ -145,7 +147,8 @@ const AlertItem: React.FC<{ alert: Alert; onResolve: (id: string) => void }> = (
           'flex-shrink-0 p-2 rounded-full transition-all',
           'bg-white/70 hover:bg-white dark:bg-gray-700/70 dark:hover:bg-gray-700',
           'shadow-sm hover:shadow-md',
-          text
+          text,
+          'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
         )}
         title="Marcar como resuelta"
         aria-label="Marcar como resuelta"
@@ -179,6 +182,7 @@ export const AlertsPanel: React.FC<AlertPanelProps> = ({ isOpen, onClose, isOthe
           "fixed top-6 right-6 z-50 p-4 rounded-full shadow-xl transition-all duration-300",
           "bg-red-600 hover:bg-red-700 text-white dark:bg-red-700 dark:hover:bg-red-800",
           "flex items-center justify-center transform hover:scale-105",
+          "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500",
           { 'hidden': isOtherPanelOpen && !isOpen } 
         )}
       >
@@ -195,6 +199,7 @@ export const AlertsPanel: React.FC<AlertPanelProps> = ({ isOpen, onClose, isOthe
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300"
           onClick={onClose} 
+          aria-hidden="true"
         ></div>
       )}
 
@@ -205,12 +210,15 @@ export const AlertsPanel: React.FC<AlertPanelProps> = ({ isOpen, onClose, isOthe
           'bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700',
           isOpen ? 'translate-x-0' : 'translate-x-full'
         )}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="alerts-panel-title"
       >
         <div className="p-6 h-full flex flex-col">
           {/* Header */}
           <div className="flex justify-between items-center border-b border-gray-200 dark:border-gray-700 pb-4 mb-4">
             <div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+              <h2 id="alerts-panel-title" className="text-xl font-bold text-gray-900 dark:text-gray-100">
                 Alertas del Sistema
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -220,7 +228,7 @@ export const AlertsPanel: React.FC<AlertPanelProps> = ({ isOpen, onClose, isOthe
             <button 
               onClick={onClose} 
               aria-label="Cerrar Panel de Alertas"
-              className="p-2 rounded-full text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+              className="p-2 rounded-full text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
             >
               <XIcon className="w-6 h-6" />
             </button>
