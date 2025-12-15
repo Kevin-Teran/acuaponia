@@ -3,7 +3,7 @@
  * @route frontend/src/services
  * @description Servicio CORREGIDO para gestionar Socket.IO
  * @author Kevin Mariano
- * @version 2.0.1 - CORRECCIÓN TYPESCRIPT
+ * @version 2.0.2 - FIXED PATH
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -54,59 +54,40 @@ class SocketManager {
              this.socket.disconnect();
         }
 
-        // 🔥 CORRECCIÓN CRÍTICA: Construir URL correcta
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
-        if (!apiBaseUrl) {
-            this.logger.error('❌ NEXT_PUBLIC_API_URL no está definida');
-            throw new Error('URL de la API no definida');
+        // 🔥 CORRECCIÓN: Construir URL base limpia (http://host:port)
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+        let baseUrl;
+        try {
+            const urlObj = new URL(apiBaseUrl);
+            baseUrl = urlObj.origin; // Esto nos da "http://localhost:5001" sin subrutas
+        } catch (e) {
+            this.logger.error('❌ URL de API inválida, usando fallback local');
+            baseUrl = 'http://localhost:5001';
         }
-
-        // 🔥 FIX: Extraer solo el dominio base, sin /acuaponiaapi
-        const urlObj = new URL(apiBaseUrl);
-        const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
-        
-        this.logger.log(`🔗 URL base: ${baseUrl}`);
-        this.logger.log(`🔗 Path Socket.IO: /acuaponiaapi/socket.io/`);
         
         const options: Partial<ManagerOptions & SocketOptions> = {
-            // 🔥 CORRECCIÓN: El path debe coincidir con el @WebSocketGateway
-            path: '/acuaponiaapi/socket.io/',
+            // 🔥 CORRECCIÓN CRÍTICA: Path SIN barra al final para coincidir con el backend
+            path: '/acuaponiaapi/socket.io',
             
-            // Headers de autenticación
+            // Headers y Auth
             extraHeaders: { 
                 Authorization: `Bearer ${token}` 
             },
-            
-            // Configuración de reconexión
+            auth: {
+                token: `Bearer ${token}`,
+            },
+
+            // Transportes y Reconexión
+            transports: ['websocket', 'polling'],
             reconnectionAttempts: this.MAX_ATTEMPTS,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
             timeout: 20000,
-            
-            // Transportes
-            transports: ['websocket', 'polling'],
-            
-            // Auth en el handshake
-            auth: {
-                token: `Bearer ${token}`,
-            },
-            
-            // Forzar nueva conexión
             forceNew: true,
-            
-            // 🔥 IMPORTANTE: Upgrade automático a WebSocket
-            upgrade: true,
-            rememberUpgrade: true,
         };
 
-        this.logger.log(`🔗 Conectando a: ${baseUrl}`);
-        this.logger.log(`📋 Opciones:`, JSON.stringify({
-            path: options.path,
-            transports: options.transports,
-            timeout: options.timeout
-        }));
+        this.logger.log(`🔗 Conectando a: ${baseUrl}${options.path}`);
         
-        // 🔥 CORRECCIÓN: Usar baseUrl sin el /acuaponiaapi
         this.socket = io(baseUrl, options);
         this.registerEventListeners();
     }
@@ -129,13 +110,14 @@ class SocketManager {
         });
         
         this.socket.on('connect_error', (error: Error) => {
-            this.logger.error('❌ Error de conexión:', error.message);
+            // Filtrar logs de polling para no ensuciar la consola
+            if(error.message !== 'xhr poll error') {
+                this.logger.error('❌ Error de conexión:', error.message);
+            }
             
             if (error.message.includes('Invalid token')) {
                 this.logger.error('🔒 Token inválido - cerrando conexión');
                 this.close(); 
-            } else {
-                this.logger.error('🌐 Posible problema de red o servidor');
             }
         });
 
@@ -144,19 +126,15 @@ class SocketManager {
             
             if (reason === 'io server disconnect') {
                 this.logger.warn('⚠️ Servidor cerró la conexión');
-                this.startReconnectionProcess();
-            } else if (reason === 'transport close') {
-                this.logger.warn('⚠️ Transporte cerrado - reconectando...');
-                this.startReconnectionProcess();
+                // Intentar reconectar automáticamente si no fue manual
+                // this.startReconnectionProcess(); 
             }
         });
 
-        // 🔥 CORRECCIÓN: Tipar el parámetro data
         this.socket.on('connection_established', (data: any) => {
             this.logger.log('✅ Conexión establecida:', data);
         });
 
-        // 🔥 CORRECCIÓN: Tipar el parámetro data
         this.socket.on('connection_error', (data: any) => {
             this.logger.error('❌ Error en handshake:', data);
         });

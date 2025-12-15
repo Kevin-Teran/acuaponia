@@ -1,9 +1,9 @@
 /**
  * @file events.gateway.ts
  * @route /backend/src/events
- * @description Gateway de WebSockets completo y corregido con tipos apropiados.
+ * @description Gateway de WebSockets completo y corregido con tipos apropiados y CORS dinámico.
  * @author Kevin Mariano
- * @version 1.0.3
+ * @version 1.0.4
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -44,15 +44,24 @@ interface ReportWithUser extends Report {
   userId: string;
 }
 
-WebSocketGateway({
-  path: '/acuaponiaapi/socket.io',
+// 🔥 CORRECCIÓN: Lista de orígenes permitidos (Local + Producción)
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  process.env.FRONTEND_URL,
+  'https://tecnoparqueatlantico.com'
+].filter((origin): origin is string => !!origin);
+
+@WebSocketGateway({
+  path: '/acuaponiaapi/socket.io', // Sin barra al final
   cors: {
-    origin: process.env.FRONTEND_URL || 'https://tecnoparqueatlantico.com/acuaponia',
+    origin: allowedOrigins,
     credentials: true,
+    methods: ['GET', 'POST'],
   },
   transports: ['websocket', 'polling'],
 })
-
 export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
@@ -135,20 +144,14 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (clientInfo) {
       this.logger.log(`🔌 Cliente desconectado: ${clientInfo.userName} (${client.id})`);
       this.connectedClients.delete(client.id);
-    } else {
-      // this.logger.log(`🔌 Cliente no identificado desconectado: ${client.id}`);
     }
-
-    // this.logger.log(`📊 Total de clientes conectados: ${this.connectedClients.size}`);
   }
 
   /**
    * @method extractTokenFromHandshake
    * @description Extrae el token JWT del handshake del socket.
-   * CORRECCIÓN: Soporta headers y auth object para mayor compatibilidad.
    */
   private extractTokenFromHandshake(client: Socket): string | undefined {
-    // Intenta obtener el token de auth (Socket.io v4 client) o de headers
     const auth = client.handshake.auth?.token || client.handshake.headers?.authorization;
     
     if (!auth) return undefined;
@@ -166,14 +169,12 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * @description Alias para mantener compatibilidad con el código existente
    */
   public broadcastNewData(data: any) {
-    // this.logger.log('📊 broadcastNewData llamado - redirigiendo a broadcastNewSensorData');
     this.broadcastNewSensorData(data);
   }
 
   /**
    * @method broadcastNewSensorData
    * @description Emite nuevos datos de sensores a usuarios específicos.
-   * Este es el método principal que debes llamar desde tu servicio de sensores.
    */
   public broadcastNewSensorData(sensorData: SensorDataPayload | any) {
     const userId = sensorData.userId || sensorData.sensor?.tank?.userId;
@@ -200,8 +201,6 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       },
     };
-
-    // this.logger.log(`📊 Enviando datos de sensor a usuario ${userId}: ${sensorData.sensor.type} = ${sensorData.value}`);
     
     this.server.to(userId).emit('new_sensor_data', formattedData);
 
@@ -223,7 +222,6 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     this.logger.log(`📋 Enviando actualización de reporte a usuario ${report.userId}`);
     this.server.to(report.userId).emit('report_status_update', report);
-    
     this.server.to('admin_room').emit('report_status_update', report);
   }
 
@@ -235,7 +233,6 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to('admin_room').emit('new-alert', alertPayload);
 
     if (adminIds && adminIds.length > 0) {
-      // this.logger.log(`🚨 Transmitiendo nueva alerta a administradores: ${adminIds.join(', ')}`);
       adminIds.forEach(adminId => {
         this.server.to(adminId).emit('new-alert', alertPayload);
       });
@@ -253,14 +250,12 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /**
    * @SubscribeMessage test_broadcast
-   * @description Método de prueba para verificar que los WebSockets funcionan correctamente.
+   * @description Método de prueba.
    */
   @SubscribeMessage('test_broadcast')
   handleTestBroadcast(client: Socket, data: any) {
     const user = client.data.user;
-    if (!user) {
-      return { error: 'Usuario no autenticado' };
-    }
+    if (!user) return { error: 'Usuario no autenticado' };
 
     const testSensorData = {
       id: 'test-' + Date.now(),
@@ -280,7 +275,6 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
     };
 
-    // this.logger.log(`🧪 Enviando datos de prueba a ${user.name} (${user.id})`);
     this.broadcastNewSensorData(testSensorData);
 
     return { 
@@ -292,7 +286,6 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /**
    * @SubscribeMessage get_connection_info
-   * @description Obtiene información sobre la conexión actual.
    */
   @SubscribeMessage('get_connection_info')
   handleGetConnectionInfo(client: Socket) {
@@ -310,21 +303,12 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     };
   }
 
-  /**
-   * @method getConnectedClientsCount
-   * @description Obtiene el número de clientes conectados.
-   */
   public getConnectedClientsCount(): number {
     return this.connectedClients.size;
   }
 
-  /**
-   * @method getConnectedUsers
-   * @description Obtiene una lista de usuarios conectados.
-   */
   public getConnectedUsers(): Array<{ userId: string; userName: string; socketId: string }> {
     const users: Array<{ userId: string; userName: string; socketId: string }> = [];
-    
     this.connectedClients.forEach((clientInfo, socketId) => {
       users.push({
         userId: clientInfo.userId,
@@ -332,32 +316,21 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         socketId: socketId,
       });
     });
-
     return users;
   }
 
-  /**
-   * @method isUserConnected
-   * @description Verifica si un usuario específico está conectado.
-   */
   public isUserConnected(userId: string): boolean {
     for (const [, clientInfo] of this.connectedClients) {
-      if (clientInfo.userId === userId) {
-        return true;
-      }
+      if (clientInfo.userId === userId) return true;
     }
     return false;
   }
 
-  /**
-  * 🔥 NUEVO: Método para enviar alerta a un usuario específico
-  */
   public broadcastNewAlertToUser(userId: string, alertPayload: any) {
     if (!userId) {
       this.logger.warn('❌ No se puede emitir alerta: userId no proporcionado');
       return;
     }
-
     this.logger.log(`🚨 Transmitiendo alerta a usuario: ${userId}`);
     this.server.to(userId).emit('new-alert', alertPayload);
   }
