@@ -1,14 +1,38 @@
 /**
  * @file weatherService.ts
  * @route frontend/src/services
- * @description Servicio CORREGIDO para obtener datos del clima desde OpenWeatherMap API
+ * @description Servicio REFORZADO para obtener datos del clima desde OpenWeatherMap API.
+ * Soporta coordenadas (Lat, Lon) y nombres de ciudades.
  * @author Kevin Mariano
- * @version 2.0.0
+ * @version 2.1.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
 
 const WEATHER_API_KEY = process.env.NEXT_PUBLIC_OPENWEATHERMAP_API_KEY || '56661711020895ed3c361ae25d46de7a';
+
+interface OpenWeatherItem {
+  dt: number;
+  main: {
+    temp: number;
+    temp_min: number;
+    temp_max: number;
+    feels_like: number;
+    humidity: number;
+  };
+  weather: Array<{
+    description: string;
+    icon: string;
+  }>;
+}
+
+interface OpenWeatherResponse {
+  list: OpenWeatherItem[];
+  city?: {
+    name: string;
+    coord: { lat: number; lon: number };
+  };
+}
 
 export interface WeatherForecast {
   date: string;
@@ -22,151 +46,122 @@ export interface WeatherForecast {
 }
 
 /**
- * @description Valida y extrae coordenadas de diferentes formatos de ubicación
- * @param {string} location - Puede ser: "lat,lon", "lat, lon", o texto descriptivo
- * @returns {{ lat: number; lon: number } | null} Coordenadas válidas o null
+ * @description Intenta extraer coordenadas si el formato es "lat,lon"
  */
-const parseLocation = (location: string): { lat: number; lon: number } | null => {
-  if (!location || typeof location !== 'string') {
-    console.warn('Ubicación vacía o inválida');
-    return null;
-  }
+const parseCoordinates = (location: string): { lat: number; lon: number } | null => {
+  if (!location || typeof location !== 'string') return null;
 
-  // Limpiar espacios
   const cleaned = location.trim();
-
-  // Intentar parsear como "lat,lon"
   if (cleaned.includes(',')) {
     const parts = cleaned.split(',').map(part => parseFloat(part.trim()));
-    
     if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
       const [lat, lon] = parts;
-      
-      // Validar rangos válidos
       if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
         return { lat, lon };
       }
     }
   }
-
-  console.warn('No se pudo parsear la ubicación:', location);
   return null;
 };
 
 /**
- * @description Obtiene el pronóstico del clima para una ubicación específica
- * @param {string} location - Coordenadas en formato "lat,lon" (ej: "4.7110,-74.0721")
- * @param {number} days - Número de días de pronóstico (máx 5 días con API gratuita)
- * @returns {Promise<WeatherForecast[]>} Array con pronósticos diarios
+ * @description Obtiene el pronóstico del clima para una ubicación (Coords o Ciudad)
+ * @param {string} location - Puede ser coordenadas "4.71,-74.07" o ciudad "Barranquilla"
+ * @param {number} days - Número de días de pronóstico (máx 5 con API gratuita)
  */
 export const getWeatherForecast = async (
   location: string, 
-  days: number = 7
+  days: number = 5
 ): Promise<WeatherForecast[]> => {
   try {
-    // Intentar parsear la ubicación
-    const coords = parseLocation(location);
-    
-    if (!coords) {
-      console.warn('⚠️ Ubicación no válida, omitiendo datos del clima');
-      return []; // Retornar array vacío en lugar de lanzar error
-    }
-
-    const { lat, lon } = coords;
-
-    console.log(`🌤️ Obteniendo clima para: ${lat}, ${lon}`);
-
-    // Llamar a la API de OpenWeatherMap (5 day / 3 hour forecast)
-    const response = await fetch(
-      `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${WEATHER_API_KEY}&units=metric&lang=es`,
-      { cache: 'no-store' } // Evitar cache para datos actuales
-    );
-
-    if (!response.ok) {
-      console.error(`Error de API del clima: ${response.status}`);
-      return []; // Retornar vacío en lugar de error
-    }
-
-    const data = await response.json();
-
-    if (!data.list || data.list.length === 0) {
-      console.warn('API del clima retornó datos vacíos');
+    if (!location) {
+      console.warn('⚠️ Ubicación vacía, omitiendo clima.');
       return [];
     }
 
-    // Procesar datos y agrupar por día
-    const dailyForecasts = processForecastData(data.list, days);
-    
-    console.log(`✅ Clima obtenido: ${dailyForecasts.length} días`);
-    
-    return dailyForecasts;
+    let apiUrl = '';
+    const coords = parseCoordinates(location);
+
+    if (coords) {
+      console.log(`🌤️ Buscando clima por coordenadas: ${coords.lat}, ${coords.lon}`);
+      apiUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${coords.lat}&lon=${coords.lon}&appid=${WEATHER_API_KEY}&units=metric&lang=es`;
+    } else {
+      const cityQuery = encodeURIComponent(location.trim());
+      console.log(`🌤️ Buscando clima por ciudad: "${location}"`);
+      apiUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${cityQuery}&appid=${WEATHER_API_KEY}&units=metric&lang=es`;
+    }
+
+    const response = await fetch(apiUrl, { cache: 'no-store' });
+
+    if (!response.ok) {
+      // Manejo específico si la ciudad no existe (404)
+      if (response.status === 404) {
+        console.warn(`⚠️ Ciudad no encontrada: ${location}`);
+      } else {
+        console.error(`Error de API del clima: ${response.status}`);
+      }
+      return [];
+    }
+
+    const data: OpenWeatherResponse = await response.json();
+
+    if (!data.list || data.list.length === 0) {
+      return [];
+    }
+
+    return processForecastData(data.list, days);
+
   } catch (error: any) {
-    console.error('❌ Error obteniendo pronóstico del clima:', error.message);
-    // NO lanzar error, solo retornar array vacío
+    console.error('❌ Error crítico en servicio de clima:', error.message);
     return [];
   }
 };
 
 /**
- * @description Procesa los datos de la API y agrupa por día
- * @param {any[]} forecastList - Lista de pronósticos de la API
- * @param {number} days - Número de días a procesar
- * @returns {WeatherForecast[]} Pronósticos diarios procesados
+ * @description Procesa los datos crudos de la API
  */
-const processForecastData = (forecastList: any[], days: number): WeatherForecast[] => {
-  const dailyData: { [date: string]: any[] } = {};
+const processForecastData = (forecastList: OpenWeatherItem[], days: number): WeatherForecast[] => {
+  const dailyData: { [date: string]: OpenWeatherItem[] } = {};
 
-  // Agrupar por fecha
   forecastList.forEach((item) => {
-    const date = new Date(item.dt * 1000).toLocaleDateString('es-CO');
+    const date = new Date(item.dt * 1000).toLocaleDateString('es-CO', {
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    });
     
     if (!dailyData[date]) {
       dailyData[date] = [];
     }
-    
     dailyData[date].push(item);
   });
 
-  // Calcular promedios diarios
   const dailyForecasts: WeatherForecast[] = Object.entries(dailyData)
     .slice(0, days)
     .map(([date, items]) => {
       const temps = items.map(i => i.main.temp);
       const temps_min = items.map(i => i.main.temp_min);
       const temps_max = items.map(i => i.main.temp_max);
-      const feels_like = items.map(i => i.main.feels_like);
       const humidity = items.map(i => i.main.humidity);
+      const feels_like = items.map(i => i.main.feels_like);
       
-      // Usar el pronóstico del mediodía para descripción e icono
-      const middayItem = items[Math.floor(items.length / 2)];
+      const representativeItem = items[Math.floor(items.length / 2)];
 
       return {
         date,
-        temp: average(temps),
+        temp: Math.round(average(temps) * 10) / 10, 
         temp_min: Math.min(...temps_min),
         temp_max: Math.max(...temps_max),
-        feels_like: average(feels_like),
-        humidity: average(humidity),
-        description: middayItem.weather[0].description,
-        icon: middayItem.weather[0].icon,
+        feels_like: Math.round(average(feels_like) * 10) / 10,
+        humidity: Math.round(average(humidity)),
+        description: representativeItem.weather[0].description,
+        icon: representativeItem.weather[0].icon,
       };
     });
 
   return dailyForecasts;
 };
 
-/**
- * @description Calcula el promedio de un array de números
- */
-const average = (arr: number[]): number => {
-  return arr.reduce((a, b) => a + b, 0) / arr.length;
-};
+const average = (arr: number[]): number => arr.reduce((a, b) => a + b, 0) / arr.length;
 
-/**
- * @description Obtiene la URL del icono del clima
- * @param {string} iconCode - Código del icono (ej: "01d")
- * @returns {string} URL completa del icono
- */
 export const getWeatherIconUrl = (iconCode: string): string => {
   return `https://openweathermap.org/img/wn/${iconCode}@2x.png`;
 };
