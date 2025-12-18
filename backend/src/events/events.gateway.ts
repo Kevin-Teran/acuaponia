@@ -44,7 +44,6 @@ interface ReportWithUser extends Report {
   userId: string;
 }
 
-// 🔥 CORRECCIÓN: Lista de orígenes permitidos (Local + Producción)
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:3001',
@@ -54,7 +53,7 @@ const allowedOrigins = [
 ].filter((origin): origin is string => !!origin);
 
 @WebSocketGateway({
-  path: '/acuaponiaapi/socket.io', // Sin barra al final
+  path: '/acuaponiaapi/socket.io',
   cors: {
     origin: allowedOrigins,
     credentials: true,

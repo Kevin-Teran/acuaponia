@@ -336,13 +336,10 @@ export class AnalyticsService {
       timestamp: dateFilter,
       sensor: {
         tank: {
-          userId: targetUserId, // 🔒 Siempre filtrar por usuario
-          // Solo agregar tankId si NO es 'ALL'
+          userId: targetUserId,
           ...(filters.tankId && filters.tankId !== 'ALL' && { id: filters.tankId }),
         },
-        // Solo agregar sensorId si NO es 'ALL'
         ...(filters.sensorId && filters.sensorId !== 'ALL' && { id: filters.sensorId }),
-        // Solo agregar type si está especificado
         ...(filters.sensorType && { type: filters.sensorType as SensorTypePrisma }),
       },
     };
