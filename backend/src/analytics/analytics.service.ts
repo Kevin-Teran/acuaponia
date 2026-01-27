@@ -1,9 +1,9 @@
 /**
  * @file analytics.service.ts
  * @route backend/src/analytics/
- * @description Servicio de analíticas OPTIMIZADO con muestreo inteligente
+ * @description Servicio de analíticas OPTIMIZADO con motor estadístico tipo R (Pearson/Spearman Logic)
  * @author Kevin Mariano
- * @version 2.0.0
+ * @version 2.1.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -18,7 +18,7 @@ import { subDays, startOfDay, endOfDay, subMonths, subYears, parseISO, isValid }
 @Injectable()
 export class AnalyticsService {
   private readonly logger = new Logger(AnalyticsService.name);
-  private readonly MAX_POINTS = 500; // Máximo de puntos a retornar
+  private readonly MAX_POINTS = 500; 
 
   constructor(private prisma: PrismaService) {}
 
@@ -63,10 +63,8 @@ export class AnalyticsService {
   private applySampling<T>(data: T[], samplingFactor: number): T[] {
     if (samplingFactor <= 1 || data.length === 0) return data;
     
-    // Muestreo uniforme: toma cada N-ésimo elemento
     const sampled = data.filter((_, index) => index % samplingFactor === 0);
     
-    // Siempre incluir el último punto para continuidad visual
     if (data.length > 0 && !sampled.includes(data[data.length - 1])) {
       sampled.push(data[data.length - 1]);
     }
@@ -123,17 +121,14 @@ export class AnalyticsService {
     try {
       const where = this.buildWhereClause(filters, user);
       
-      // 1️⃣ Contar total de puntos
       const totalCount = await this.prisma.sensorData.count({ where });
       
-      // 2️⃣ Calcular muestreo óptimo
       const samplingFactor = this.calculateOptimalSampling(totalCount);
       
       this.logger.log(
         `📊 [TimeSeries] Total: ${totalCount} pts | Muestreo: 1:${samplingFactor} | Retorno: ~${Math.ceil(totalCount / samplingFactor)} pts`
       );
       
-      // 3️⃣ Obtener TODOS los datos (necesario para muestreo uniforme)
       const allData = await this.prisma.sensorData.findMany({
         where,
         orderBy: { timestamp: 'asc' },
@@ -151,12 +146,10 @@ export class AnalyticsService {
         },
       });
 
-      // 4️⃣ Aplicar muestreo
       const sampledData = this.applySampling(allData, samplingFactor);
       
       this.logger.log(`✅ [TimeSeries] Retornando: ${sampledData.length} puntos`);
       
-      // 5️⃣ Retornar con metadata
       return {
         data: sampledData,
         metadata: {
@@ -215,7 +208,7 @@ export class AnalyticsService {
 
   /**
    * @method getCorrelations
-   * @description Obtiene datos de correlación entre dos tipos de sensores CON MUESTREO
+   * @description Obtiene datos de correlación simple X vs Y (Legacy)
    */
   async getCorrelations(filters: CorrelationFiltersDto, user: User) {
     try {
@@ -267,13 +260,12 @@ export class AnalyticsService {
         },
       };
 
-      // Obtener datos con límite razonable
       const [dataX, dataY] = await Promise.all([
         this.prisma.sensorData.findMany({
           where: whereX,
           orderBy: { timestamp: 'asc' },
           select: { value: true, timestamp: true },
-          take: 1000, // Límite para correlación
+          take: 1000, 
         }),
         this.prisma.sensorData.findMany({
           where: whereY,
@@ -283,17 +275,13 @@ export class AnalyticsService {
         })
       ]);
 
-      this.logger.log(`📊 [Correlations] Datos obtenidos - X: ${dataX.length}, Y: ${dataY.length}`);
-
       if (dataX.length === 0 || dataY.length === 0) {
         this.logger.warn('⚠️ [Correlations] No se encontraron datos suficientes');
         return [];
       }
 
-      // Crear mapa de valores Y por timestamp normalizado
       const yMap = new Map(dataY.map((d) => [this.normalizeTimestamp(d.timestamp), d.value]));
       
-      // Generar puntos de correlación
       const correlationData = dataX
         .map((dx) => {
           const normalizedTime = this.normalizeTimestamp(dx.timestamp);
@@ -302,29 +290,143 @@ export class AnalyticsService {
         })
         .filter((item): item is { x: number; y: number } => item !== null);
 
-      // Aplicar muestreo si hay muchos puntos
       const samplingFactor = this.calculateOptimalSampling(correlationData.length);
-      const sampledCorrelation = this.applySampling(correlationData, samplingFactor);
-
-      this.logger.log(
-        `✅ [Correlations] Retornando: ${sampledCorrelation.length} puntos (muestreo: 1:${samplingFactor})`
-      );
-
-      return sampledCorrelation;
+      return this.applySampling(correlationData, samplingFactor);
 
     } catch (error) {
       this.logger.error('❌ [Correlations] Error:', error);
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
+      if (error instanceof BadRequestException) { throw error; }
       throw new BadRequestException('Error al obtener los datos de correlación');
     }
   }
 
   /**
-   * @method buildWhereClause
-   * @description Construye la cláusula WHERE con validación mejorada
+   * @method getAdvancedCorrelationMatrix
+   * @description Implementación ESTADÍSTICA ROBUSTA (Tipo R cor/pearson).
+   * Genera una matriz completa de correlación entre todas las variables disponibles.
    */
+  async getAdvancedCorrelationMatrix(filters: AnalyticsFiltersDto, user: User) {
+    try {
+      const where = this.buildWhereClause(filters, user);
+      
+      const rawData = await this.prisma.sensorData.findMany({
+        where,
+        select: {
+          timestamp: true,
+          value: true,
+          sensor: { select: { type: true } }
+        },
+        orderBy: { timestamp: 'asc' }
+      });
+
+      if (rawData.length < 10) return { matrix: [], warning: "Insuficientes datos para análisis estadístico (Min 10 pts)" };
+
+      const timeMap = new Map<string, Record<string, number[]>>();
+
+      rawData.forEach(d => {
+        const timeKey = new Date(d.timestamp).setMinutes(0, 0, 0).toString();
+        
+        if (!timeMap.has(timeKey)) {
+          timeMap.set(timeKey, {});
+        }
+        const entry = timeMap.get(timeKey);
+        const type = d.sensor.type;
+
+        if (!entry[type]) entry[type] = [];
+        entry[type].push(d.value);
+      });
+
+      const alignedData: Record<string, number[]> = {};
+      const sensorTypes = [...new Set(rawData.map(d => d.sensor.type))];
+
+      sensorTypes.forEach(t => alignedData[t] = []);
+
+      for (const [_, sensors] of timeMap) {
+        sensorTypes.forEach(type => {
+            if (sensors[type] && sensors[type].length > 0) {
+                const avg = sensors[type].reduce((a, b) => a + b, 0) / sensors[type].length;
+                alignedData[type].push(avg);
+            } else {
+                alignedData[type].push(null); 
+            }
+        });
+      }
+
+      const matrix = [];
+      
+      for (const typeX of sensorTypes) {
+        const row = { variable: typeX, correlations: {} };
+        
+        for (const typeY of sensorTypes) {
+          if (typeX === typeY) {
+            row.correlations[typeY] = 1.0; 
+            continue;
+          }
+
+          const validPairs = alignedData[typeX].map((val, i) => ({ x: val, y: alignedData[typeY][i] }))
+                                               .filter(p => p.x !== null && p.y !== null);
+
+          row.correlations[typeY] = this.calculatePearsonCorrelation(validPairs);
+        }
+        matrix.push(row);
+      }
+
+      return {
+        matrix,
+        sampleSize: timeMap.size,
+        interpretation: this.generateStatisticalInsight(matrix)
+      };
+
+    } catch (error) {
+      this.logger.error('Error en matriz de correlación avanzada:', error);
+      throw new BadRequestException('Error calculando estadísticas avanzadas');
+    }
+  }
+
+  private calculatePearsonCorrelation(data: { x: number, y: number }[]): number {
+    const n = data.length;
+    if (n < 2) return 0;
+
+    const sumX = data.reduce((acc, p) => acc + p.x, 0);
+    const sumY = data.reduce((acc, p) => acc + p.y, 0);
+    const sumXY = data.reduce((acc, p) => acc + p.x * p.y, 0);
+    const sumX2 = data.reduce((acc, p) => acc + p.x * p.x, 0);
+    const sumY2 = data.reduce((acc, p) => acc + p.y * p.y, 0);
+
+    const numerator = (n * sumXY) - (sumX * sumY);
+    const denominator = Math.sqrt(((n * sumX2) - (sumX * sumX)) * ((n * sumY2) - (sumY * sumY)));
+
+    if (denominator === 0) return 0;
+    return parseFloat((numerator / denominator).toFixed(4));
+  }
+
+  private generateStatisticalInsight(matrix: any[]): string[] {
+    const insights = [];
+    const seenPairs = new Set();
+
+    matrix.forEach(row => {
+      Object.entries(row.correlations).forEach(([key, val]: [string, number]) => {
+        if (row.variable !== key) {
+           const pairId = [row.variable, key].sort().join('-');
+           if (seenPairs.has(pairId)) return;
+           seenPairs.add(pairId);
+
+           const strength = Math.abs(val);
+           if (strength > 0.6) { 
+             const direction = val > 0 ? "positiva" : "negativa"; 
+             const magnitude = strength > 0.8 ? "muy fuerte" : "moderada";
+             
+             insights.push(
+               `Correlación ${direction} ${magnitude} (r=${val}) entre ${row.variable} y ${key}. ` +
+               (val < 0 ? `(Cuando ${row.variable} sube, ${key} tiende a bajar).` : `(Se mueven en la misma dirección).`)
+             );
+           }
+        }
+      });
+    });
+    return insights;
+  }
+
   private buildWhereClause(
     filters: AnalyticsFiltersDto,
     user: User,
@@ -347,15 +449,10 @@ export class AnalyticsService {
     return whereClause;
   }
 
-  /**
-   * @method getDateFilter
-   * @description Genera el filtro de fechas basado en el rango especificado
-   */
   private getDateFilter(range?: string, startDate?: string, endDate?: string): { gte: Date; lte: Date } {
     if (startDate && endDate) {
       const start = parseISO(startDate);
       const end = parseISO(endDate);
-      
       if (isValid(start) && isValid(end)) {
         return { gte: start, lte: end };
       }
@@ -371,10 +468,6 @@ export class AnalyticsService {
     }
   }
 
-  /**
-   * @method resolveTargetUserId
-   * @description Resuelve el ID del usuario objetivo basado en permisos
-   */
   private resolveTargetUserId(requestedUserId: string | undefined, currentUser: User): string {
     if (currentUser.role === Role.ADMIN && requestedUserId) {
       return requestedUserId;
@@ -382,16 +475,12 @@ export class AnalyticsService {
     return currentUser.id;
   }
 
-  /**
-   * @method calculateVariance
-   * @description Calcula la varianza de los datos
-   */
   private async calculateVariance(where: Prisma.SensorDataWhereInput): Promise<number> {
     try {
       const data = await this.prisma.sensorData.findMany({ 
         where,
         select: { value: true },
-        take: 1000, // Límite para cálculo de varianza
+        take: 1000, 
       });
 
       if (data.length < 2) return 0;
@@ -407,10 +496,6 @@ export class AnalyticsService {
     }
   }
 
-  /**
-   * @method normalizeTimestamp
-   * @description Normaliza timestamps para permitir correlación con tolerancia de tiempo
-   */
   private normalizeTimestamp(timestamp: Date): string {
     const normalized = new Date(timestamp);
     normalized.setSeconds(0, 0); 

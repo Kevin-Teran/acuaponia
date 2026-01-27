@@ -19,13 +19,11 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import LoadingScreen from './loading'; 
-// Componentes de Botones Flotantes Importados
 import { AlertsPanel } from '@/components/common/AlertsPanel';
 import { AiAssistantButton } from '@/components/common/AiAssistantButton'; 
 import { clsx } from 'clsx';
-import { Menu, X } from 'lucide-react'; // Iconos para el botón de móvil
+import { Menu, X } from 'lucide-react'; 
 
-// Componente para el botón de abrir/cerrar sidebar en móvil
 const MobileMenuButton: React.FC<{ isOpen: boolean, onClick: () => void }> = ({ isOpen, onClick }) => {
     const Icon = isOpen ? X : Menu;
     return (

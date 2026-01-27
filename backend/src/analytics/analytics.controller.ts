@@ -1,9 +1,9 @@
 /**
  * @file analytics.controller.ts
  * @route backend/src/analytics/
- * @description Controlador optimizado con validación mejorada
+ * @description Controlador optimizado con endpoints estadísticos avanzados
  * @author Kevin Mariano
- * @version 2.0.0
+ * @version 2.1.0
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -83,7 +83,6 @@ export class AnalyticsController {
 
       const result = await this.analyticsService.getTimeSeries(filters, user);
       
-      // Log de metadata útil
       if (result.metadata) {
         this.logger.log(
           `✅ [Analytics] Serie temporal generada: ${result.metadata.returnedPoints} pts (${result.metadata.compressionRatio} del total)`
@@ -126,7 +125,7 @@ export class AnalyticsController {
 
   /**
    * @route GET /analytics/correlations
-   * @description Obtiene correlaciones entre sensores
+   * @description Obtiene correlaciones simples (Legacy)
    */
   @Get('correlations')
   async getCorrelations(
@@ -146,8 +145,6 @@ export class AnalyticsController {
         sensorTypeX: rawFilters.sensorTypeX || SensorType.TEMPERATURE,
         sensorTypeY: rawFilters.sensorTypeY || SensorType.PH,
       };
-
-      this.logger.log(`🧹 [Analytics] Filtros procesados:`, JSON.stringify(filters));
       
       this.validateCorrelationFiltersManual(filters);
 
@@ -162,9 +159,25 @@ export class AnalyticsController {
   }
 
   /**
-   * @method validateBasicFilters
-   * @description Valida filtros básicos de analíticas
+   * @route GET /analytics/matrix
+   * @description NUEVO: Obtiene la matriz de correlación completa (Estilo R)
    */
+  @Get('matrix')
+  async getCorrelationMatrix(
+    @Query() filters: AnalyticsFiltersDto, 
+    @CurrentUser() user: User
+  ) {
+    try {
+      this.logger.log(`🧮 [Analytics] Generando matriz estadística multivariada para usuario ${user.id}`);
+      this.validateBasicFilters(filters);
+      return await this.analyticsService.getAdvancedCorrelationMatrix(filters, user);
+    } catch (error) {
+      this.logger.error('❌ [Analytics] Error en getCorrelationMatrix:', error);
+      if (error instanceof BadRequestException) { throw error; }
+      throw new BadRequestException('Error al generar la matriz estadística');
+    }
+  }
+
   private validateBasicFilters(filters: AnalyticsFiltersDto): void {
     if (filters.sensorType && !Object.values(SensorType).includes(filters.sensorType as SensorType)) {
       throw new BadRequestException(`Tipo de sensor inválido: ${filters.sensorType}`);
@@ -188,28 +201,19 @@ export class AnalyticsController {
     }
   }
 
-  /**
-   * @method validateCorrelationFiltersManual
-   * @description Valida filtros específicos para correlaciones
-   */
   private validateCorrelationFiltersManual(filters: CorrelationFiltersDto): void {
     this.validateBasicFilters(filters);
 
     if (!Object.values(SensorType).includes(filters.sensorTypeX as SensorType)) {
-      this.logger.error(`❌ [Analytics] Tipo de sensor X inválido: ${filters.sensorTypeX}`);
-      throw new BadRequestException(`Tipo de sensor X inválido: ${filters.sensorTypeX}. Valores válidos: ${Object.values(SensorType).join(', ')}`);
+      throw new BadRequestException(`Tipo de sensor X inválido: ${filters.sensorTypeX}`);
     }
 
     if (!Object.values(SensorType).includes(filters.sensorTypeY as SensorType)) {
-      this.logger.error(`❌ [Analytics] Tipo de sensor Y inválido: ${filters.sensorTypeY}`);
-      throw new BadRequestException(`Tipo de sensor Y inválido: ${filters.sensorTypeY}. Valores válidos: ${Object.values(SensorType).join(', ')}`);
+      throw new BadRequestException(`Tipo de sensor Y inválido: ${filters.sensorTypeY}`);
     }
 
     if (filters.sensorTypeX === filters.sensorTypeY) {
-      this.logger.error(`❌ [Analytics] Tipos de sensor iguales: X=${filters.sensorTypeX}, Y=${filters.sensorTypeY}`);
-      throw new BadRequestException('Los tipos de sensor X e Y deben ser diferentes para realizar una correlación');
+      throw new BadRequestException('Los tipos de sensor X e Y deben ser diferentes');
     }
-
-    this.logger.log(`✅ [Analytics] Validación de correlación exitosa: X=${filters.sensorTypeX}, Y=${filters.sensorTypeY}`);
   }
 }

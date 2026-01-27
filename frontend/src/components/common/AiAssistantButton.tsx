@@ -3,20 +3,18 @@
  * @description Implementa el botón flotante y el panel lateral de chat con toda la lógica del asistente de IA.
  * Se fija en la esquina inferior derecha (bottom-6, right-6).
  * @author Kevin Mariano
- * @version 1.0.6 // Versión final de Layout y Control de Ocultamiento
- * @since 1.0.0
+ * @version 1.0.6 
  * @copyright SENA 2025
  */
 
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Card } from '@/components/common/Card';
 import { useAuth } from '@/context/AuthContext';
 import { Bot, Sparkles, Clipboard, Trash2, Send, X, Bot as BotIconComponent } from 'lucide-react'; 
 import { clsx } from 'clsx';
 import api from '@/config/api'; 
-const cn = (...classes: (string | boolean | null | undefined)[]) => classes.filter(Boolean).join(' ');
+import Link from 'next/link'; // Importar Link para navegación interna
 
 const XIcon = X; 
 const BotIcon = BotIconComponent;
@@ -28,11 +26,49 @@ type Message = {
   command?: any; 
 };
 
-const PREGUNTAS_SUGERIDAS: string[] = [
-  '¿Cuál es el estado general del sistema?',
-  'Analiza los niveles de pH de las últimas 48 horas.',
-  '¿Hay alguna recomendación para el oxígeno disuelto?',
+const PREGUNTAS_DEFAULT: string[] = [
+  '¿Estado del sistema?',
+  'Analiza el pH (48h)',
+  'Crear un tanque',
 ];
+
+// --- Componente para renderizar texto con enlaces Markdown [Texto](url) ---
+const FormattedMessage = ({ text }: { text: string }) => {
+  // Expresión regular para capturar [Texto](Url)
+  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  // Iterar sobre las coincidencias
+  while ((match = linkRegex.exec(text)) !== null) {
+    // Texto antes del enlace
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    
+    // El enlace en sí
+    parts.push(
+      <Link 
+        key={match.index} 
+        href={match[2]} 
+        className="text-emerald-200 hover:text-white underline font-semibold transition-colors mx-1"
+      >
+        {match[1]}
+      </Link>
+    );
+    
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Texto restante
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  return <p className="whitespace-pre-wrap leading-relaxed">{parts}</p>;
+};
 
 const UserAvatar = ({ name }: { name: string }) => {
   const getInitials = (name: string) => {
@@ -49,45 +85,28 @@ const UserAvatar = ({ name }: { name: string }) => {
   );
 };
 
+// Procesador de texto para limpiar JSON residuales si los hubiera
 const processAIResponse = (rawText: string) => {
     let cleanText = rawText;
     let command = null;
 
-    const commandBlockRegex = /[\s\S]*?/g;
-    cleanText = cleanText.replace(commandBlockRegex, '').trim();
+    // Limpieza agresiva de bloques JSON o markdown de código
+    cleanText = cleanText.replace(/:::ACTION[\s\S]*?:::/g, '').trim(); // Eliminar bloque ACTION si se filtró
     cleanText = cleanText.replace(/```[\s\S]*?```/g, '').trim();
-    cleanText = cleanText.replace(/'''[\s\S]*?'''/g, '').trim();
-    cleanText = cleanText.replace(/\{[\s\S]*?\}/g, '').trim();
-    cleanText = cleanText.replace(/`{1,3}[^`]*`{1,3}/g, '').trim();
     cleanText = cleanText.replace(/^\s*(json|type|message|id|respuesta)\s*$/gmi, '').trim();
-    cleanText = cleanText.replace(/^\s*\.{2,}\s*$/gm, '').trim();
-    cleanText = cleanText.replace(/^["']+|["']+$/g, '').trim();
     
-    const lines = cleanText.split('\n');
-    const filteredLines = lines.filter(line => {
-      const trimmedLine = line.trim();
-      if (trimmedLine.includes('":') || trimmedLine.includes('{"') || trimmedLine.includes('"}')) {
-        return false;
-      }
-      if (/^[\{\}\[\]:,"]*$/.test(trimmedLine)) {
-        return false;
-      }
-      return trimmedLine.length > 0;
-    });
-    cleanText = filteredLines.join('\n').trim();
-
+    // Normalizar saltos de línea
     cleanText = cleanText.replace(/\n{3,}/g, '\n\n').trim();
-    cleanText = cleanText.replace(/\s{2,}/g, ' ').trim();
 
-    if (cleanText.length < 10) {
-      cleanText = 'Lo siento, no pude procesar tu consulta correctamente. Por favor, intenta reformular tu pregunta.';
+    if (cleanText.length < 2) {
+      cleanText = 'Procesando acción... (Por favor revisa el resultado).';
     }
 
     return { cleanText, command };
 };
 
 interface AiAssistantButtonProps {
-    isOtherPanelOpen: boolean; // Para saber si el AlertsPanel está abierto
+    isOtherPanelOpen: boolean; 
     setIsOpen: (isOpen: boolean) => void;
     isOpen: boolean;
 }
@@ -99,6 +118,9 @@ export const AiAssistantButton: React.FC<AiAssistantButtonProps> = ({ isOtherPan
   const [messages, setMessages] = useState<Message[]>([]);
   const [cargando, setCargando] = useState<boolean>(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  
+  // Estado para sugerencias dinámicas (Botones de confirmación)
+  const [sugerencias, setSugerencias] = useState<string[]>(PREGUNTAS_DEFAULT);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -118,12 +140,27 @@ export const AiAssistantButton: React.FC<AiAssistantButtonProps> = ({ isOtherPan
       if (messages.length === 0 && !cargando && user) {
            setMessages([{
                id: 1,
-               text: `Hola ${user.name.split(' ')[0]}, soy ACUAGENIUS, tu asistente de IA. ¿En qué puedo ayudarte con tu sistema hoy?`,
+               text: `Hola ${user.name.split(' ')[0]}, soy ACUAGENIUS. ¿Qué hacemos hoy?`,
                sender: 'ai'
            }]);
       }
   }, [messages.length, cargando, user]);
 
+  // Efecto para detectar si la IA pide confirmación y cambiar los botones
+  useEffect(() => {
+    if (messages.length > 0) {
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg.sender === 'ai') {
+            const textLower = lastMsg.text.toLowerCase();
+            // Detectar palabras clave de confirmación
+            if (textLower.includes('¿confirmas') || textLower.includes('¿estás seguro') || textLower.includes('confirmar')) {
+                setSugerencias(['✅ Sí, confirmo', '❌ Cancelar']);
+            } else {
+                setSugerencias(PREGUNTAS_DEFAULT);
+            }
+        }
+    }
+  }, [messages]);
 
   const sendMessage = useCallback(async (pregunta: string) => {
     if (!pregunta.trim() || cargando) return;
@@ -132,15 +169,9 @@ export const AiAssistantButton: React.FC<AiAssistantButtonProps> = ({ isOtherPan
     setMessages(prev => [...prev, userMessage]);
     setInput('');
 
-    const esPreguntaValida = pregunta.trim().length > 3 && /[a-z]/i.test(pregunta) && /[aeiou]/i.test(pregunta);
-    if (!esPreguntaValida) {
-      setMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        text: 'Lo siento, no he entendido tu pregunta. Por favor, intenta ser más específico.',
-        sender: 'ai'
-      }]);
-      return;
-    }
+    // --- VALIDACIÓN CORREGIDA: Permitir "Si", "No", "Ok" ---
+    if (pregunta.trim().length === 0) return; 
+    // Eliminamos la validación regex estricta que bloqueaba "si"
 
     setCargando(true);
     try {
@@ -150,21 +181,28 @@ export const AiAssistantButton: React.FC<AiAssistantButtonProps> = ({ isOtherPan
 
       setMessages(prev => [...prev, { id: Date.now() + 1, text: cleanText, sender: 'ai', command }]);
     } catch (error: any) {
-      const errorMsg = error.response?.data?.message || 'Error al contactar al servidor.';
-      setMessages(prev => [...prev, { id: Date.now() + 1, text: `Error: ${errorMsg}. Verifique la API de Groq en el backend.`, sender: 'ai' }]);
+      const errorMsg = error.response?.data?.message || 'Error de conexión.';
+      setMessages(prev => [...prev, { id: Date.now() + 1, text: `⚠️ Error: ${errorMsg}`, sender: 'ai' }]);
     } finally {
       setCargando(false);
-      inputRef.current?.focus();
+      // Mantener foco en input salvo en móviles para no abrir teclado
+      if (window.innerWidth > 640) {
+          inputRef.current?.focus();
+      }
     }
-  }, [cargando, isOpen, setIsOpen]);
+  }, [cargando]);
   
   const handleFormSubmit = (e: React.FormEvent) => { e.preventDefault(); sendMessage(input); };
+  
   const handleCopy = (text: string, id: number) => { 
+      // Limpiar markdown de links para copiar solo texto
+      const cleanText = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
+      
       if (navigator.clipboard) {
-          navigator.clipboard.writeText(text);
+          navigator.clipboard.writeText(cleanText);
       } else {
           const textarea = document.createElement('textarea');
-          textarea.value = text;
+          textarea.value = cleanText;
           document.body.appendChild(textarea);
           textarea.select();
           document.execCommand('copy');
@@ -173,13 +211,13 @@ export const AiAssistantButton: React.FC<AiAssistantButtonProps> = ({ isOtherPan
       setCopiedId(id); 
       setTimeout(() => setCopiedId(null), 2000); 
   };
-  const handleClearChat = () => setMessages([]);
-
-
-  // --- Renderización del Botón Flotante y Panel Lateral ---
+  
+  const handleClearChat = () => {
+      setMessages([]);
+      setSugerencias(PREGUNTAS_DEFAULT);
+  };
 
   const floatingButtonClasses = clsx(
-    // POSICIÓN INFERIOR DERECHA: bottom-6 right-6
     "fixed bottom-6 right-6 z-50 p-4 rounded-full shadow-xl transition-all duration-300", 
     "bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-emerald-700 dark:hover:bg-emerald-800",
     "flex items-center justify-center transform hover:scale-105"
@@ -187,130 +225,155 @@ export const AiAssistantButton: React.FC<AiAssistantButtonProps> = ({ isOtherPan
   
   return (
     <div className='relative'>
-      {/* 1. Botón Flotante para el Asistente IA */}
+      {/* Botón Flotante */}
       <button
         onClick={togglePanel}
         aria-label="Abrir Asistente de IA"
-        // Ocultar si el panel de IA está cerrado Y el otro (Alertas) está abierto
         className={clsx(floatingButtonClasses, { 'hidden': isOtherPanelOpen && !isOpen })} 
       >
         <BotIcon size={24} />
       </button>
 
-      {/* 2. Panel de Chat del Asistente IA */}
-      
-      {/* Overlay para cerrar el panel al hacer clic fuera */}
+      {/* Panel de Chat */}
       {isOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-[49]" 
-          onClick={togglePanel} 
-        ></div>
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[49]" onClick={togglePanel}></div>
       )}
 
-      {/* Contenedor del panel deslizable */}
       <div
         className={clsx(
-          // FIX CLAVE DE LAYOUT: h-full y flex-col
-          'fixed bottom-0 right-0 h-full w-full sm:w-96 shadow-2xl z-50 transition-transform duration-300 transform', 
-          'bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col rounded-t-xl',
+          'fixed bottom-0 right-0 h-[100dvh] w-full sm:w-[400px] shadow-2xl z-50 transition-transform duration-300 transform', 
+          'bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col',
           isOpen ? 'translate-x-0' : 'translate-x-full'
         )}
       >
-        
-        
-          {/* Cabecera del Panel (flex-shrink-0) */}
-          <header className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-             <div className='flex items-center gap-2'>
-                <BotIcon size={20} className='text-emerald-600' />
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">ACUAGENIUS (Asistente IA)</h2>
+          {/* Cabecera */}
+          <header className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-800/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+             <div className='flex items-center gap-2.5'>
+                <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
+                    <BotIcon size={20} className='text-emerald-600 dark:text-emerald-400' />
+                </div>
+                <div>
+                    <h2 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">ACUAGENIUS</h2>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Asistente Inteligente</p>
+                </div>
              </div>
-             <div className="flex space-x-2">
+             <div className="flex items-center gap-1">
                 {messages.length > 0 && (
-                    <button onClick={handleClearChat} className="flex items-center gap-1 p-1 text-sm font-medium text-gray-500 dark:text-gray-400 bg-transparent rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 transition-all">
-                        <Trash2 size={16} />
+                    <button onClick={handleClearChat} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors" title="Borrar chat">
+                        <Trash2 size={18} />
                     </button>
                 )}
-                <button 
-                    onClick={togglePanel} 
-                    aria-label="Cerrar Asistente"
-                    className="p-1 rounded-full text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                >
+                <button onClick={togglePanel} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full transition-colors">
                     <XIcon size={24} />
                 </button>
              </div>
           </header>
         
-          {/* Cuerpo del Chat (Mensajes) - USAR flex-grow DIRECTAMENTE */}
-          <div className="flex-grow overflow-y-auto p-4 sm:p-6 space-y-6 bg-gray-50 dark:bg-gray-900/50">
+          {/* Cuerpo del Chat */}
+          <div className="flex-grow overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-[#0B1120]">
             {messages.length === 0 && (
-              <div className="text-center text-gray-500 dark:text-gray-400 h-full flex flex-col justify-center items-center p-4">
-                <BotIcon size={48} className="mb-4 text-gray-400" />
-                <h2 className="text-lg font-semibold">Bienvenido al Asistente</h2>
-                <p className="text-sm max-w-sm mx-auto">Puedes empezar saludando o usando una de las sugerencias.</p>
+              <div className="h-full flex flex-col justify-center items-center text-center p-6 opacity-60">
+                <BotIcon size={64} className="mb-4 text-gray-300 dark:text-gray-600" />
+                <p className="text-sm text-gray-500">Hazme una pregunta o pídeme una acción.</p>
               </div>
             )}
             
             {messages.map((msg) => (
-              <div key={msg.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className={clsx('group flex items-start gap-3 sm:gap-4', { 'justify-end': msg.sender === 'user' })}>
-                  {msg.sender === 'ai' && (
-                    <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                      <BotIcon size={20} className="text-emerald-600 dark:text-emerald-400"/>
-                    </div>
-                  )}
-                  <div className={clsx('relative max-w-xs md:max-w-md rounded-xl px-4 py-3 text-sm', {
-                    'bg-emerald-600 text-white': msg.sender === 'user',
-                    'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200': msg.sender === 'ai',
-                  })}>
-                    <p className="whitespace-pre-wrap">{msg.text}</p>
+              <div key={msg.id} className={clsx("flex gap-3", msg.sender === 'user' ? "justify-end" : "justify-start")}>
+                
+                {msg.sender === 'ai' && (
+                   <div className="flex-shrink-0 mt-1">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm">
+                        <BotIcon size={16} className="text-white" />
+                      </div>
+                   </div>
+                )}
+
+                <div className={clsx(
+                    "relative max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm", 
+                    msg.sender === 'user' 
+                        ? "bg-emerald-600 text-white rounded-tr-none" 
+                        : "bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-tl-none border border-gray-100 dark:border-gray-600"
+                )}>
+                    {msg.sender === 'ai' ? (
+                        <FormattedMessage text={msg.text} />
+                    ) : (
+                        <p className="whitespace-pre-wrap">{msg.text}</p>
+                    )}
                     
                     {msg.sender === 'ai' && (
-                      <button onClick={() => handleCopy(msg.text, msg.id)} className="absolute -top-2 -right-2 p-1.5 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-full text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {copiedId === msg.id ? <span className="text-emerald-500 text-xs">¡Ok!</span> : <Clipboard size={14} />}
+                      <button 
+                        onClick={() => handleCopy(msg.text, msg.id)} 
+                        className="absolute -bottom-5 right-0 text-gray-400 hover:text-emerald-500 text-xs flex items-center gap-1 opacity-0 hover:opacity-100 transition-opacity"
+                      >
+                        {copiedId === msg.id ? 'Copiado' : <Clipboard size={12} />}
                       </button>
                     )}
-                  </div>
-                  {msg.sender === 'user' && <UserAvatar name={user?.name || 'Usuario'} />}
                 </div>
+
+                {msg.sender === 'user' && (
+                    <div className="flex-shrink-0 mt-1">
+                       <UserAvatar name={user?.name || 'U'} />
+                    </div>
+                )}
               </div>
             ))}
+            
             {cargando && (
-              <div className="flex items-start gap-4 animate-in fade-in">
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center"> <BotIcon size={24} className='text-emerald-600'/> </div>
-                <div className="bg-gray-100 dark:bg-gray-700 rounded-xl px-4 py-3 flex items-center">
-                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse-dot [animation-delay:0s]"></span>
-                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse-dot [animation-delay:0.2s] mx-1"></span>
-                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse-dot [animation-delay:0.4s]"></span>
-                </div>
+              <div className="flex items-center gap-3">
+                 <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center animate-pulse">
+                    <BotIcon size={16} className="text-gray-400" />
+                 </div>
+                 <div className="flex space-x-1 bg-gray-200 dark:bg-gray-700 rounded-full px-3 py-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                 </div>
               </div>
             )}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Area (flex-shrink-0) */}
-          <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
-            <div className="hidden sm:flex flex-wrap gap-2 mb-3">
-              {messages.length < 5 && PREGUNTAS_SUGERIDAS.map(sug => (
-                <button key={sug} onClick={() => sendMessage(sug)} disabled={cargando} className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors disabled:opacity-50">
-                  <Sparkles size={12} className="inline mr-1.5" />{sug}
+          {/* Área de Input y Sugerencias */}
+          <div className="flex-shrink-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+            {/* Botones de Sugerencia / Confirmación */}
+            <div className="flex flex-wrap gap-2 mb-3 max-h-20 overflow-y-auto">
+              {sugerencias.map((sug, idx) => (
+                <button 
+                    key={idx} 
+                    onClick={() => sendMessage(sug)} 
+                    disabled={cargando} 
+                    className={clsx(
+                        "px-3 py-1.5 text-xs font-medium rounded-full transition-all border shadow-sm",
+                        // Estilo especial para botones de confirmación (tienen emojis)
+                        sug.includes('✅') 
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800"
+                            : sug.includes('❌')
+                                ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800"
+                                : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+                    )}
+                >
+                  {/* Icono de chispa solo para sugerencias normales */}
+                  {!sug.includes('✅') && !sug.includes('❌') && <Sparkles size={12} className="inline mr-1.5 opacity-50" />}
+                  {sug}
                 </button>
               ))}
             </div>
-            <form onSubmit={handleFormSubmit} className="flex items-center gap-3">
+
+            <form onSubmit={handleFormSubmit} className="flex items-end gap-2">
               <input
                 ref={inputRef}
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Escribe tu mensaje..."
-                className="flex-grow w-full h-12 px-4 rounded-xl border-gray-300 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:border-emerald-500 focus:ring-emerald-500 text-base"
+                placeholder="Escribe aquí..."
+                className="flex-grow w-full py-3 px-4 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all resize-none"
                 disabled={cargando}
               />
               <button 
                 type="submit" 
                 disabled={!input.trim() || cargando} 
-                className="flex-shrink-0 flex items-center justify-center h-12 w-12 bg-emerald-600 text-white rounded-xl disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors"
-                aria-label="Enviar mensaje"
+                className="flex-shrink-0 h-[46px] w-[46px] flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed transition-all active:scale-95"
               >
                 <Send size={20} />
               </button>

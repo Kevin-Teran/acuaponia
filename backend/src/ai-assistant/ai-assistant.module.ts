@@ -12,9 +12,21 @@ import { Module } from '@nestjs/common';
 import { AiAssistantController } from './ai-assistant.controller';
 import { AiAssistantService } from './ai-assistant.service';
 import { PrismaModule } from '../prisma/prisma.module'; 
+import { AnalyticsModule } from '../analytics/analytics.module';
+import { ReportModule } from '../reports/reports.module';
+import { AlertsModule } from '../alerts/alerts.module';
+import { TanksModule } from '../tanks/tanks.module';
+import { SensorsModule } from '../sensors/sensors.module';
 
 @Module({
-  imports: [PrismaModule], 
+  imports: [
+    PrismaModule,
+    AnalyticsModule,
+    ReportModule,
+    AlertsModule,
+    TanksModule,
+    SensorsModule
+  ],
   controllers: [AiAssistantController],
   providers: [AiAssistantService],
 })
