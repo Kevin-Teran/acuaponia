@@ -3,7 +3,7 @@
  * @route backend/src/sensors
  * @description Lógica de negocio para la gestión de sensores, con validación de límite por tipo de sensor por tanque y control de autorización.
  * @author Kevin Mariano 
- * @version 2.2.1
+ * @version 2.0.1
  * @since 1.0.0
  * @copyright SENA 2025
  */
@@ -15,16 +15,12 @@ import { UpdateSensorDto } from './dto/update-sensor.dto';
 import { FindSensorsDto } from './dto/find-sensors.dto';
 import { Sensor, sensors_type as sensors_type, Prisma, Role } from '@prisma/client';
 
-
 const MAX_SENSORS_PER_TYPE_PER_TANK = 1;
 
 @Injectable()
 export class SensorsService {
   constructor(private prisma: PrismaService) {}
 
-  // -------------------------------------------------------------------------
-  // MÉTODO AUXILIAR DE AUTORIZACIÓN
-  // -------------------------------------------------------------------------
   private async checkSensorOwnership(sensorId: string, userId: string, userRole: Role) {
     const sensor = await this.prisma.sensor.findUnique({
       where: { id: sensorId },
@@ -50,14 +46,10 @@ export class SensorsService {
     }
     return sensor;
   }
-  // -------------------------------------------------------------------------
 
   async create(createSensorDto: CreateSensorDto): Promise<Sensor> {
-    // CORRECCIÓN: Desestructuramos todos los campos necesarios.
     const { tankId, type, hardwareId, calibrationDate, name } = createSensorDto;
-  
-    // CORRECCIÓN: Asegurar que calibrationDate siempre tenga un valor para Prisma.
-    // Si no se proporciona o es una cadena vacía (porque es opcional en el DTO), usamos la fecha actual.
+    
     const dateForPrisma = (calibrationDate && calibrationDate.trim() !== '') 
         ? new Date(calibrationDate).toISOString() 
         : new Date().toISOString(); 
@@ -100,7 +92,7 @@ export class SensorsService {
         name,
         hardwareId,
         type,
-        calibrationDate: dateForPrisma, // <-- CORRECCIÓN: Campo requerido asegurado
+        calibrationDate: dateForPrisma, 
         location: tankWithSensors.location,
         tank: {
           connect: { id: tankId },
@@ -197,7 +189,6 @@ export class SensorsService {
 
   async update(id: string, updateSensorDto: UpdateSensorDto, userId: string, userRole: Role): Promise<Sensor> {
     
-    // 1. Verificar propiedad (Autorización USER)
     await this.checkSensorOwnership(id, userId, userRole);
     
     const sensorToUpdate = await this.findOne(id);
@@ -232,7 +223,6 @@ export class SensorsService {
 
   async remove(id: string, userId: string, userRole: Role): Promise<Sensor> {
     
-    // 1. Verificar propiedad (Autorización USER)
     await this.checkSensorOwnership(id, userId, userRole);
     
     return this.prisma.sensor.delete({
@@ -262,7 +252,6 @@ export class SensorsService {
   
     return tanks.filter(tank => tank.sensors.length < MAX_SENSORS_PER_TYPE_PER_TANK);
   }
-  
 
   async getSensorCountByTypeForTank(tankId: string): Promise<Record<sensors_type, number>> {
     const sensors = await this.prisma.sensor.findMany({

@@ -15,17 +15,25 @@ import { AnalyticsService } from '../analytics/analytics.service';
 import { ReportService } from '../reports/reports.service';
 import { AlertsService } from '../alerts/alerts.service';
 import { TanksService } from '../tanks/tanks.service';
-import { SensorsService } from '../sensors/sensors.service'; 
-import { sensors_type, Role, User, Prisma } from '@prisma/client'; 
+import { SensorsService } from '../sensors/sensors.service';
+import { sensors_type, Role, User, Prisma } from '@prisma/client';
 import axios from 'axios';
-import { startOfDay, endOfDay, subDays, format } from 'date-fns';
+import { startOfDay, subDays, format } from 'date-fns';
 
 type CurrentUser = Pick<User, 'id' | 'role'>;
 
-// Interfaces para el manejo de acciones de la IA
-interface AiAction {
-  action: 'CREATE_REPORT' | 'CREATE_TANK' | 'DELETE_TANK' | 'CREATE_SENSOR' | 'DELETE_SENSOR';
-  params?: any;
+enum ConversationState {
+  IDLE = 'idle',
+  AWAITING_CONFIRMATION = 'awaiting_confirmation'
+}
+
+interface UserContext {
+  state: ConversationState;
+  pendingAction?: {
+    action: string;
+    params: any;
+  };
+  timestamp: Date;
 }
 
 @Injectable()
@@ -35,14 +43,12 @@ export class AiAssistantService {
   private readonly groqApiUrl: string;
   private readonly openWeatherMapApiKey: string;
 
-  // Coordenadas fijas para Barranquilla, Atlántico
-  private readonly DEFAULT_LAT = 10.9685; 
+  private readonly DEFAULT_LAT = 10.9685;
   private readonly DEFAULT_LON = -74.7813;
   private readonly DEFAULT_LOCATION_NAME = "Barranquilla, Atlántico";
 
-  // 🔥 MEMORIA DE CORTO PLAZO (Para recordar qué se le preguntó al usuario)
-  // Key: UserId, Value: Última respuesta del Asistente
-  private userContexts = new Map<string, string>();
+  private userContexts = new Map<string, UserContext>();
+  private readonly CONTEXT_TIMEOUT_MS = 15 * 60 * 1000;
 
   constructor(
     private prisma: PrismaService,
@@ -55,184 +61,454 @@ export class AiAssistantService {
     this.groqApiKey = process.env.GROQ_API_KEY;
     this.groqApiUrl = process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
     this.openWeatherMapApiKey = process.env.OPENWEATHERMAP_API_KEY;
+    setInterval(() => this.cleanupOldContexts(), 5 * 60 * 1000);
   }
 
-  // --- MÉTODOS PRIVADOS ---
+  // --- GESTIÓN DE CONTEXTO ---
 
-  private async getWeatherData(location: any) {
-     if (!this.openWeatherMapApiKey) {
-      return { summary: 'N/D', temperature: 'N/D', locationName: 'Barranquilla (Default)' };
+  private getUserContext(userId: string): UserContext {
+    const context = this.userContexts.get(userId);
+    if (!context || (Date.now() - context.timestamp.getTime() > this.CONTEXT_TIMEOUT_MS)) {
+      const newContext: UserContext = { state: ConversationState.IDLE, timestamp: new Date() };
+      this.userContexts.set(userId, newContext);
+      return newContext;
     }
-    try {
-      let lat = this.DEFAULT_LAT;
-      let lon = this.DEFAULT_LON;
-      if (location && typeof location === 'string' && location.includes(',')) {
-         const parts = location.split(',');
-         lat = parseFloat(parts[0]);
-         lon = parseFloat(parts[1]);
-      } else if (location?.latitude && location?.longitude) {
-         lat = Number(location.latitude);
-         lon = Number(location.longitude);
+    return context;
+  }
+
+  private updateUserContext(userId: string, updates: Partial<UserContext>): void {
+    const current = this.getUserContext(userId);
+    const updated: UserContext = { ...current, ...updates, timestamp: new Date() };
+    this.userContexts.set(userId, updated);
+  }
+
+  private clearUserPendingAction(userId: string): void {
+    this.updateUserContext(userId, { state: ConversationState.IDLE, pendingAction: undefined });
+  }
+
+  private cleanupOldContexts(): void {
+    const now = Date.now();
+    for (const [userId, context] of this.userContexts.entries()) {
+      if (now - context.timestamp.getTime() > this.CONTEXT_TIMEOUT_MS) {
+        this.userContexts.delete(userId);
       }
-      const queryUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${this.openWeatherMapApiKey}&units=metric&lang=es`;
-      const response = await axios.get(queryUrl);
-      const data = response.data;
-      return {
-        summary: `${data.weather[0].description}, Viento: ${data.wind.speed} m/s`,
-        temperature: data.main.temp.toFixed(1) + ' °C',
-        humidity: data.main.humidity + '%',
-        feels_like: data.main.feels_like.toFixed(1) + ' °C',
-        locationName: data.name
-      };
-    } catch (error) {
-      return { summary: 'Cálido', temperature: '30 °C', locationName: 'Barranquilla' };
     }
   }
 
-  private async getSystemContext(user: CurrentUser) {
-    try {
-      // 🔒 SEGURIDAD: Filtro estricto por userId
-      const userTankWhere: Prisma.TankWhereInput = { userId: user.id };
-      
-      const activeTanks = await this.prisma.tank.findMany({ 
-          where: userTankWhere,
-          include: { sensors: true }
-      });
-      
-      const activeAlerts = await this.alertsService.getUnresolvedAlerts(user.id);
-      const alertsSummary = activeAlerts.map(a => 
-        `- [${a.severity}] ${a.message}`
-      ).join('\n');
+  // --- DETECCIÓN DE INTENCIÓN (SIN IA) ---
 
-      return {
-        tanks: activeTanks,
-        alertsCount: activeAlerts.length,
-        alertsText: alertsSummary || "Sin alertas.",
-        userLocation: null 
+  private detectIntention(message: string): { action: string; params: any } | null {
+    const msg = message.toLowerCase().trim();
+
+    // CREAR MÚLTIPLES SENSORES (ph y temperatura, todos los sensores, etc.)
+    if (msg.includes('sensor') && 
+        (msg.includes('crear') || msg.includes('crea') || msg.includes('agregar') || msg.includes('agrega'))) {
+      
+      // Detectar si pide múltiples tipos
+      const types: sensors_type[] = [];
+      if (msg.includes('ph')) types.push('PH');
+      if (msg.includes('temperatura') || msg.includes('temperature')) types.push('TEMPERATURE');
+      if (msg.includes('oxígeno') || msg.includes('oxigeno') || msg.includes('oxygen')) types.push('OXYGEN');
+      
+      // Si dice "todos" o "que le faltan" o "completos", agregar todos los tipos
+      if (msg.includes('todos') || msg.includes('todo') || msg.includes('falta') || 
+          msg.includes('completo') || msg.includes('completa')) {
+        types.push('TEMPERATURE', 'PH', 'OXYGEN');
+      }
+
+      // Si no detectó ningún tipo específico
+      if (types.length === 0) {
+        return null; // Mostrará mensaje de ayuda
+      }
+
+      // Buscar tanque especificado
+      const tankNameMatch = msg.match(/(?:en\s+)?(?:el\s+)?(?:al\s+)?(?:del?\s+)?tanque\s+([\w\d\s]+?)(?:\s+crear|\s+los|\s+sensor|$)/i);
+      const tankName = tankNameMatch ? tankNameMatch[1].trim() : null;
+
+      return { 
+        action: 'CREATE_SENSORS', 
+        params: { 
+          types: [...new Set(types)], // Eliminar duplicados
+          tankName 
+        } 
       };
-    } catch (error) {
-      this.logger.error('Error construyendo contexto:', error);
-      throw new InternalServerErrorException('Error cargando datos del sistema.');
     }
+
+    // EDITAR UBICACIÓN DE TANQUE
+    if ((msg.includes('cambiar') || msg.includes('cambia') || msg.includes('editar') || 
+         msg.includes('edita') || msg.includes('modificar') || msg.includes('modifica')) && 
+        (msg.includes('ubicación') || msg.includes('ubicacion') || msg.includes('localización') || 
+         msg.includes('localizacion') || msg.includes('lugar') || msg.includes('dirección') || msg.includes('direccion'))) {
+      
+      // "cambiar ubicación tanque 005 a Cartagena, Bolívar"
+      const pattern = /(?:cambiar|cambia|editar|edita|modificar|modifica)\s+(?:la\s+)?(?:ubicación|ubicacion|localización|localizacion|lugar|dirección|direccion)\s+(?:del?\s+)?tanque\s+([\w\d]+)\s+(?:a|por)\s+(.+)/i;
+      const match = message.match(pattern);
+      
+      if (match) {
+        return { 
+          action: 'EDIT_TANK', 
+          params: { 
+            tankName: match[1].trim(), 
+            newLocation: match[2].trim() 
+          } 
+        };
+      }
+    }
+
+    // EDITAR NOMBRE DE TANQUE - MEJORADO: captura hasta el final o hasta palabras clave
+    if ((msg.includes('cambiar') || msg.includes('cambia') || msg.includes('editar') || 
+         msg.includes('edita') || msg.includes('renombrar') || msg.includes('renombra') || 
+         msg.includes('modificar') || msg.includes('modifica')) && 
+        (msg.includes('nombre') || msg.includes('tanque')) &&
+        !(msg.includes('ubicación') || msg.includes('ubicacion') || msg.includes('localización'))) {
+      
+      // Mejorado: captura todo después de "a" hasta el final de la línea
+      const patterns = [
+        /(?:cambiar|cambia|editar|edita|renombrar|renombra|modificar|modifica)\s+(?:el\s+)?(?:nombre\s+)?(?:de\s+)?(?:del?\s+)?tanque\s+([\w\d]+)\s+(?:a|por)\s+(.+?)$/i,
+        /tanque\s+([\w\d]+)\s+(?:a|por)\s+(.+?)$/i
+      ];
+      
+      for (const pattern of patterns) {
+        const match = message.match(pattern);
+        if (match) {
+          return { 
+            action: 'EDIT_TANK', 
+            params: { 
+              tankName: match[1].trim(), 
+              newName: match[2].trim() 
+            } 
+          };
+        }
+      }
+    }
+
+    // CREAR TANQUE (solo si NO menciona sensor)
+    if ((msg.includes('crear') || msg.includes('crea')) && msg.includes('tanque') && !msg.includes('sensor')) {
+      return { action: 'CREATE_TANK', params: {} };
+    }
+
+    // ELIMINAR TANQUE
+    if ((msg.includes('eliminar') || msg.includes('elimina') || msg.includes('borrar') || 
+         msg.includes('borra') || msg.includes('quitar') || msg.includes('quita')) && 
+        msg.includes('tanque') && !msg.includes('sensor')) {
+      const tankNameMatch = msg.match(/tanque\s+([\w\d\s]+?)(?:\s|$)/i);
+      if (tankNameMatch) {
+        return { action: 'DELETE_TANK', params: { tankName: tankNameMatch[1].trim() } };
+      }
+    }
+
+    // ELIMINAR SENSOR
+    if ((msg.includes('eliminar') || msg.includes('elimina') || msg.includes('borrar') || 
+         msg.includes('borra') || msg.includes('quitar') || msg.includes('quita')) && 
+        msg.includes('sensor')) {
+      let type = 'TEMPERATURE';
+      if (msg.includes('ph')) type = 'PH';
+      if (msg.includes('oxígeno') || msg.includes('oxigeno') || msg.includes('oxygen')) type = 'OXYGEN';
+      if (msg.includes('temperatura') || msg.includes('temperature')) type = 'TEMPERATURE';
+
+      const tankNameMatch = msg.match(/(?:del?\s+)?tanque\s+([\w\d]+)/i);
+      const tankName = tankNameMatch ? tankNameMatch[1].trim() : null;
+
+      return { action: 'DELETE_SENSOR', params: { type, tankName } };
+    }
+
+    // GENERAR REPORTE
+    if ((msg.includes('generar') || msg.includes('genera') || msg.includes('crear') || 
+         msg.includes('crea') || msg.includes('hacer') || msg.includes('haz')) && 
+        msg.includes('reporte')) {
+      let range = 'today';
+      if (msg.includes('semana')) range = 'week';
+      if (msg.includes('mes')) range = 'month';
+
+      return { action: 'CREATE_REPORT', params: { range } };
+    }
+
+    // ESTADO DEL SISTEMA
+    if (msg.includes('estado') || msg.includes('resumen') || msg.includes('información') || 
+        msg.includes('info') || msg.includes('status')) {
+      return { action: 'SHOW_STATUS', params: {} };
+    }
+
+    return null;
+  }
+
+  private isAffirmative(message: string): boolean {
+    const cleaned = message
+      .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
+      .replace(/[✅❌✔️✖️☑️]/g, '')
+      .replace(/[,;:.!¡¿?]/g, '')
+      .toLowerCase()
+      .trim();
+
+    return /^s[ií]$|^ok$|^dale$|^claro$|^confirmo$|^acepto$/.test(cleaned) || cleaned.includes('sí');
+  }
+
+  private isNegative(message: string): boolean {
+    const cleaned = message
+      .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
+      .replace(/[✅❌✔️✖️☑️]/g, '')
+      .toLowerCase()
+      .trim();
+
+    return /^no$|^cancela|^olvida/.test(cleaned);
   }
 
   // --- MÉTODO PRINCIPAL ---
 
   async getAIResponse(pregunta: string, user: CurrentUser): Promise<string> {
-    if (!this.groqApiKey) return "Error de configuración interna (API Key).";
-
-    const context = await this.getSystemContext(user);
-    const weather = await this.getWeatherData(context.userLocation);
-
-    // Recuperar memoria: ¿Qué le dijimos al usuario la última vez?
-    const lastAssistantResponse = this.userContexts.get(user.id) || "Ninguno (Inicio de conversación)";
-
-    // Calcular el siguiente nombre secuencial
-    const nextTankName = this.calculateNextTankName(context.tanks);
-
-    const prompt = `
-      == ROL ==
-      Eres "ACUAGENIUS", el gestor de infraestructura inteligente.
-      Ubicación: ${weather.locationName}.
-      
-      == INFRAESTRUCTURA DEL USUARIO ==
-      Tanques:
-      ${context.tanks.map(t => `- "${t.name}" (ID: ${t.id}, Sensores: ${t.sensors.map(s => s.type).join(', ') || 'Ninguno'})`).join('\n')}
-      
-      == MEMORIA DE CONVERSACIÓN (IMPORTANTE) ==
-      Lo último que TÚ (Asistente) dijiste fue: "${lastAssistantResponse}"
-      El Usuario ahora dice: "${pregunta}"
-
-      == CAPACIDADES ==
-      Puedes realizar las siguientes acciones reales:
-      1. CREAR TANQUE: Sugerencia automática: "${nextTankName}". Ubicación por defecto: "${this.DEFAULT_LOCATION_NAME}".
-      2. ELIMINAR TANQUE.
-      3. CREAR SENSOR (Tipos: TEMPERATURE, PH, OXYGEN).
-      4. ELIMINAR SENSOR.
-      5. CREAR REPORTE.
-
-      == LÓGICA DE CONFIRMACIÓN ==
-      1. Si en "Lo último que tú dijiste" estabas pidiendo confirmación (ej: "¿Confirmas?", "¿Seguro?", "Voy a crear...") Y el usuario responde afirmativamente ("Sí", "Confirmo", "Claro", "Ok", "Dale"), ENTONCES DEBES GENERAR EL BLOQUE :::ACTION::: correspondiente a lo que propusiste antes.
-      2. Si el usuario pide algo nuevo (ej: "Crea un tanque"), NO generes la acción aún. Responde describiendo lo que harás y pidiendo confirmación.
-
-      == FORMATO DE ACCIÓN (SOLO SI ESTÁ CONFIRMADO) ==
-      :::ACTION
-      {
-        "action": "CREATE_TANK",
-        "params": { "name": "default" }
-      }
-      :::
-
-      == PREGUNTA DEL USUARIO ==
-      "${pregunta}"
-      
-      == TU RESPUESTA ==
-      (Si confirmas una acción, genera el bloque :::ACTION::: y un texto amable. Si no, responde conversacionalmente).
-    `;
-
     try {
-      const response = await axios.post(
-        this.groqApiUrl,
-        {
-          messages: [{ role: 'user', content: prompt }],
-          model: 'llama-3.1-8b-instant',
-          temperature: 0.4, // Temperatura baja para que sea obediente con la lógica
-        },
-        { headers: { 'Authorization': `Bearer ${this.groqApiKey}`, 'Content-Type': 'application/json' } },
-      );
-      
-      const content = response.data.choices[0]?.message?.content?.trim() || 'Sin respuesta.';
+      const userContext = this.getUserContext(user.id);
+      const context = await this.getSystemContext(user);
 
-      // --- PARSER DE ACCIONES ---
-      const actionRegex = /:::ACTION([\s\S]*?):::/;
-      const match = content.match(actionRegex);
-      
-      let finalResponse = content;
-      let actionExecuted = false;
-
-      if (match) {
-          const jsonStr = match[1].trim();
-          // Ocultar JSON al usuario
-          finalResponse = content.replace(actionRegex, '').trim(); 
-
+      // 🎯 MANEJO DE CONFIRMACIÓN
+      if (userContext.state === ConversationState.AWAITING_CONFIRMATION && userContext.pendingAction) {
+        
+        if (this.isAffirmative(pregunta)) {
           try {
-              const command = JSON.parse(jsonStr) as AiAction;
-              
-              // Ejecutar en Backend
-              const executionResult = await this.executeAction(command, user, context.tanks);
-              
-              finalResponse += `\n\n${executionResult}`;
-              actionExecuted = true;
-              
-          } catch (e) {
-               this.logger.error("Error ejecutando acción IA:", e);
-               finalResponse += "\n\n❌ Error técnico procesando la acción.";
+            const result = await this.executeAction(userContext.pendingAction, user, context.tanks);
+            this.clearUserPendingAction(user.id);
+            return result;
+          } catch (error) {
+            this.clearUserPendingAction(user.id);
+            return `❌ Error: ${error.message}`;
           }
+        }
+        
+        if (this.isNegative(pregunta)) {
+          this.clearUserPendingAction(user.id);
+          return `❌ Operación cancelada. ¿En qué más puedo ayudarte?`;
+        }
+
+        this.clearUserPendingAction(user.id);
+        return `⚠️ No entendí. Di "sí" para confirmar o "no" para cancelar.`;
       }
 
-      // 🔥 GUARDAR MEMORIA
-      // Si ejecutamos una acción, limpiamos la memoria para no repetir la acción si el usuario dice "sí" de nuevo.
-      // Si solo estamos charlando o pidiendo confirmación, guardamos el texto.
-      if (actionExecuted) {
-        this.userContexts.set(user.id, "Acción completada con éxito.");
-      } else {
-        this.userContexts.set(user.id, finalResponse); // Guardamos lo que le mostramos al usuario
+      // 🎯 DETECCIÓN DE OPCIONES RÁPIDAS (1-8)
+      const quickOption = pregunta.trim();
+      if (/^[1-8]$/.test(quickOption)) {
+        const optionMap = {
+          '1': 'crear tanque',
+          '2': 'cambiar nombre tanque',
+          '3': 'cambiar ubicación tanque',
+          '4': 'eliminar tanque',
+          '5': 'crear sensor',
+          '6': 'eliminar sensor',
+          '7': 'generar reporte',
+          '8': 'estado del sistema'
+        };
+        
+        const command = optionMap[quickOption];
+        if (command === 'estado del sistema') {
+          return this.getSystemStatus(context);
+        } else {
+          return `Para ${command}, especifica los detalles.
+
+Ejemplo:
+• "crear sensor ph en tanque 004"
+• "cambiar nombre tanque 003 a Principal"
+• "eliminar tanque 005"`;
+        }
       }
 
-      return finalResponse;
+      // 🎯 DETECCIÓN DE INTENCIÓN (SIN USAR IA)
+      const intention = this.detectIntention(pregunta);
+
+      if (!intention) {
+        return `🤔 No entendí tu solicitud. Aquí tienes opciones:
+
+1️⃣ Crear tanque
+2️⃣ Editar nombre de tanque
+3️⃣ Editar ubicación de tanque
+4️⃣ Eliminar tanque
+5️⃣ Crear sensor (especifica tanque y tipo)
+6️⃣ Eliminar sensor
+7️⃣ Generar reporte
+8️⃣ Ver estado del sistema
+
+💡 Ejemplos:
+• "crear tanque"
+• "cambiar nombre tanque 00X a tanque 00Y"
+• "crear sensor ph y temperatura en tanque 00X"
+• "crear todos los sensores en tanque 00X"
+• "eliminar tanque 00X"
+
+Escribe el número o el comando completo.`;
+      }
+
+      // ACCIÓN INMEDIATA: Mostrar estado
+      if (intention.action === 'SHOW_STATUS') {
+        return this.getSystemStatus(context);
+      }
+
+      // ACCIONES QUE REQUIEREN CONFIRMACIÓN
+      const confirmationMessage = this.buildConfirmationMessage(intention, context);
+      
+      this.updateUserContext(user.id, {
+        state: ConversationState.AWAITING_CONFIRMATION,
+        pendingAction: intention
+      });
+
+      return confirmationMessage;
 
     } catch (error) {
-      this.logger.error("Error Groq:", error);
-      throw new InternalServerErrorException('ACUAGENIUS no está disponible.');
+      this.logger.error('Error en getAIResponse:', error);
+      return '❌ Error técnico. Por favor intenta nuevamente.';
     }
   }
 
-  /**
-   * @description Calcula el siguiente nombre "Tanque 00X"
-   */
+  private async getSystemContext(user: CurrentUser) {
+    try {
+      const activeTanks = await this.prisma.tank.findMany({
+        where: { userId: user.id },
+        include: { sensors: true }
+      });
+      
+      const activeAlerts = await this.alertsService.getUnresolvedAlerts(user.id);
+      const reportsCount = await this.prisma.report.count({ where: { userId: user.id } });
+
+      return { tanks: activeTanks, alertsCount: activeAlerts.length, reportsCount };
+    } catch (error) {
+      this.logger.error('Error construyendo contexto:', error);
+      return { tanks: [], alertsCount: 0, reportsCount: 0 };
+    }
+  }
+
+  private getSystemStatus(context: any): string {
+    let status = `📊 **Estado del Sistema**\n\n`;
+    status += `📦 Tanques: ${context.tanks.length}\n`;
+    
+    if (context.tanks.length > 0) {
+      context.tanks.forEach((tank, idx) => {
+        status += `   ${idx + 1}. "${tank.name}" - ${tank.sensors?.length || 0} sensores\n`;
+      });
+    }
+    
+    status += `\n🚨 Alertas activas: ${context.alertsCount}`;
+    status += `\n📊 Reportes generados: ${context.reportsCount}`;
+    
+    return status;
+  }
+
+  private buildConfirmationMessage(intention: any, context: any): string {
+    const nextTankName = this.calculateNextTankName(context.tanks);
+
+    switch (intention.action) {
+      case 'CREATE_TANK':
+        return `Voy a crear el tanque "${nextTankName}" en ${this.DEFAULT_LOCATION_NAME}. ¿Confirmas?`;
+
+      case 'EDIT_TANK':
+        const tankToEdit = context.tanks.find(t => 
+          t.name.toLowerCase().includes(intention.params.tankName?.toLowerCase()) ||
+          t.name.toLowerCase().replace(/\s+/g, '') === intention.params.tankName?.toLowerCase().replace(/\s+/g, '')
+        );
+        if (!tankToEdit) {
+          this.clearUserPendingAction('temp');
+          return `❌ No encontré ningún tanque llamado "${intention.params.tankName}".`;
+        }
+        intention.params.tankId = tankToEdit.id;
+        intention.params.oldName = tankToEdit.name;
+        
+        if (intention.params.newLocation) {
+          return `Voy a cambiar la ubicación de "${tankToEdit.name}" a "${intention.params.newLocation}". ¿Confirmas?`;
+        } else {
+          return `Voy a cambiar el nombre de "${tankToEdit.name}" a "${intention.params.newName}". ¿Confirmas?`;
+        }
+
+      case 'DELETE_TANK':
+        const tankToDelete = context.tanks.find(t => 
+          t.name.toLowerCase().includes(intention.params.tankName?.toLowerCase())
+        );
+        if (!tankToDelete) {
+          this.clearUserPendingAction('temp');
+          return `❌ No encontré ningún tanque con ese nombre.`;
+        }
+        if (tankToDelete.sensors?.length > 0) {
+          this.clearUserPendingAction('temp');
+          return `⚠️ El tanque "${tankToDelete.name}" tiene ${tankToDelete.sensors.length} sensores. Elimínalos primero.`;
+        }
+        intention.params.tankId = tankToDelete.id;
+        return `Voy a eliminar el tanque "${tankToDelete.name}". ¿Confirmas?`;
+
+      case 'CREATE_SENSORS':
+        // VALIDACIÓN: Tanque es obligatorio
+        if (!intention.params.tankName) {
+          this.clearUserPendingAction('temp');
+          return `⚠️ Debes especificar el tanque
+
+Ejemplo: "crear sensores en tanque 004"
+
+Tus tanques:
+${context.tanks.map((t, i) => `${i + 1}. ${t.name}`).join('\n') || 'Ninguno'}`;
+        }
+        
+        const multiTank = context.tanks.find(t => 
+          t.name.toLowerCase().includes(intention.params.tankName?.toLowerCase())
+        );
+        
+        if (!multiTank) {
+          this.clearUserPendingAction('temp');
+          return `❌ No encontré el tanque "${intention.params.tankName}".`;
+        }
+        
+        // Filtrar sensores que ya existen
+        const existingTypes = multiTank.sensors?.map(s => s.type) || [];
+        const typesToCreate = intention.params.types.filter(t => !existingTypes.includes(t));
+        
+        if (typesToCreate.length === 0) {
+          this.clearUserPendingAction('temp');
+          return `✅ El tanque "${multiTank.name}" ya tiene todos los sensores solicitados.`;
+        }
+        
+        intention.params.tankId = multiTank.id;
+        intention.params.tankName = multiTank.name;
+        intention.params.types = typesToCreate;
+        
+        const typeNames = {
+          TEMPERATURE: 'Temperatura',
+          PH: 'pH',
+          OXYGEN: 'Oxígeno'
+        };
+        
+        const sensorsList = typesToCreate.map(t => typeNames[t]).join(', ');
+        return `Voy a crear ${typesToCreate.length} sensor(es) en "${multiTank.name}": ${sensorsList}. ¿Confirmas?`;
+
+      case 'DELETE_SENSOR':
+        if (!intention.params.tankName && context.tanks.length > 0) {
+          intention.params.tankName = context.tanks[0].name;
+        }
+        const sensorTank = context.tanks.find(t => 
+          t.name.toLowerCase().includes(intention.params.tankName?.toLowerCase())
+        );
+        if (!sensorTank) {
+          this.clearUserPendingAction('temp');
+          return `❌ No encontré el tanque.`;
+        }
+        const sensorToDelete = sensorTank.sensors?.find(s => s.type === intention.params.type);
+        if (!sensorToDelete) {
+          this.clearUserPendingAction('temp');
+          return `❌ El tanque "${sensorTank.name}" no tiene sensor de ${intention.params.type}.`;
+        }
+        intention.params.tankId = sensorTank.id;
+        intention.params.tankName = sensorTank.name;
+        return `Voy a eliminar el sensor de ${intention.params.type} del tanque "${sensorTank.name}". ¿Confirmas?`;
+
+      case 'CREATE_REPORT':
+        if (context.tanks.length === 0) {
+          this.clearUserPendingAction('temp');
+          return `⚠️ No tienes tanques para generar reportes.`;
+        }
+        const rangeText = intention.params.range === 'week' ? 'última semana' : 
+                         intention.params.range === 'month' ? 'último mes' : 'hoy';
+        return `Voy a generar un reporte de ${rangeText}. ¿Confirmas?`;
+
+      default:
+        return '⚠️ Acción no reconocida.';
+    }
+  }
+
   private calculateNextTankName(tanks: any[]): string {
     let maxNum = 0;
-    const regex = /^Tanque (\d+)$/i;
+    const regex = /^Tanque\s+(\d+)$/i;
 
     tanks.forEach(t => {
       const match = t.name.match(regex);
@@ -246,42 +522,80 @@ export class AiAssistantService {
     return `Tanque ${nextNum.toString().padStart(3, '0')}`;
   }
 
-  private async executeAction(command: AiAction, user: CurrentUser, userTanks: any[]): Promise<string> {
-    this.logger.log(`🤖 Acción IA: ${command.action} para usuario ${user.id}`);
+  /**
+   * Calcula el siguiente número secuencial de sensor (global, no por tanque)
+   * Ejemplo: Sensor-001, Sensor-002, Sensor-003...
+   */
+  private async calculateNextSensorNumber(userId: string): Promise<number> {
+    try {
+      // Obtener TODOS los sensores del usuario
+      const allSensors = await this.prisma.sensor.findMany({
+        where: {
+          tank: {
+            userId: userId
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
 
-    switch (command.action) {
-      case 'CREATE_REPORT':
-        return await this.handleCreateReport(command.params, user, userTanks);
-      
-      case 'CREATE_TANK':
-        return await this.handleCreateTank(command.params, user, userTanks);
+      let maxNum = 0;
+      const regex = /Sensor[-\s](\d+)/i;
 
-      case 'DELETE_TANK':
-        return await this.handleDeleteTank(command.params, user, userTanks);
+      allSensors.forEach(s => {
+        // Buscar en nombre
+        const nameMatch = s.name.match(regex);
+        if (nameMatch) {
+          const num = parseInt(nameMatch[1], 10);
+          if (num > maxNum) maxNum = num;
+        }
 
-      case 'CREATE_SENSOR':
-        return await this.handleCreateSensor(command.params, user, userTanks);
-      
-      case 'DELETE_SENSOR':
-        return await this.handleDeleteSensor(command.params, user, userTanks);
+        // Buscar en hardwareId
+        const hwMatch = s.hardwareId.match(regex);
+        if (hwMatch) {
+          const num = parseInt(hwMatch[1], 10);
+          if (num > maxNum) maxNum = num;
+        }
+      });
 
-      default:
-        return "Acción no reconocida.";
+      return maxNum + 1;
+    } catch (error) {
+      this.logger.error('Error calculando número de sensor:', error);
+      return 1; // Por defecto empezar en 1
     }
   }
 
-  // --- MANEJADORES DE ACCIONES ---
+  private async executeAction(action: any, user: CurrentUser, userTanks: any[]): Promise<string> {
+    this.logger.log(`🤖 Ejecutando: ${action.action} para usuario ${user.id}`);
+
+    switch (action.action) {
+      case 'CREATE_TANK':
+        return await this.handleCreateTank(action.params, user, userTanks);
+      case 'EDIT_TANK':
+        return await this.handleEditTank(action.params, user, userTanks);
+      case 'DELETE_TANK':
+        return await this.handleDeleteTank(action.params, user, userTanks);
+      case 'CREATE_SENSORS':
+        return await this.handleCreateMultipleSensors(action.params, user, userTanks);
+      case 'DELETE_SENSOR':
+        return await this.handleDeleteSensor(action.params, user, userTanks);
+      case 'CREATE_REPORT':
+        return await this.handleCreateReport(action.params, user, userTanks);
+      default:
+        return "❌ Acción no reconocida.";
+    }
+  }
+
+  // --- MANEJADORES ---
 
   private async handleCreateTank(params: any, user: CurrentUser, existingTanks: any[]) {
     try {
       const fullUser = await this.prisma.user.findUnique({ where: { id: user.id }});
-      
-      let tankName = params.name;
-      if (!tankName || tankName === 'default') {
-          tankName = this.calculateNextTankName(existingTanks);
-      }
-      
-      const location = params.location || this.DEFAULT_LOCATION_NAME;
+      if (!fullUser) throw new Error('Usuario no encontrado');
+
+      const tankName = this.calculateNextTankName(existingTanks);
+      const location = this.DEFAULT_LOCATION_NAME;
 
       const newTank = await this.tanksService.create({
         name: tankName,
@@ -289,92 +603,212 @@ export class AiAssistantService {
         userId: user.id
       }, fullUser);
 
-      return `✅ **Éxito:** Tanque creado correctamente.\n\n🔗 **[Ver Tanque Creado](/tanks-and-sensors)**`;
+      return `✅ Tanque creado: "${newTank.name}"
+📍 ${newTank.location}
+
+🔗 [Ver Tanques](/tanks-and-sensors)`;
+
     } catch (error) {
-      return `❌ No se pudo crear el tanque. Posiblemente el nombre ya existe.`;
+      this.logger.error('Error creando tanque:', error);
+      return `❌ Error: ${error.message}`;
     }
   }
 
-  private async handleDeleteTank(params: any, user: CurrentUser, tanks: any[]) {
-    const tankName = params.tankName;
-    const tank = tanks.find(t => t.name.toLowerCase() === tankName.toLowerCase());
-
-    if (!tank) return `❌ No encontré ningún tanque llamado "${tankName}".`;
-
+  private async handleEditTank(params: any, user: CurrentUser, tanks: any[]) {
     try {
       const fullUser = await this.prisma.user.findUnique({ where: { id: user.id }});
-      await this.tanksService.remove(tank.id, fullUser);
-      return `🗑️ **Eliminado:** El tanque "${tankName}" ha sido eliminado.\n\n🔗 **[Ver Mis Tanques](/tanks-and-sensors)**`;
+      if (!fullUser) throw new Error('Usuario no encontrado');
+
+      const tank = tanks.find(t => 
+        t.name.toLowerCase().includes(params.tankName?.toLowerCase()) ||
+        t.id === params.tankId
+      );
+
+      if (!tank) return `❌ Tanque no encontrado.`;
+
+      const updateData: any = {};
+      if (params.newName) updateData.name = params.newName;
+      if (params.newLocation) updateData.location = params.newLocation;
+
+      if (Object.keys(updateData).length === 0) return `⚠️ Sin cambios especificados.`;
+
+      await this.tanksService.update(tank.id, updateData, fullUser);
+
+      if (params.newLocation) {
+        return `✅ Tanque actualizado
+📍 Nueva ubicación: "${params.newLocation}"
+
+🔗 [Ver Tanques](/tanks-and-sensors)`;
+      } else {
+        return `✅ Tanque actualizado
+🔄 "${params.oldName || tank.name}" → "${params.newName}"
+
+🔗 [Ver Tanques](/tanks-and-sensors)`;
+      }
+
     } catch (error) {
-      return `❌ Error al eliminar: ${error.message} (Si tiene sensores, elimínalos primero).`;
+      this.logger.error('Error editando tanque:', error);
+      return `❌ Error: ${error.message}`;
     }
   }
 
-  private async handleCreateSensor(params: any, user: CurrentUser, tanks: any[]) {
-    const tankName = params.tankName;
-    const type = params.type as sensors_type;
-    
-    if (!['TEMPERATURE', 'PH', 'OXYGEN'].includes(type)) {
-        return "❌ Tipo de sensor inválido. Usa: TEMPERATURE, PH u OXYGEN.";
-    }
-
-    const tank = tanks.find(t => t.name.toLowerCase() === tankName.toLowerCase());
-    if (!tank) return `❌ No encontré el tanque "${tankName}".`;
-
+  private async handleCreateMultipleSensors(params: any, user: CurrentUser, tanks: any[]) {
     try {
-        const hardwareId = `ESP32-${type.substring(0,3)}-${Math.floor(Math.random()*10000)}`;
-        
-        await this.sensorsService.create({
-            name: `Sensor ${type} (IA)`,
+      const tank = tanks.find(t => t.name.toLowerCase().includes(params.tankName?.toLowerCase()));
+      if (!tank) return `❌ Tanque no encontrado.`;
+
+      const typeNames = {
+        TEMPERATURE: 'Temperatura',
+        PH: 'pH',
+        OXYGEN: 'Oxígeno'
+      };
+
+      const createdSensors: string[] = [];
+      const errors: string[] = [];
+
+      for (const type of params.types) {
+        try {
+          // Calcular siguiente número secuencial
+          const nextNum = await this.calculateNextSensorNumber(user.id);
+          const numStr = nextNum.toString().padStart(3, '0');
+
+          const sensorName = `Sensor ${typeNames[type]} ${numStr}`;
+          const hardwareId = `Sensor-${numStr}`;
+          
+          await this.sensorsService.create({
+            name: sensorName,
             type: type,
             tankId: tank.id,
             hardwareId: hardwareId,
             calibrationDate: new Date().toISOString()
-        });
+          });
 
-        return `✅ **Sensor Creado:** He agregado un sensor de ${type} al tanque "${tankName}".\n\n🔗 **[Ver Sensores](/tanks-and-sensors)**`;
+          createdSensors.push(`${typeNames[type]} (${hardwareId})`);
+        } catch (error) {
+          errors.push(`${typeNames[type]}: ${error.message}`);
+        }
+      }
+
+      let response = '';
+      
+      if (createdSensors.length > 0) {
+        response += `✅ ${createdSensors.length} sensor(es) creado(s):\n`;
+        createdSensors.forEach(s => response += `   📡 ${s}\n`);
+        response += `\n📦 Tanque: "${tank.name}"\n`;
+      }
+
+      if (errors.length > 0) {
+        response += `\n⚠️ Errores:\n`;
+        errors.forEach(e => response += `   • ${e}\n`);
+      }
+
+      response += `\n🔗 [Ver Sensores](/tanks-and-sensors)`;
+      
+      return response;
     } catch (error) {
-        return `❌ Error creando sensor: ${error.message}`;
+      this.logger.error('Error creando sensores múltiples:', error);
+      return `❌ Error: ${error.message}`;
+    }
+  }
+
+  private async handleDeleteTank(params: any, user: CurrentUser, tanks: any[]) {
+    try {
+      const tank = tanks.find(t => t.name.toLowerCase().includes(params.tankName?.toLowerCase()));
+      if (!tank) return `❌ Tanque no encontrado.`;
+
+      const fullUser = await this.prisma.user.findUnique({ where: { id: user.id }});
+      await this.tanksService.remove(tank.id, fullUser);
+
+      return `✅ Tanque "${tank.name}" eliminado
+🔗 [Ver Tanques](/tanks-and-sensors)`;
+    } catch (error) {
+      return `❌ Error: ${error.message}`;
+    }
+  }
+
+  private async handleCreateSensor(params: any, user: CurrentUser, tanks: any[]) {
+    try {
+      const tank = tanks.find(t => t.name.toLowerCase().includes(params.tankName?.toLowerCase()));
+      if (!tank) return `❌ Tanque no encontrado.`;
+
+      const type = params.type as sensors_type;
+      const existingSensor = tank.sensors?.find(s => s.type === type);
+      if (existingSensor) return `⚠️ Ya existe un sensor de ${type} en este tanque.`;
+
+      // Calcular siguiente número secuencial
+      const nextNum = await this.calculateNextSensorNumber(user.id);
+      const numStr = nextNum.toString().padStart(3, '0');
+
+      // Nombres de tipos en español
+      const typeNames = {
+        TEMPERATURE: 'Temperatura',
+        PH: 'pH',
+        OXYGEN: 'Oxígeno'
+      };
+
+      // Generar nombre y hardware ID secuenciales
+      const sensorName = `Sensor ${typeNames[type]} ${numStr}`;
+      const hardwareId = `Sensor-${numStr}`;
+      
+      await this.sensorsService.create({
+        name: sensorName,
+        type: type,
+        tankId: tank.id,
+        hardwareId: hardwareId,
+        calibrationDate: new Date().toISOString()
+      });
+
+      return `✅ Sensor creado
+📡 ${sensorName}
+🔧 ID: ${hardwareId}
+📦 Tanque: "${tank.name}"
+
+🔗 [Ver Sensores](/tanks-and-sensors)`;
+    } catch (error) {
+      this.logger.error('Error creando sensor:', error);
+      return `❌ Error: ${error.message}`;
     }
   }
 
   private async handleDeleteSensor(params: any, user: CurrentUser, tanks: any[]) {
-     const tankName = params.tankName;
-     const type = params.type;
+    try {
+      const tank = tanks.find(t => t.name.toLowerCase().includes(params.tankName?.toLowerCase()));
+      if (!tank) return `❌ Tanque no encontrado.`;
 
-     const tank = tanks.find(t => t.name.toLowerCase() === tankName.toLowerCase());
-     if (!tank) return `❌ No encontré el tanque.`;
+      const sensor = tank.sensors?.find(s => s.type === params.type);
+      if (!sensor) return `❌ Sensor no encontrado.`;
 
-     const sensor = tank.sensors.find(s => s.type === type);
-     if (!sensor) return `❌ El tanque "${tankName}" no tiene un sensor de tipo ${type}.`;
+      await this.sensorsService.remove(sensor.id, user.id, user.role as Role);
 
-     try {
-         await this.sensorsService.remove(sensor.id, user.id, user.role);
-         return `🗑️ **Sensor Eliminado:** El sensor de ${type} ha sido removido.\n\n🔗 **[Ver Resultado](/tanks-and-sensors)**`;
-     } catch (error) {
-         return `❌ Error eliminando sensor: ${error.message}`;
-     }
+      return `✅ Sensor ${params.type} eliminado
+🔗 [Ver Sensores](/tanks-and-sensors)`;
+    } catch (error) {
+      return `❌ Error: ${error.message}`;
+    }
   }
 
   private async handleCreateReport(params: any, user: CurrentUser, tanks: any[]) {
-    if (tanks.length === 0) return "⚠️ No tienes tanques para reportar.";
-
-    let targetTank = tanks[0];
-    if (params.tankName && params.tankName !== 'all') {
-      const found = tanks.find(t => t.name.toLowerCase().includes(params.tankName.toLowerCase()));
-      if (found) targetTank = found;
-    }
-
-    const endDate = new Date();
-    let startDate = new Date();
-    if (params.range === 'week') startDate = subDays(endDate, 7);
-    else if (params.range === 'month') startDate = subDays(endDate, 30);
-    else startDate = startOfDay(endDate);
-
     try {
+      if (tanks.length === 0) return `⚠️ No tienes tanques.`;
+
+      const targetTank = tanks[0];
+      if (targetTank.sensors?.length === 0) return `⚠️ El tanque no tiene sensores.`;
+
+      const endDate = new Date();
+      let startDate = startOfDay(endDate);
+      let rangeText = 'hoy';
+
+      if (params.range === 'week') {
+        startDate = subDays(endDate, 7);
+        rangeText = 'última semana';
+      } else if (params.range === 'month') {
+        startDate = subDays(endDate, 30);
+        rangeText = 'último mes';
+      }
+
       const report = await this.reportService.createReport({
-        reportName: `Reporte IA - ${targetTank.name} (${params.range || 'hoy'})`,
-        userId: user.id, 
+        reportName: `Reporte IA - ${rangeText}`,
+        userId: user.id,
         tankId: targetTank.id,
         sensorIds: targetTank.sensors.map(s => s.id),
         startDate: format(startDate, 'yyyy-MM-dd'),
@@ -382,9 +816,11 @@ export class AiAssistantService {
         isAutomatic: false
       });
 
-      return `✅ **Reporte Generado:** "${report.title}".\n\n🔗 **[Ir a Reportes](/reports)**`;
+      return `✅ Reporte generado
+📅 ${rangeText}
+🔗 [Ver Reporte](/reports)`;
     } catch (error) {
-      return "❌ Error técnico generando el reporte. Asegúrate de tener datos.";
+      return `❌ Error: ${error.message}`;
     }
   }
 }

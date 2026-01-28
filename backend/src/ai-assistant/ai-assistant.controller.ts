@@ -8,20 +8,21 @@
  * @copyright SENA 2025
  */
 
-import { Controller, Post, Body, ValidationPipe } from '@nestjs/common';
+import { Controller, Post, Body, ValidationPipe, HttpCode, HttpStatus } from '@nestjs/common';
 import { AiAssistantService } from './ai-assistant.service';
 import { CreateQueryDto } from './dto/create-query.dto';
-import { CurrentUser } from '../auth/decorators/current-user.decorator'; // Importar decorador
-import { User, Role } from '@prisma/client'; // Importar tipos
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { User } from '@prisma/client';
 
-@Controller('asistente') 
+@Controller('asistente')
 export class AiAssistantController {
   constructor(private readonly aiAssistantService: AiAssistantService) {}
 
-  @Post() 
+  @Post()
+  @HttpCode(HttpStatus.OK)
   async createQuery(
     @Body(new ValidationPipe()) createQueryDto: CreateQueryDto,
-    @CurrentUser() user: Pick<User, 'id' | 'role'>, // Inyectar el usuario autenticado
+    @CurrentUser() user: Pick<User, 'id' | 'role'>,
   ) {
     const respuesta = await this.aiAssistantService.getAIResponse(
       createQueryDto.pregunta,
